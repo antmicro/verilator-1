@@ -75,6 +75,7 @@
 #include "V3Premit.h"
 #include "V3ProtectLib.h"
 #include "V3Reloop.h"
+#include "V3Region.h"
 #include "V3Scope.h"
 #include "V3Scoreboard.h"
 #include "V3Slice.h"
@@ -128,6 +129,8 @@ static void process() {
     V3Error::abortIfErrors();
 
     if (v3Global.opt.stats()) V3Stats::statsStageAll(v3Global.rootp(), "Link");
+
+    V3Region::insertRegions(v3Global.rootp());
 
     // Remove parameters by cloning modules to de-parameterized versions
     //   This requires some width calculations and constant propagation

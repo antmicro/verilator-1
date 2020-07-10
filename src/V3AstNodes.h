@@ -2439,6 +2439,30 @@ public:
     bool emptyConnectNoNext() const { return !exprp() && name() == "" && !nextp(); }
 };
 
+class AstActiveRegion : public AstNodeRegion {
+    // An active region
+public:
+    AstActiveRegion(FileLine* fl)
+        : ASTGEN_SUPER(fl) {}
+    ASTNODE_NODE_FUNCS(ActiveRegion)
+};
+
+class AstReactiveRegion : public AstNodeRegion {
+    // An reactive region
+public:
+    AstReactiveRegion(FileLine* fl)
+        : ASTGEN_SUPER(fl) {}
+    ASTNODE_NODE_FUNCS(ReactiveRegion)
+};
+
+class AstObservedRegion : public AstNodeRegion {
+    // An observed region
+public:
+    AstObservedRegion(FileLine* fl)
+        : ASTGEN_SUPER(fl) {}
+    ASTNODE_NODE_FUNCS(ObservedRegion)
+};
+
 class AstModule : public AstNodeModule {
     // A module declaration
 private:
