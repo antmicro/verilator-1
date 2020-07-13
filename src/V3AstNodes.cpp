@@ -1007,6 +1007,7 @@ static std::string nodeAddr(const AstNode* nodep) {
 void AstNode::dump(std::ostream& str) const {
     str << typeName() << " "
         << nodeAddr(this)
+        << " region: " << regionId() << " "
         //<< " " << nodeAddr(m_backp)
         << " <e" << std::dec << editCount() << ((editCount() >= editCountLast()) ? "#>" : ">")
         << " {" << fileline()->filenameLetters() << std::dec << fileline()->lastLineno()

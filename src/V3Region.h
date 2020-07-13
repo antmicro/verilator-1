@@ -9,6 +9,14 @@
 #include "V3Error.h"
 #include "V3Ast.h"
 
+#define REG_ACTIVE      0
+#define REG_REACTIVE    4
+#define REG_OBSERVED    8
+
+#define REG_ACT         0
+#define REG_INACT       1
+#define REG_NBA         2
+
 //============================================================================
 
 class V3Region {

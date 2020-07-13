@@ -1384,6 +1384,9 @@ class AstNode {
     int m_cloneCnt;  // Mark of when userp was set
     static int s_cloneCntGbl;  // Count of which userp is set
 
+    // Region
+    int m_regionId;
+
     // Attributes
     bool m_didWidth : 1;  // Did V3Width computation
     bool m_doingWidth : 1;  // Inside V3Width
@@ -1555,6 +1558,8 @@ public:
     virtual string prettyOperatorName() const { return "operator " + prettyTypeName(); }
     FileLine* fileline() const { return m_fileline; }
     void fileline(FileLine* fl) { m_fileline = fl; }
+    int regionId() const { return m_regionId; }
+    void regionId(int id) { m_regionId = id; }
     bool width1() const;
     int widthInstrs() const;
     void didWidth(bool flag) { m_didWidth = flag; }

@@ -86,6 +86,7 @@ void AstNode::init() {
     m_user4Cnt = 0;
     m_user5u = VNUser(0);
     m_user5Cnt = 0;
+    m_regionId = -1;
 }
 
 AstNode* AstNode::abovep() const {

@@ -2442,24 +2442,31 @@ public:
 class AstActiveRegion : public AstNodeRegion {
     // An active region
 public:
-    AstActiveRegion(FileLine* fl)
-        : ASTGEN_SUPER(fl) {}
+    AstActiveRegion(FileLine* fl, AstNode* nodep)
+        : ASTGEN_SUPER(fl) {
+        setNOp1p(nodep);
+    }
     ASTNODE_NODE_FUNCS(ActiveRegion)
+    AstNode* nodep() const { return op1p(); }
 };
 
 class AstReactiveRegion : public AstNodeRegion {
     // An reactive region
 public:
-    AstReactiveRegion(FileLine* fl)
-        : ASTGEN_SUPER(fl) {}
+    AstReactiveRegion(FileLine* fl, AstNode* nodep)
+        : ASTGEN_SUPER(fl) {
+        setNOp1p(nodep);
+    }
     ASTNODE_NODE_FUNCS(ReactiveRegion)
 };
 
 class AstObservedRegion : public AstNodeRegion {
     // An observed region
 public:
-    AstObservedRegion(FileLine* fl)
-        : ASTGEN_SUPER(fl) {}
+    AstObservedRegion(FileLine* fl, AstNode* nodep)
+        : ASTGEN_SUPER(fl) {
+        setNOp1p(nodep);
+    }
     ASTNODE_NODE_FUNCS(ObservedRegion)
 };
 
