@@ -51,8 +51,9 @@ private:
     AstNodeModule* m_modp;  // Current module
     AstTopScope* m_topScopep;  // Current top scope
     AstScope* m_scopep;  // Current scope
-    AstCFunc* m_evalFuncp;  // Top eval function we are creating
-    AstCFunc* m_initFuncp;  // Top initial function we are creating
+    AstCFunc* m_evalFuncp;  // Top eval active function we are creating
+    AstCFunc* m_initFuncp;  // Top initial active function we are creating
+    AstCFunc* m_initReFuncp;  // Top initial reactive function we are creating
     AstCFunc* m_finalFuncp;  // Top final function we are creating
     AstCFunc* m_settleFuncp;  // Top settlement function we are creating
     AstSenTree* m_lastSenp;  // Last sensitivity match, so we can detect duplicates.
@@ -83,6 +84,7 @@ private:
         if (v3Global.opt.xInitialEdge()) fromp = new AstNot(fromp->fileline(), fromp);
         AstNode* newinitp = new AstAssign(
             vscp->fileline(), new AstVarRef(newvarp->fileline(), newvscp, true), fromp);
+        newinitp->regionId(0);
         addToInitial(newinitp);
         // At bottom, assign them
         AstAssign* finalp
@@ -191,6 +193,17 @@ private:
             funcp->entryPoint(true);
             m_scopep->addActivep(funcp);
             m_initFuncp = funcp;
+        }
+        {
+            AstCFunc* funcp = new AstCFunc(nodep->fileline(), "_eval_re_initial", m_scopep);
+            funcp->argTypes(EmitCBaseVisitor::symClassVar());
+            funcp->dontCombine(true);
+            funcp->slow(true);
+            funcp->symProlog(true);
+            funcp->isStatic(true);
+            funcp->entryPoint(true);
+            m_scopep->addActivep(funcp);
+            m_initReFuncp = funcp;
         }
         {
             AstCFunc* funcp = new AstCFunc(nodep->fileline(), "final", m_scopep);
@@ -312,7 +325,13 @@ private:
         m_settleFuncp->addStmtsp(stmtsp);  // add to top level function
     }
     void addToInitial(AstNode* stmtsp) {
-        m_initFuncp->addStmtsp(stmtsp);  // add to top level function
+        int regionId = stmtsp->regionId();
+        UASSERT_OBJ(regionId != -1, stmtsp, "No region specified");
+        regionId &= 4;
+        if (regionId == 0)
+            m_initFuncp->addStmtsp(stmtsp);  // add to top level active function
+        else if (regionId == 4)
+            m_initReFuncp->addStmtsp(stmtsp);  // add to top level reactive function
     }
     virtual void visit(AstActive* nodep) VL_OVERRIDE {
         // Careful if adding variables here, ACTIVES can be under other ACTIVES
@@ -405,6 +424,7 @@ public:
         m_modp = NULL;
         m_evalFuncp = NULL;
         m_initFuncp = NULL;
+        m_initReFuncp = NULL;
         m_finalFuncp = NULL;
         m_settleFuncp = NULL;
         m_topScopep = NULL;
