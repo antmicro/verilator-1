@@ -3684,6 +3684,7 @@ class AstDisplay : public AstNodeStmt {
     // Children: SFORMATF to generate print string
 private:
     AstDisplayType m_displayType;
+    VRegion m_region;  // Region
 
 public:
     AstDisplay(FileLine* fl, AstDisplayType dispType, const string& text, AstNode* filep,
@@ -3728,6 +3729,8 @@ public:
     AstSFormatF* fmtp() const { return VN_CAST(op1p(), SFormatF); }
     AstNode* filep() const { return op3p(); }
     void filep(AstNodeVarRef* nodep) { setNOp3p(nodep); }
+    void region(const VRegion& flag) { m_region = flag; }
+    VRegion region() const { return m_region; }
 };
 
 class AstDumpCtl : public AstNodeStmt {
@@ -8384,6 +8387,7 @@ private:
     string m_rtnType;  // void, bool, or other return type
     string m_argTypes;
     string m_ifdef;  // #ifdef symbol around this function
+    VRegion m_region;  // Region
     VBoolOrUnknown m_isConst;  // Function is declared const (*this not changed)
     VBoolOrUnknown m_isStatic;  // Function is declared static (no this)
     bool m_dontCombine : 1;  // V3Combine shouldn't compare this func tree, it's special
@@ -8504,6 +8508,8 @@ public:
     void dpiImport(bool flag) { m_dpiImport = flag; }
     bool dpiImportWrapper() const { return m_dpiImportWrapper; }
     void dpiImportWrapper(bool flag) { m_dpiImportWrapper = flag; }
+    void region(const VRegion& flag) { m_region = flag; }
+    VRegion region() const { return m_region; }
     //
     // If adding node accessors, see below emptyBody
     AstNode* argsp() const { return op1p(); }

@@ -10,49 +10,41 @@
 #include <map>
 
 class RegionVisitor : public AstNVisitor {
-    int m_region;
+    bool m_inProgram;
 private:
 
     // VISITORS
     virtual void visit(AstNodeModule* nodep) VL_OVERRIDE {
         UINFO(4, " ACTIVE " << nodep << endl);
-        int old_region = m_region;
-        m_region = REG_ACTIVE;
-        nodep->regionId(m_region);
         iterateChildren(nodep);
-        m_region = old_region;
     }
     virtual void visit(AstProgram* nodep) VL_OVERRIDE {
         UINFO(4, " REACTIVE " << nodep << endl);
-        int old_region = m_region;
-        m_region = REG_REACTIVE;
-        nodep->regionId(m_region);
+        m_inProgram = true;
         iterateChildren(nodep);
-        m_region = old_region;
-    }
-    virtual void visit(AstPropClocked* nodep) VL_OVERRIDE {
-        UINFO(4, " OBSERVED " << nodep << endl);
-        int old_region = m_region;
-        m_region = REG_OBSERVED;
-        nodep->regionId(m_region);
-        iterateChildren(nodep);
-        m_region = old_region;
+        m_inProgram = false;
     }
     virtual void visit(AstAssignDly* nodep) VL_OVERRIDE {
-        UINFO(4, " DLY " << nodep << endl);
-        nodep->regionId(m_region | REG_NBA);
+        nodep->region(m_inProgram ? VRegion::RENBA : VRegion::NBA);
         iterateChildren(nodep);
     }
+    virtual void visit(AstAssign* nodep) VL_OVERRIDE {
+        nodep->region(m_inProgram ? VRegion::REACTIVE : VRegion::ACTIVE);
+        iterateChildren(nodep);
+    }
+    virtual void visit(AstDisplay* nodep) VL_OVERRIDE {
+        nodep->region(m_inProgram ? VRegion::REACTIVE : VRegion::ACTIVE);
+        iterateChildren(nodep);
+    }
+
     virtual void visit(AstNode* nodep) VL_OVERRIDE {
-        UINFO(4, " ACT " << nodep << endl);
-        nodep->regionId(m_region | REG_ACT);
         iterateChildren(nodep);
     }
 
 public:
     // CONSTRUCTORS
     explicit RegionVisitor(AstNetlist* nodep) {
-        m_region = REG_ACTIVE;
+        m_inProgram = false;
         iterateChildren(nodep);
         V3Global::dumpCheckGlobalTree("region", 0, v3Global.opt.dumpTreeLevel(__FILE__) >= 3);
     }

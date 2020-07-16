@@ -89,6 +89,7 @@ const char* AstNodeUOrStructDType::broken() const {
 
 void AstNodeCCall::dump(std::ostream& str) const {
     this->AstNode::dump(str);
+    if (!region().isNone()) str << " [" << region() << "]";
     if (funcp()) {
         str << " " << funcp()->name() << " => ";
         funcp()->dump(str);
@@ -1007,7 +1008,6 @@ static std::string nodeAddr(const AstNode* nodep) {
 void AstNode::dump(std::ostream& str) const {
     str << typeName() << " "
         << nodeAddr(this)
-        << " region: " << regionId() << " "
         //<< " " << nodeAddr(m_backp)
         << " <e" << std::dec << editCount() << ((editCount() >= editCountLast()) ? "#>" : ">")
         << " {" << fileline()->filenameLetters() << std::dec << fileline()->lastLineno()
@@ -1609,6 +1609,7 @@ void AstCFunc::dump(std::ostream& str) const {
     } else if (isStatic().trueUnknown()) {
         str << " [STATIC]";
     }
+    if (!region().isNone()) str << " [" << region() << "]";
     if (dpiImport()) str << " [DPII]";
     if (dpiExport()) str << " [DPIX]";
     if (dpiExportWrapper()) str << " [DPIXWR]";

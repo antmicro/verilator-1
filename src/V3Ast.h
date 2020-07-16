@@ -94,6 +94,35 @@ inline std::ostream& operator<<(std::ostream& os, const AstType& rhs) { return o
 
 //######################################################################
 
+class VRegion {
+public:
+    enum en { NONE, ACTIVE, INACTIVE, NBA, OBSERVED, REACTIVE, REINACTIVE, RENBA };
+    enum en m_e;
+    const char* ascii() const {
+        static const char* const names[] = {"NONE", "ACTIVE", "INACTIVE", "NBA", "OBSERVED", "REACTIVE", "REINACTIVE", "RENBA"};
+        return names[m_e];
+    }
+    inline VRegion()
+        : m_e(NONE) {}
+    // cppcheck-suppress noExplicitConstructor
+    inline VRegion(en _e)
+        : m_e(_e) {}
+    explicit inline VRegion(int _e)
+        : m_e(static_cast<en>(_e)) {}
+    operator en() const { return m_e; }
+    bool isNone() const { return m_e == NONE; }
+    bool isActive() const { return (m_e == ACTIVE || m_e == INACTIVE || m_e == NBA); }
+    bool isReactive() const { return (m_e == REACTIVE || m_e == REINACTIVE || m_e == RENBA); }
+};
+inline bool operator==(const VRegion& lhs, const VRegion& rhs) { return lhs.m_e == rhs.m_e; }
+inline bool operator==(const VRegion& lhs, VRegion::en rhs) { return lhs.m_e == rhs; }
+inline bool operator==(VRegion::en lhs, const VRegion& rhs) { return lhs == rhs.m_e; }
+inline std::ostream& operator<<(std::ostream& os, const VRegion& rhs) {
+    return os << rhs.ascii();
+}
+
+//######################################################################
+
 class VLifetime {
 public:
     enum en { NONE, AUTOMATIC, STATIC };
@@ -1384,9 +1413,6 @@ class AstNode {
     int m_cloneCnt;  // Mark of when userp was set
     static int s_cloneCntGbl;  // Count of which userp is set
 
-    // Region
-    int m_regionId;
-
     // Attributes
     bool m_didWidth : 1;  // Did V3Width computation
     bool m_doingWidth : 1;  // Inside V3Width
@@ -1558,8 +1584,6 @@ public:
     virtual string prettyOperatorName() const { return "operator " + prettyTypeName(); }
     FileLine* fileline() const { return m_fileline; }
     void fileline(FileLine* fl) { m_fileline = fl; }
-    int regionId() const { return m_regionId; }
-    void regionId(int id) { m_regionId = id; }
     bool width1() const;
     int widthInstrs() const;
     void didWidth(bool flag) { m_didWidth = flag; }
@@ -2162,6 +2186,8 @@ public:
 };
 
 class AstNodeAssign : public AstNodeStmt {
+private:
+    VRegion m_region;  // Region
 public:
     AstNodeAssign(AstType t, FileLine* fl, AstNode* lhsp, AstNode* rhsp)
         : AstNodeStmt(t, fl) {
@@ -2184,6 +2210,8 @@ public:
     virtual bool same(const AstNode*) const { return true; }
     virtual string verilogKwd() const { return "="; }
     virtual bool brokeLhsMustBeLvalue() const = 0;
+    void region(const VRegion& flag) { m_region = flag; }
+    VRegion region() const { return m_region; }
 };
 
 class AstNodeFor : public AstNodeStmt {
@@ -2579,6 +2607,7 @@ class AstNodeCCall : public AstNodeStmt {
     AstCFunc* m_funcp;
     string m_hiername;
     string m_argTypes;
+    VRegion m_region;  // Region
 
 public:
     AstNodeCCall(AstType t, FileLine* fl, AstCFunc* funcp, AstNode* argsp = NULL)
@@ -2620,6 +2649,8 @@ public:
     // op1p reserved for AstCMethodCall
     AstNode* argsp() const { return op2p(); }
     void addArgsp(AstNode* nodep) { addOp2p(nodep); }
+    void region(const VRegion& flag) { m_region = flag; }
+    VRegion region() const { return m_region; }
 };
 
 class AstNodeFTask : public AstNode {

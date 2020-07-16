@@ -84,7 +84,6 @@ private:
         if (v3Global.opt.xInitialEdge()) fromp = new AstNot(fromp->fileline(), fromp);
         AstNode* newinitp = new AstAssign(
             vscp->fileline(), new AstVarRef(newvarp->fileline(), newvscp, true), fromp);
-        newinitp->regionId(0);
         addToInitial(newinitp);
         // At bottom, assign them
         AstAssign* finalp
@@ -325,13 +324,17 @@ private:
         m_settleFuncp->addStmtsp(stmtsp);  // add to top level function
     }
     void addToInitial(AstNode* stmtsp) {
-        int regionId = stmtsp->regionId();
-        UASSERT_OBJ(regionId != -1, stmtsp, "No region specified");
-        regionId &= 4;
-        if (regionId == 0)
+        AstNodeCCall* nodep = dynamic_cast<AstNodeCCall*>(stmtsp);
+        if (nodep) {
+            VRegion region = nodep->region();
+            if (region.isReactive()) {
+                m_initReFuncp->addStmtsp(stmtsp);  // add to top level reactive function
+            } else {
+                m_initFuncp->addStmtsp(stmtsp);  // add to top level default function
+            }
+        } else {
             m_initFuncp->addStmtsp(stmtsp);  // add to top level active function
-        else if (regionId == 4)
-            m_initReFuncp->addStmtsp(stmtsp);  // add to top level reactive function
+        }
     }
     virtual void visit(AstActive* nodep) VL_OVERRIDE {
         // Careful if adding variables here, ACTIVES can be under other ACTIVES
