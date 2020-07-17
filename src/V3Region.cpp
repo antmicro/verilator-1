@@ -14,13 +14,8 @@ class RegionVisitor : public AstNVisitor {
 private:
 
     // VISITORS
-    virtual void visit(AstNodeModule* nodep) VL_OVERRIDE {
-        UINFO(4, " ACTIVE " << nodep << endl);
-        iterateChildren(nodep);
-    }
-    virtual void visit(AstProgram* nodep) VL_OVERRIDE {
-        UINFO(4, " REACTIVE " << nodep << endl);
-        m_inProgram = true;
+    virtual void visit(AstModule* nodep) VL_OVERRIDE {
+        m_inProgram = nodep->isProgram();
         iterateChildren(nodep);
         m_inProgram = false;
     }
