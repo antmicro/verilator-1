@@ -2480,6 +2480,7 @@ public:
         , m_isProgram(program) {}
     ASTNODE_NODE_FUNCS(Module)
     virtual string verilogKwd() const { return m_isProgram ? "program" : "module"; }
+    bool isProgram() const { return m_isProgram; }
 };
 
 class AstNotFoundModule : public AstNodeModule {
