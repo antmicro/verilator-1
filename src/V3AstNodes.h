@@ -3190,15 +3190,21 @@ public:
 };
 
 class AstInitial : public AstNodeProcedure {
+private:
+    VRegion m_region;  // Region
 public:
     AstInitial(FileLine* fl, AstNode* bodysp)
         : ASTGEN_SUPER(fl, bodysp) {}
     ASTNODE_NODE_FUNCS(Initial)
+    void region(const VRegion& flag) { m_region = flag; }
+    VRegion region() const { return m_region; }
 };
 
 class AstAlways : public AstNodeProcedure {
     VAlwaysKwd m_keyword;
 
+private:
+    VRegion m_region;  // Region
 public:
     AstAlways(FileLine* fl, VAlwaysKwd keyword, AstSenTree* sensesp, AstNode* bodysp)
         : ASTGEN_SUPER(fl, bodysp)
@@ -3211,6 +3217,8 @@ public:
     AstSenTree* sensesp() const { return VN_CAST(op1p(), SenTree); }  // op1 = Sensitivity list
     void sensesp(AstSenTree* nodep) { setOp1p(nodep); }
     VAlwaysKwd keyword() const { return m_keyword; }
+    void region(const VRegion& flag) { m_region = flag; }
+    VRegion region() const { return m_region; }
 };
 
 class AstAlwaysPublic : public AstNodeStmt {
@@ -3685,7 +3693,6 @@ class AstDisplay : public AstNodeStmt {
     // Children: SFORMATF to generate print string
 private:
     AstDisplayType m_displayType;
-    VRegion m_region;  // Region
 
 public:
     AstDisplay(FileLine* fl, AstDisplayType dispType, const string& text, AstNode* filep,
@@ -3730,8 +3737,6 @@ public:
     AstSFormatF* fmtp() const { return VN_CAST(op1p(), SFormatF); }
     AstNode* filep() const { return op3p(); }
     void filep(AstNodeVarRef* nodep) { setNOp3p(nodep); }
-    void region(const VRegion& flag) { m_region = flag; }
-    VRegion region() const { return m_region; }
 };
 
 class AstDumpCtl : public AstNodeStmt {

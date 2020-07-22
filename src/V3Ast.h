@@ -2173,6 +2173,7 @@ public:
 class AstNodeStmt : public AstNode {
     // Statement -- anything that's directly under a function
     bool m_statement;  // Really a statement (e.g. not a function with return)
+    VRegion m_region;  // Region
 public:
     AstNodeStmt(AstType t, FileLine* fl, bool statement = true)
         : AstNode(t, fl)
@@ -2181,13 +2182,13 @@ public:
     // METHODS
     bool isStatement() const { return m_statement; }  // Really a statement
     void statement(bool flag) { m_statement = flag; }
+    void region(const VRegion& flag) { m_region = flag; }
+    VRegion region() const { return m_region; }
     virtual void addNextStmt(AstNode* newp, AstNode* belowp);  // Stop statement searchback here
     virtual void addBeforeStmt(AstNode* newp, AstNode* belowp);  // Stop statement searchback here
 };
 
 class AstNodeAssign : public AstNodeStmt {
-private:
-    VRegion m_region;  // Region
 public:
     AstNodeAssign(AstType t, FileLine* fl, AstNode* lhsp, AstNode* rhsp)
         : AstNodeStmt(t, fl) {
@@ -2210,8 +2211,6 @@ public:
     virtual bool same(const AstNode*) const { return true; }
     virtual string verilogKwd() const { return "="; }
     virtual bool brokeLhsMustBeLvalue() const = 0;
-    void region(const VRegion& flag) { m_region = flag; }
-    VRegion region() const { return m_region; }
 };
 
 class AstNodeFor : public AstNodeStmt {
@@ -2607,7 +2606,6 @@ class AstNodeCCall : public AstNodeStmt {
     AstCFunc* m_funcp;
     string m_hiername;
     string m_argTypes;
-    VRegion m_region;  // Region
 
 public:
     AstNodeCCall(AstType t, FileLine* fl, AstCFunc* funcp, AstNode* argsp = NULL)
@@ -2649,8 +2647,6 @@ public:
     // op1p reserved for AstCMethodCall
     AstNode* argsp() const { return op2p(); }
     void addArgsp(AstNode* nodep) { addOp2p(nodep); }
-    void region(const VRegion& flag) { m_region = flag; }
-    VRegion region() const { return m_region; }
 };
 
 class AstNodeFTask : public AstNode {
