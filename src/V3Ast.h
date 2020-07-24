@@ -2893,14 +2893,6 @@ public:
     ASTNODE_BASE_FUNCS(NodeRange)
 };
 
-class AstNodeRegion : public AstNode {
-    // Stratified scheduler region
-public:
-    AstNodeRegion(AstType t, FileLine *fl)
-        : AstNode(t, fl) {}
-    ASTNODE_BASE_FUNCS(NodeRegion)
-};
-
 //######################################################################
 
 #include "V3AstNodes__gen.h"
