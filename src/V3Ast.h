@@ -96,10 +96,10 @@ inline std::ostream& operator<<(std::ostream& os, const AstType& rhs) { return o
 
 class VRegion {
 public:
-    enum en { NONE, ACTIVE, INACTIVE, NBA, OBSERVED, REACTIVE, REINACTIVE, RENBA };
+    enum en { NONE, ACTIVE, INACTIVE, NBA, OBSERVED, REACTIVE, REINACTIVE, RENBA, MAX };
     enum en m_e;
     const char* ascii() const {
-        static const char* const names[] = {"NONE", "ACTIVE", "INACTIVE", "NBA", "OBSERVED", "REACTIVE", "REINACTIVE", "RENBA"};
+        static const char* const names[] = {"NONE", "ACTIVE", "INACTIVE", "NBA", "OBSERVED", "REACTIVE", "REINACTIVE", "RENBA", "MAX"};
         return names[m_e];
     }
     inline VRegion()
