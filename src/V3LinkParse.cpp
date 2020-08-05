@@ -579,10 +579,15 @@ private:
             }
             if (nodep->stmtsp()) alwaysp->addStmtp(nodep->stmtsp()->unlinkFrBackWithNext());
         } else {
+# if 0
             nodep->v3warn(E_UNSUPPORTED, "Unsupported: timing control statement in this location\n"
                                              << nodep->warnMore()
                                              << "... Suggest have one timing control statement "
                                              << "per procedure, at the top of the procedure");
+# else
+            // Return so the tree here is not deleted
+            return;
+# endif
         }
         VL_DO_DANGLING(nodep->unlinkFrBack()->deleteTree(), nodep);
     }
