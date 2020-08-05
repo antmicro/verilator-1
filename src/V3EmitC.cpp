@@ -830,6 +830,14 @@ public:
 
         puts("}\n");
     }
+    virtual void visit(AstTimingControl* nodep) override {
+        puts("/* [@ statement was here]\n");
+        puts("--- sentree ---\n");
+        iterateAndNextNull(nodep->sensesp());
+        puts("\n--- statements ---\n");
+        iterateAndNextNull(nodep->stmtsp());
+        puts("\n*/\n");
+    }
     virtual void visit(AstWhile* nodep) override {
         iterateAndNextNull(nodep->precondsp());
         puts("while (");
