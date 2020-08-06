@@ -3130,11 +3130,11 @@ statement_item<nodep>:		// IEEE: statement_item
 	|	yP_MINUSGT idDotted/*hierarchical_identifier-event*/ ';'
 			{ // AssignDly because we don't have stratified queue, and need to
 			  // read events, clear next event, THEN apply this set
-			  $$ = new AstAssignDly($1, $2, new AstConst($1, AstConst::BitTrue())); }
+			  $$ = new AstEventTrigger($1, $2); }
 	//UNSUP	yP_MINUSGTGT delay_or_event_controlE hierarchical_identifier/*event*/ ';'	{ UNSUP }
 	//			// IEEE remove below
 	|	yP_MINUSGTGT delayE idDotted/*hierarchical_identifier-event*/ ';'
-			{ $$ = new AstAssignDly($1, $3, new AstConst($1, AstConst::BitTrue())); }
+			{ $$ = new AstEventTrigger($1, $3); }
 	//
 	//			// IEEE: loop_statement
 	|	yFOREVER stmtBlock			{ $$ = new AstWhile($1,new AstConst($1, AstConst::BitTrue()), $2); }

@@ -844,6 +844,12 @@ public:
     virtual void visit(AstSenItem *nodep) override {
         iterateAndNextNull(nodep->sensp());
     }
+    virtual void visit(AstEventTrigger *nodep) override {
+        puts("/* [ -> statement was here ]\n");
+        puts("--- trigger ---\n");
+        iterateAndNextNull(nodep->trigger());
+        puts("\n*/\n");
+    }
     virtual void visit(AstWhile* nodep) override {
         iterateAndNextNull(nodep->precondsp());
         puts("while (");

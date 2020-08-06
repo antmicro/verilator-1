@@ -85,6 +85,8 @@ private:
     virtual void visit(AstVar*) override {}
     virtual void visit(AstTypedef*) override {}
     virtual void visit(AstParamTypeDType*) override {}
+    virtual void visit(AstWait*) VL_OVERRIDE {}
+    virtual void visit(AstEventTrigger*) override {}
     virtual void visit(AstNode* nodep) override {
         // Hash not just iterate
         nodeHashIterate(nodep);
