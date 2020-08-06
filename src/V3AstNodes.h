@@ -4401,6 +4401,16 @@ public:
     }
 };
 
+class AstEventTrigger : public AstNodeStmt {
+public:
+    explicit AstEventTrigger(FileLine* fl, AstNode* trigger = NULL)
+        : ASTGEN_SUPER(fl) {
+        setNOp1p(trigger);
+    }
+    ASTNODE_NODE_FUNCS(EventTrigger)
+    AstNode* trigger() const { return op1p(); }
+};
+
 class AstGenIf : public AstNodeIf {
 public:
     AstGenIf(FileLine* fl, AstNode* condp, AstNode* ifsp, AstNode* elsesp)
