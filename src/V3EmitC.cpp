@@ -838,6 +838,12 @@ public:
         iterateAndNextNull(nodep->stmtsp());
         puts("\n*/\n");
     }
+    virtual void visit(AstSenTree *nodep) override {
+        iterateAndNextNull(nodep->sensesp());
+    }
+    virtual void visit(AstSenItem *nodep) override {
+        iterateAndNextNull(nodep->sensp());
+    }
     virtual void visit(AstWhile* nodep) override {
         iterateAndNextNull(nodep->precondsp());
         puts("while (");
