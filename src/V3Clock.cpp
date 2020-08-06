@@ -314,6 +314,9 @@ private:
     void addToInitial(AstNode* stmtsp) {
         m_initFuncp->addStmtsp(stmtsp);  // add to top level function
     }
+    virtual void visit(AstTimingControl *nodep) VL_OVERRIDE {
+        // Do not iterate to keep sentree in place
+    }
     virtual void visit(AstActive* nodep) VL_OVERRIDE {
         // Careful if adding variables here, ACTIVES can be under other ACTIVES
         // Need to save and restore any member state in AstUntilStable block
