@@ -583,8 +583,6 @@ private:
             VL_DO_DANGLING(pushDeletep(nodep->unlinkFrBack()), nodep);
             return;
         }
-        nodep->v3warn(STMTDLY, "Unsupported: Ignoring delay on this delayed statement.");
-        VL_DO_DANGLING(pushDeletep(nodep->unlinkFrBack()), nodep);
     }
     virtual void visit(AstFork* nodep) override {
         if (VN_IS(m_ftaskp, Func) && !nodep->joinType().joinNone()) {
