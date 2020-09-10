@@ -389,6 +389,7 @@ public:
             puts(nodep->hiernameProtect());
         }
         puts(nodep->funcp()->nameProtect());
+
         puts("(");
         ccallIterateArgs(nodep);
         if (VN_IS(nodep->backp(), NodeMath) || VN_IS(nodep->backp(), CReturn)) {
@@ -401,8 +402,19 @@ public:
     virtual void visit(AstCTrigger* nodep) override {
         AstCFunc* funcp = nodep->funcp();
         if (funcp->proc()) {
+            // XXX oneshot should be set only for initial blocks!!
+            puts(funcp->nameProtect() + "__oneshot = true;\n");
+            puts("if (!");
+            puts(funcp->nameProtect() + "__started) {\n");
+            puts(funcp->nameProtect() + "__started = true;\n");
+            puts("std::thread " + funcp->nameProtect() + "__thread(" + funcp->nameProtect() + ", ");
+            ccallIterateArgs(nodep);
+            puts(");\n");
+            puts(funcp->nameProtect() + "__thread.detach();\n");
+            puts("}\n");
             puts(funcp->nameProtect() + "__ready = true;\n");
             puts(funcp->nameProtect() + "__cv.notify_all();\n");
+            puts("printf(\"triggering: %s\\n\", \"" + funcp->nameProtect()+ "\");\n");
         } else {
             visit_call(nodep);
         }
@@ -1573,9 +1585,13 @@ class EmitCImp final : EmitCStmts {
             puts("std::mutex ");
             puts(funcNameProtect(nodep, m_modp) + "__mtx;\n");
 
-            // define bool that will be checked in the loop
+            // define bools that will be checked in the loop
             puts("bool ");
             puts(funcNameProtect(nodep, m_modp) + "__ready = false;\n");
+            puts("bool ");
+            puts(funcNameProtect(nodep, m_modp) + "__oneshot = false;\n");
+            puts("bool ");
+            puts(funcNameProtect(nodep, m_modp) + "__started = false;\n");
         }
 
         if (nodep->isInline()) puts("VL_INLINE_OPT ");
@@ -1611,7 +1627,10 @@ class EmitCImp final : EmitCStmts {
             puts(".wait(lck);\n}\n");
             put_cfunc_body(nodep);
             puts(funcNameProtect(nodep, m_modp) + "__ready = false;\n");
-            puts("} while (0 /* FIXME change to !finished for timed blocks */);\n");
+            puts("} while (");
+            //puts(funcNameProtect(nodep, m_modp) + "__oneshot");
+            puts("0");
+            puts(" /* FIXME add || !finished for timed blocks */);\n");
         }
 
         // puts("__Vm_activity = true;\n");
