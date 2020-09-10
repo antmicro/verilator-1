@@ -363,6 +363,15 @@ public:
             puts(".data()");  // Access returned std::array as C array
         }
     }
+    virtual void visit_call_args(AstNodeCCall* nodep) {
+        puts(nodep->argTypes());
+        bool comma = (nodep->argTypes() != "");
+        for (AstNode* subnodep = nodep->argsp(); subnodep; subnodep = subnodep->nextp()) {
+            if (comma) puts(", ");
+            iterate(subnodep);
+            comma = true;
+        }
+    }
     virtual void visit_call(AstNodeCCall* nodep) {
         if (AstCMethodCall* ccallp = VN_CAST(nodep, CMethodCall)) {
             // make this a Ast type for future opt
@@ -372,14 +381,9 @@ public:
             puts(nodep->hiernameProtect());
         }
         puts(nodep->funcp()->nameProtect());
+
         puts("(");
-        puts(nodep->argTypes());
-        bool comma = (nodep->argTypes() != "");
-        for (AstNode* subnodep = nodep->argsp(); subnodep; subnodep = subnodep->nextp()) {
-            if (comma) puts(", ");
-            iterate(subnodep);
-            comma = true;
-        }
+        visit_call_args(nodep);
         if (VN_IS(nodep->backp(), NodeMath) || VN_IS(nodep->backp(), CReturn)) {
             // We should have a separate CCall for math and statement usage, but...
             puts(")");
@@ -390,8 +394,19 @@ public:
     virtual void visit(AstCTrigger* nodep) VL_OVERRIDE {
         AstCFunc* funcp = nodep->funcp();
         if (funcp->proc()) {
+            // XXX oneshot should be set only for initial blocks!!
+            puts(funcp->nameProtect() + "__oneshot = true;\n");
+            puts("if (!");
+            puts(funcp->nameProtect() + "__started) {\n");
+            puts(funcp->nameProtect() + "__started = true;\n");
+            puts("std::thread " + funcp->nameProtect() + "__thread(" + funcp->nameProtect() + ", ");
+            visit_call_args(nodep);
+            puts(");\n");
+            puts(funcp->nameProtect() + "__thread.detach();\n");
+            puts("}\n");
             puts(funcp->nameProtect() + "__ready = true;\n");
             puts(funcp->nameProtect() + "__cv.notify_all();\n");
+            puts("printf(\"triggering: %s\\n\", \"" + funcp->nameProtect()+ "\");\n");
         } else {
             visit_call(nodep);
         }
@@ -1563,9 +1578,13 @@ class EmitCImp : EmitCStmts {
             puts("std::mutex ");
             puts(funcNameProtect(nodep, m_modp) + "__mtx;\n");
 
-            // define bool that will be checked in the loop
+            // define bools that will be checked in the loop
             puts("bool ");
             puts(funcNameProtect(nodep, m_modp) + "__ready = false;\n");
+            puts("bool ");
+            puts(funcNameProtect(nodep, m_modp) + "__oneshot = false;\n");
+            puts("bool ");
+            puts(funcNameProtect(nodep, m_modp) + "__started = false;\n");
         }
 
         if (nodep->isInline()) puts("VL_INLINE_OPT ");
@@ -1593,7 +1612,10 @@ class EmitCImp : EmitCStmts {
             puts(".wait(lck);\n}\n");
             put_cfunc_body(nodep);
             puts(funcNameProtect(nodep, m_modp) + "__ready = false;\n");
-            puts("} while (0 /* FIXME change to !finished for timed blocks */);\n");
+            puts("} while (");
+            //puts(funcNameProtect(nodep, m_modp) + "__oneshot");
+            puts("0");
+            puts(" /* FIXME add || !finished for timed blocks */);\n");
         }
 
         // puts("__Vm_activity = true;\n");
