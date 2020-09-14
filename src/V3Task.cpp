@@ -540,6 +540,10 @@ private:
         AstCFunc* cfuncp = m_statep->ftaskCFuncp(refp->taskp());
         UASSERT_OBJ(cfuncp, refp, "No non-inline task associated with this task call?");
         //
+
+        // propagate m_dynamic flag
+        cfuncp->dynamic(refp->taskp()->dynamic());
+
         AstNode* beginp
             = new AstComment(refp->fileline(), string("Function: ") + refp->name(), true);
         AstNodeCCall* ccallp;
