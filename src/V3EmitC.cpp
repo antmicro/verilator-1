@@ -402,11 +402,18 @@ public:
     virtual void visit(AstCTrigger* nodep) override {
         AstCFunc* funcp = nodep->funcp();
         if (funcp->proc()) {
-            // XXX oneshot should be set only for initial blocks!!
-            puts(funcp->nameProtect() + "__oneshot = true;\n");
+            puts("if(!");
+            puts(funcp->nameProtect() + "__ready) {\n");
+
             puts("if (!");
             puts(funcp->nameProtect() + "__started) {\n");
+            puts("printf(\"starting: %s\\n\", \"" + funcp->nameProtect()+ "\");\n");
             puts(funcp->nameProtect() + "__started = true;\n");
+            // XXX oneshot should be set only for initial blocks.
+            // Make sure using 'slow' is sufficient here.
+            if (nodep->funcp()->slow()) {
+                puts(funcp->nameProtect() + "__oneshot = true;\n");
+            }
             puts("std::thread " + funcp->nameProtect() + "__thread(" + funcp->nameProtect() + ", ");
             ccallIterateArgs(nodep);
             puts(");\n");
@@ -414,7 +421,7 @@ public:
             puts("}\n");
             puts(funcp->nameProtect() + "__ready = true;\n");
             puts(funcp->nameProtect() + "__cv.notify_all();\n");
-            puts("printf(\"triggering: %s\\n\", \"" + funcp->nameProtect()+ "\");\n");
+            puts("}\n");
         } else {
             visit_call(nodep);
         }
@@ -1627,10 +1634,10 @@ class EmitCImp final : EmitCStmts {
             puts(".wait(lck);\n}\n");
             put_cfunc_body(nodep);
             puts(funcNameProtect(nodep, m_modp) + "__ready = false;\n");
-            puts("} while (");
-            //puts(funcNameProtect(nodep, m_modp) + "__oneshot");
-            puts("0");
-            puts(" /* FIXME add || !finished for timed blocks */);\n");
+            puts("} while (!(");
+            puts(funcNameProtect(nodep, m_modp) + "__oneshot");
+            puts(")");
+            puts(" && !Verilated::gotFinish());\n");
         }
 
         // puts("__Vm_activity = true;\n");
