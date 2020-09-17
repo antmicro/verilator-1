@@ -29,25 +29,6 @@
 
 #include <map>
 
-class DynamicSubtreeVisitor : public AstNVisitor {
-private:
-    bool m_dynamic;
-    // VISITORS
-    virtual void visit(AstNode* nodep) override {
-        iterateChildren(nodep);
-        nodep->dynamic(m_dynamic);
-    }
-
-public:
-    explicit DynamicSubtreeVisitor(AstNode* nodep, bool dynamic)
-        : m_dynamic{dynamic} {
-        UINFO(4, " Marking subnodes of " << nodep << " as " << (dynamic ? "DYNAMIC" : "STATIC")
-                                         << endl);
-        iterateChildren(nodep);
-    }
-    virtual ~DynamicSubtreeVisitor() {}
-};
-
 class DynamicRegionCheckerVisitor : public AstNVisitor {
 private:
     VRegion m_region = VRegion::NONE;
@@ -66,52 +47,9 @@ public:
     bool isMixed() const { return m_mixed; }
 };
 
-class DynamicVisitor : public AstNVisitor {
+class DynamicSubtreeVisitor : public AstNVisitor {
 private:
-    bool m_dynamic = false;
-    bool m_inTask = false;
-    void markAndClear(AstNode* nodep) {
-        // DynamicSubtreeVisitor visitor(nodep, m_dynamic);
-        nodep->dynamic(m_dynamic);
-        m_dynamic = false;
-    }
     // VISITORS
-    virtual void visit(AstNodeProcedure* nodep) override {  // Initial/Always/Final
-        UINFO(4, "Visiting NodeProcedure: " << nodep << endl);
-        iterateChildren(nodep);
-        markAndClear(nodep);
-    }
-
-    virtual void visit(AstNodeFTask* nodep) override {  // Function/Task
-        UINFO(4, "Visiting NodeFTask: " << nodep << endl);
-        if (VN_IS(nodep, Task)) m_inTask = true;
-
-        if (v3Global.opt.stratifiedScheduler()) {
-            DynamicRegionCheckerVisitor visitor(nodep);
-            if (visitor.isMixed()) {
-                UINFO(4, "Found NodeFTask with mixed regions: " << nodep << endl);
-                m_dynamic = true;
-            }
-        }
-
-        iterateChildren(nodep);
-
-        m_inTask = false;
-
-        if (nodep->isVirtual()) m_dynamic = true;
-
-        markAndClear(nodep);
-    }
-
-    virtual void visit(AstNodeFTaskRef* nodep) override {  // Function/Task calls
-        UINFO(4, "Visiting NodeFTaskRef: " << nodep << endl);
-        iterateChildren(nodep);
-        AstNodeFTask* taskp = nodep->taskp();
-        m_dynamic = m_dynamic || taskp->dynamic();
-        if (taskp->isVirtual()) m_dynamic = true;
-        if (taskp->dpiImport()) m_dynamic = true;
-    }
-
     virtual void
     visit(AstVarRef* nodep) override {  // Predefined classes (process/mailbox/semaphore)
         UINFO(4, "Visiting VarRef: " << nodep << endl);
@@ -138,6 +76,84 @@ private:
         UINFO(4, "Visiting Delay: " << nodep << endl);
         if (m_inTask) m_dynamic = true;
         iterateChildren(nodep);
+    }
+
+    virtual void visit(AstNode* nodep) override {
+        iterateChildren(nodep);
+    }
+
+public:
+    explicit DynamicSubtreeVisitor(AstNode* nodep, bool dynamic) {
+        iterateChildren(nodep);
+    }
+    virtual ~DynamicSubtreeVisitor() {}
+    bool isDynamic() const { return false; }
+};
+
+class DynamicVisitor : public AstNVisitor {
+private:
+    bool m_dynamic = false;
+    bool m_inTask = false;
+    void markAndClear(AstNode* nodep) {
+        // DynamicSubtreeVisitor visitor(nodep, m_dynamic);
+        nodep->dynamic(m_dynamic);
+        m_dynamic = false;
+    }
+    // VISITORS
+    virtual void visit(AstNodeProcedure* nodep) override {  // Initial/Always/Final
+        UINFO(4, "Visiting NodeProcedure: " << nodep << endl);
+
+        DynamicSubtreeVisitor visitor(nodep);
+
+        nodep->dynamic(visitor.dynamic());
+
+        /*
+
+        iterateChildren(nodep);
+        markAndClear(nodep);
+
+        */
+    }
+
+    virtual void visit(AstNodeFTask* nodep) override {  // Function/Task
+        UINFO(4, "Visiting NodeFTask: " << nodep << endl);
+
+        /*
+
+        if (VN_IS(nodep, Task)) m_inTask = true;
+
+        if (v3Global.opt.stratifiedScheduler()) {
+            DynamicRegionCheckerVisitor visitor(nodep);
+            if (visitor.isMixed()) {
+                UINFO(4, "Found NodeFTask with mixed regions: " << nodep << endl);
+                m_dynamic = true;
+            }
+        }
+
+        iterateChildren(nodep);
+
+        m_inTask = false;
+
+        if (nodep->isVirtual()) m_dynamic = true;
+
+        markAndClear(nodep);
+
+        */
+    }
+
+    virtual void visit(AstNodeFTaskRef* nodep) override {  // Function/Task calls
+        UINFO(4, "Visiting NodeFTaskRef: " << nodep << endl);
+
+        /*
+
+        iterateChildren(nodep);
+        AstNodeFTask* taskp = nodep->taskp();
+
+        */
+
+        m_dynamic = m_dynamic || taskp->dynamic();
+        if (taskp->isVirtual()) m_dynamic = true;
+        if (taskp->dpiImport()) m_dynamic = true;
     }
 
     virtual void visit(AstNode* nodep) override { iterateChildren(nodep); }
