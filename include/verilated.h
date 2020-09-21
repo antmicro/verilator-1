@@ -91,6 +91,7 @@ typedef WData* WDataOutP;  ///< Array output from a function
 
 class VerilatedEvalMsgQueue;
 class VerilatedScopeNameMap;
+class VerilatedTimedQueue;
 class VerilatedVar;
 class VerilatedVarNameMap;
 class VerilatedVcd;
@@ -364,6 +365,7 @@ public:  // But for internal use only
 #ifdef VL_THREADED
     VerilatedEvalMsgQueue* __Vm_evalMsgQp;
 #endif
+    VerilatedTimedQueue* __Vm_timedQp;
     VerilatedSyms();
     ~VerilatedSyms();
 };
@@ -608,6 +610,7 @@ public:
     // Internal: Throw signal assertion
     static void nullPointerError(const char* filename, int linenum) VL_ATTR_NORETURN VL_MT_SAFE;
     static void overWidthError(const char* signame) VL_ATTR_NORETURN VL_MT_SAFE;
+    static void timeBackwardsError() VL_ATTR_NORETURN VL_MT_SAFE;
 
     // Internal: Find scope
     static const VerilatedScope* scopeFind(const char* namep) VL_MT_SAFE;
@@ -632,6 +635,12 @@ public:
     static void* serialized1Ptr() VL_MT_UNSAFE { return &s_s; }  // Unsafe, for Serialize only
     static size_t serialized2Size() VL_PURE;
     static void* serialized2Ptr() VL_MT_UNSAFE;
+
+    // Internal: Time Queue
+    static bool timedQEmpty(VerilatedSyms* symsp) VL_MT_SAFE;
+    static vluint64_t timedQEarliestTime(VerilatedSyms* symsp) VL_MT_SAFE;
+    static void timedQPush(VerilatedSyms* symsp, vluint64_t time, CData* eventp) VL_MT_SAFE;
+    static void timedQActivate(VerilatedSyms* symsp, vluint64_t time) VL_MT_SAFE;
 #ifdef VL_THREADED
     /// Set the mtaskId, called when an mtask starts
     static void mtaskId(vluint32_t id) VL_MT_SAFE { t_s.t_mtaskId = id; }

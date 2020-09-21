@@ -2734,6 +2734,7 @@ void EmitCImp::emitWrapEval(AstNodeModule* modp) {
     puts("if (VL_UNLIKELY(!vlSymsp->__Vm_didInit)) " + protect("_eval_initial_loop")
          + "(vlSymsp);\n");
     if (v3Global.opt.inhibitSim()) puts("if (VL_UNLIKELY(__Vm_inhibitSim)) return;\n");
+    puts("Verilated::timedQActivate(vlSymsp, VL_TIME_Q());\n");
 
     if (v3Global.opt.threads() == 1) {
         uint32_t mtaskId = 0;
@@ -2817,6 +2818,12 @@ void EmitCImp::emitWrapEval(AstNodeModule* modp) {
                    true);
     puts("}\n");
     splitSizeInc(10);
+
+    puts("\n");
+    puts("bool " + prefixNameProtect(modp)
+         + "::timeSlotsEmpty() { return Verilated::timedQEmpty(__VlSymsp); }\n");
+    puts("vluint64_t " + prefixNameProtect(modp)
+         + "::timeSlotsEarliestTime() { return Verilated::timedQEarliestTime(__VlSymsp); }\n");
 }
 
 //----------------------------------------------------------------------
@@ -3232,6 +3239,11 @@ void EmitCImp::emitInt(AstNodeModule* modp) {
                  "must call on completion.\n");
         }
         puts("void final();\n");
+        // Calling this "time slots" matches IEEE nomenclature
+        puts("/// Return true if no more timed work to do. Application uses to exit.\n");
+        puts("bool timeSlotsEmpty();\n");
+        puts("/// Return earliest time slot. Application uses to advance time.\n");
+        puts("vluint64_t timeSlotsEarliestTime();\n");
         if (v3Global.opt.inhibitSim()) {
             puts("/// Disable evaluation of module (e.g. turn off)\n");
             puts("void inhibitSim(bool flag) { __Vm_inhibitSim = flag; }\n");
