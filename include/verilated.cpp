@@ -71,6 +71,8 @@ Verilated::CommandArgValues Verilated::s_args;
 
 VerilatedImp VerilatedImp::s_s;
 
+std::vector<VerilatedThread*> verilated_threads;
+
 //===========================================================================
 // User definable functions
 // Note a TODO is a future version of the API will pass a structure so that

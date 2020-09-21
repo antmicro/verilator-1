@@ -384,7 +384,7 @@ static void process() {
         if (v3Global.opt.oLocalize()) V3Localize::localizeAll(v3Global.rootp());
 
         // Icache packing; combine common code in each module's functions into subroutines
-        if (v3Global.opt.oCombine()) V3Combine::combineAll(v3Global.rootp());
+        //if (v3Global.opt.oCombine()) V3Combine::combineAll(v3Global.rootp());
     }
 
     V3Error::abortIfErrors();
