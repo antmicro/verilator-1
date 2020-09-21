@@ -2437,6 +2437,12 @@ void Verilated::overWidthError(const char* signame) VL_MT_SAFE {
     VL_UNREACHABLE
 }
 
+void Verilated::timeBackwardsError() VL_MT_SAFE {
+     // Slowpath
+     VL_FATAL_MT("unknown", 0, "", "Time attempted to flow backwards");
+     VL_UNREACHABLE
+}
+
 void Verilated::mkdir(const char* dirname) VL_MT_UNSAFE {
 #if defined(_WIN32) || defined(__MINGW32__)
     ::mkdir(dirname);
@@ -2479,6 +2485,20 @@ void Verilated::endOfEvalGuts(VerilatedEvalMsgQueue* evalMsgQp) VL_MT_SAFE {
     evalMsgQp->process();
 }
 #endif
+
+bool Verilated::timedQEmpty(VerilatedSyms* symsp) VL_MT_SAFE {
+    return symsp->__Vm_timedQp->empty();
+}
+vluint64_t Verilated::timedQEarliestTime(VerilatedSyms* symsp) VL_MT_SAFE {
+    return symsp->__Vm_timedQp->earliestTime();
+}
+void Verilated::timedQPush(VerilatedSyms* symsp, vluint64_t time, CData* eventp) VL_MT_SAFE {
+    *eventp = 0;  // Deactivate event
+    symsp->__Vm_timedQp->push(time, eventp);
+}
+void Verilated::timedQActivate(VerilatedSyms* symsp, vluint64_t time) VL_MT_SAFE {
+    symsp->__Vm_timedQp->activate(time);
+}
 
 //===========================================================================
 // VerilatedImp:: Constructors
@@ -2604,12 +2624,14 @@ bool VerilatedImp::commandArgVlValue(const std::string& arg, const std::string& 
 VerilatedSyms::VerilatedSyms() {
 #ifdef VL_THREADED
     __Vm_evalMsgQp = new VerilatedEvalMsgQueue;
+    __Vm_timedQp = new VerilatedTimedQueue;
 #endif
 }
 VerilatedSyms::~VerilatedSyms() {
 #ifdef VL_THREADED
     delete __Vm_evalMsgQp;
 #endif
+    delete __Vm_timedQp;
 }
 
 //===========================================================================
