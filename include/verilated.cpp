@@ -95,6 +95,8 @@ struct VerilatedInitializer {
     }
 } s_VerilatedInitializer;
 
+std::vector<VerilatedThread*> verilated_threads;
+
 //===========================================================================
 // User definable functions
 // Note a TODO is a future version of the API will pass a structure so that

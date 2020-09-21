@@ -35,8 +35,10 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <vector>
 #include <thread>
 #include <condition_variable>
+#include <functional>
 
 // <iostream> avoided to reduce compile time
 // <map> avoided and instead in verilated_heavy.h to reduce compile time
@@ -96,6 +98,62 @@ class VerilatedVcdC;
 class VerilatedVcdSc;
 class VerilatedFst;
 class VerilatedFstC;
+class VerilatedThread;
+
+extern std::vector<VerilatedThread*> verilated_threads;
+
+class VerilatedThread {
+
+public:
+    bool m_ready;
+    bool m_oneshot;
+    bool m_started;
+    bool m_should_exit;
+    std::thread m_thr;
+    std::mutex m_mtx;
+    std::condition_variable m_cv;
+    std::function<void(void*,VerilatedThread*)> m_func;
+
+    VerilatedThread(void (*func)(void*, VerilatedThread*), void* args, bool oneshot)
+        : m_ready(false)
+        , m_oneshot(oneshot)
+        , m_started(false)
+        , m_should_exit(false) {
+        verilated_threads.push_back(this);
+
+        m_func = func;
+
+        m_thr = std::thread(m_func, args, this);
+    }
+
+    bool should_exit() {
+        return m_should_exit;
+    }
+
+    bool ready() {
+        return m_ready;
+    }
+
+    void ready(bool r) {
+        m_ready = r;
+    }
+
+    void join() {
+        m_thr.join();
+    }
+
+    void exit() {
+        m_should_exit = true;
+        m_cv.notify_all();
+        join();
+    }
+
+    void kick() {
+        m_ready = true;
+        m_cv.notify_all();
+    }
+
+};
 
 enum VerilatedVarType : vluint8_t {
     VLVT_UNKNOWN = 0,

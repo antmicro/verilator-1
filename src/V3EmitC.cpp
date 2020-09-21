@@ -245,7 +245,11 @@ public:
                 puts(" ");
             }
             puts(funcNameProtect(funcp, modp));
-            puts("(" + cFuncArgs(funcp) + ")");
+
+            if (funcp->proc())
+                puts("(" + cFuncArgs(funcp) + ", VerilatedThread* self)");
+            else
+                puts("(" + cFuncArgs(funcp) + ")");
             if (funcp->isConst().trueKnown()) puts(" const");
             if (funcp->slow()) puts(" VL_ATTR_COLD");
             puts(";\n");
@@ -402,26 +406,15 @@ public:
     virtual void visit(AstCTrigger* nodep) override {
         AstCFunc* funcp = nodep->funcp();
         if (funcp->proc()) {
-            puts("if(!");
-            puts(funcp->nameProtect() + "__ready) {\n");
-
-            puts("if (!");
-            puts(funcp->nameProtect() + "__started) {\n");
-            puts("printf(\"starting: %s\\n\", \"" + funcp->nameProtect()+ "\");\n");
-            puts(funcp->nameProtect() + "__started = true;\n");
-            // XXX oneshot should be set only for initial blocks.
-            // Make sure using 'slow' is sufficient here.
-            if (nodep->funcp()->slow()) {
-                puts(funcp->nameProtect() + "__oneshot = true;\n");
-            }
-            puts("std::thread " + funcp->nameProtect() + "__thread(" + funcp->nameProtect() + ", ");
+            puts("static VerilatedThread ");
+            puts(funcp->nameProtect() + "__thread(");;
+            puts("(void (*)(void*, VerilatedThread*))");
+            puts(funcp->nameProtect() + ", ");
             ccallIterateArgs(nodep);
+            puts(", ");
+            puts(nodep->funcp()->slow() ? "true" : "false");
             puts(");\n");
-            puts(funcp->nameProtect() + "__thread.detach();\n");
-            puts("}\n");
-            puts(funcp->nameProtect() + "__ready = true;\n");
-            puts(funcp->nameProtect() + "__cv.notify_all();\n");
-            puts("}\n");
+            puts(funcp->nameProtect() + "__thread.kick();\n");;
         } else {
             visit_call(nodep);
         }
@@ -1583,24 +1576,6 @@ class EmitCImp final : EmitCStmts {
         puts("\n");
         if (nodep->ifdef() != "") puts("#ifdef " + nodep->ifdef() + "\n");
 
-        if (nodep->proc()) {
-            // definie condition variable for unlocking the thread (eval step)
-            puts("std::condition_variable ");
-            puts(funcEvalBlockNameProtect(nodep, m_modp) + ";\n");
-
-            // define mutex to use for condition waiting
-            puts("std::mutex ");
-            puts(funcNameProtect(nodep, m_modp) + "__mtx;\n");
-
-            // define bools that will be checked in the loop
-            puts("bool ");
-            puts(funcNameProtect(nodep, m_modp) + "__ready = false;\n");
-            puts("bool ");
-            puts(funcNameProtect(nodep, m_modp) + "__oneshot = false;\n");
-            puts("bool ");
-            puts(funcNameProtect(nodep, m_modp) + "__started = false;\n");
-        }
-
         if (nodep->isInline()) puts("VL_INLINE_OPT ");
         if (!nodep->isConstructor() && !nodep->isDestructor()) {
             puts(nodep->rtnTypeVoid());
@@ -1609,7 +1584,11 @@ class EmitCImp final : EmitCStmts {
 
         if (nodep->isMethod()) puts(prefixNameProtect(m_modp) + "::");
         puts(funcNameProtect(nodep, m_modp));
-        puts("(" + cFuncArgs(nodep) + ")");
+        if (!nodep->proc()) {
+            puts("(" + cFuncArgs(nodep) + ")");
+        } else {
+            puts("(" + cFuncArgs(nodep) + ", VerilatedThread* self)");
+        }
         if (nodep->isConst().trueKnown()) puts(" const");
 
         // TODO perhaps better to have a new AstCCtorInit so we can pass arguments
@@ -1624,20 +1603,20 @@ class EmitCImp final : EmitCStmts {
         if (!nodep->proc()) {
             put_cfunc_body(nodep);
         } else {
-            puts("std::unique_lock<std::mutex> lck(");
-            puts(funcNameProtect(nodep, m_modp) + "__mtx");
-            puts(");\n");
-            puts("do {\n");
-            puts("while(!");
-            puts(funcNameProtect(nodep, m_modp) + "__ready) {\n");
-            puts(funcEvalBlockNameProtect(nodep, m_modp));
-            puts(".wait(lck);\n}\n");
+            puts("std::unique_lock<std::mutex> lck(self->m_mtx);\n");
+            if (!nodep->slow())
+                puts("do {\n");
+
+            puts("while(!self->ready() && !self->should_exit()) {\n");
+            puts("self->m_cv.wait(lck);\n}\n");
+
+            puts("if (self->should_exit()) return;\n");
+
             put_cfunc_body(nodep);
-            puts(funcNameProtect(nodep, m_modp) + "__ready = false;\n");
-            puts("} while (!(");
-            puts(funcNameProtect(nodep, m_modp) + "__oneshot");
-            puts(")");
-            puts(" && !Verilated::gotFinish());\n");
+
+            puts("self->ready(false);\n");
+            if (!nodep->slow())
+                puts("} while (!Verilated::gotFinish() && !self->should_exit());\n");
         }
 
         // puts("__Vm_activity = true;\n");
