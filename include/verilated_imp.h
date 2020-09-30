@@ -220,7 +220,7 @@ class VerilatedThread {
 // VerilatedTimedQueue
 /// A priority queue of events to activate at a given time
 class VerilatedTimedQueue {
-    typedef std::pair<vluint64_t, CData*> TimeEvent;  // time, eventp
+    typedef std::pair<vluint64_t, VerilatedThread*> TimeEvent;  // time, eventp
 
     struct CustomCompare {
         bool operator()(const TimeEvent& lhs, const TimeEvent& rhs) {
@@ -236,6 +236,8 @@ class VerilatedTimedQueue {
     VL_UNCOPYABLE(VerilatedTimedQueue);
 
 public:
+    std::condition_variable m_cv;
+
     VerilatedTimedQueue() {}
     ~VerilatedTimedQueue() {}
 
@@ -249,20 +251,22 @@ public:
         return topTime;
     }
     /// Push to activate given event at given time
-    void push(vluint64_t time, CData* eventp) VL_EXCLUDES(m_mutex) VL_MT_SAFE {
+    void push(vluint64_t time, VerilatedThread* thread) VL_EXCLUDES(m_mutex) VL_MT_SAFE {
         VL_DEBUG_IF(if (VL_UNLIKELY(time < VL_TIME_Q())) Verilated::timeBackwardsError(););
         VerilatedLockGuard lock{m_mutex};
-        m_timeq.push(std::make_pair(time, eventp));
+        m_timeq.push(std::make_pair(time, thread));
+        thread->idle(true);
     }
     /// Activate and pop all events earlier than given time
     void activate(vluint64_t time) VL_EXCLUDES(m_mutex) VL_MT_SAFE {
         VerilatedLockGuard lock{m_mutex};
         while (VL_LIKELY(!m_timeq.empty() && m_timeq.top().first <= time)) {
-            CData* eventp = m_timeq.top().second;
-            *eventp = 1;
+            VerilatedThread* thread = m_timeq.top().second;
+            thread->idle(false);
             VL_DEBUG_IF(VL_DBG_MSGF("+    activate %p\n", eventp););
             m_timeq.pop();
         }
+        m_cv.notify_all();
     }
 };
 
