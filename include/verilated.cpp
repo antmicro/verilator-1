@@ -2422,15 +2422,27 @@ void Verilated::endOfEvalGuts(VerilatedEvalMsgQueue* evalMsgQp) VL_MT_SAFE {
 bool Verilated::timedQEmpty(VerilatedSyms* symsp) VL_MT_SAFE {
     return symsp->__Vm_timedQp->empty();
 }
+
 vluint64_t Verilated::timedQEarliestTime(VerilatedSyms* symsp) VL_MT_SAFE {
+    // wait for all threads to be in idle state first, otherwise
+    // we might not have the real earliest time yet
+    for (auto t: verilated_threads) {
+        t->wait_for_idle();
+    }
+
     return symsp->__Vm_timedQp->earliestTime();
 }
-void Verilated::timedQPush(VerilatedSyms* symsp, vluint64_t time, CData* eventp) VL_MT_SAFE {
-    *eventp = 0;  // Deactivate event
-    symsp->__Vm_timedQp->push(time, eventp);
+void Verilated::timedQPush(VerilatedSyms* symsp, vluint64_t time, VerilatedThread* thread) VL_MT_SAFE {
+    symsp->__Vm_timedQp->push(time, thread);
 }
 void Verilated::timedQActivate(VerilatedSyms* symsp, vluint64_t time) VL_MT_SAFE {
     symsp->__Vm_timedQp->activate(time);
+}
+
+void Verilated::timedQWait(VerilatedSyms* symsp, std::mutex& mtx) VL_MT_SAFE {
+    std::unique_lock<std::mutex> lck(mtx);
+
+    symsp->__Vm_timedQp->m_cv.wait(lck);
 }
 
 //===========================================================================
@@ -2544,6 +2556,15 @@ VerilatedSyms::VerilatedSyms() {
 #endif
 }
 VerilatedSyms::~VerilatedSyms() {
+    for (auto t: verilated_threads) {
+        t->should_exit(true);
+    }
+    __Vm_timedQp->m_cv.notify_all();
+
+    for (auto t: verilated_threads) {
+        t->exit();
+    }
+
 #ifdef VL_THREADED
     delete __Vm_evalMsgQp;
 #endif

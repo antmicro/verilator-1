@@ -106,20 +106,30 @@ extern std::vector<VerilatedThread*> verilated_threads;
 class VerilatedThread {
 
 public:
-    bool m_ready;
-    bool m_oneshot;
-    bool m_started;
-    bool m_should_exit;
+    std::atomic<bool> m_ready;
+    std::atomic<bool> m_oneshot;
+    std::atomic<bool> m_started;
+
+    std::atomic<bool> m_should_exit;
+    std::atomic<bool> m_idle;
+
     std::thread m_thr;
     std::mutex m_mtx;
     std::condition_variable m_cv;
+
+    std::mutex m_delay_mtx;
+    std::mutex m_delay_wait_mtx;
+    std::condition_variable m_delay_wait_cv;
+
     std::function<void(void*,VerilatedThread*)> m_func;
 
-    VerilatedThread(void (*func)(void*, VerilatedThread*), void* args, bool oneshot)
+    VerilatedThread(void (*func)(void*, VerilatedThread*), void* args, bool oneshot, std::string name)
         : m_ready(false)
         , m_oneshot(oneshot)
         , m_started(false)
-        , m_should_exit(false) {
+        , m_should_exit(false)
+        , m_idle(false)
+        , m_name(name) {
         verilated_threads.push_back(this);
 
         m_func = func;
@@ -131,12 +141,41 @@ public:
         return m_should_exit;
     }
 
+    void should_exit(bool e) {
+        std::unique_lock<std::mutex> lck(m_delay_wait_mtx);
+        m_should_exit = e;
+        m_delay_wait_cv.notify_all();
+    }
+
     bool ready() {
         return m_ready;
     }
 
     void ready(bool r) {
+        std::unique_lock<std::mutex> lck(m_delay_wait_mtx);
         m_ready = r;
+        m_delay_wait_cv.notify_all();
+    }
+
+    void wait_for_idle() {
+        std::unique_lock<std::mutex> lck(m_delay_wait_mtx);
+
+        while(ready() && !should_exit() && !idle()) {
+            m_delay_wait_cv.wait(lck);
+        }
+    }
+
+    bool idle() {
+        return m_idle;
+    }
+
+    void idle(bool w) {
+        std::unique_lock<std::mutex> lck(m_delay_wait_mtx);
+        m_idle = w;
+
+        if (w) {
+            m_delay_wait_cv.notify_all();
+        }
     }
 
     void join() {
@@ -144,14 +183,25 @@ public:
     }
 
     void exit() {
-        m_should_exit = true;
+        should_exit(true);
         m_cv.notify_all();
+        m_delay_wait_cv.notify_all();
         join();
     }
 
     void kick() {
-        m_ready = true;
+        ready(true);
         m_cv.notify_all();
+    }
+
+    // debug only
+    std::string m_name;
+    void name(std::string n) {
+        m_name = n;
+    }
+
+    std::string name() {
+        return m_name;
     }
 
 };
@@ -639,8 +689,9 @@ public:
     // Internal: Time Queue
     static bool timedQEmpty(VerilatedSyms* symsp) VL_MT_SAFE;
     static vluint64_t timedQEarliestTime(VerilatedSyms* symsp) VL_MT_SAFE;
-    static void timedQPush(VerilatedSyms* symsp, vluint64_t time, CData* eventp) VL_MT_SAFE;
+    static void timedQPush(VerilatedSyms* symsp, vluint64_t time, VerilatedThread* thread) VL_MT_SAFE;
     static void timedQActivate(VerilatedSyms* symsp, vluint64_t time) VL_MT_SAFE;
+    static void timedQWait(VerilatedSyms* symsp, std::mutex& mtx) VL_MT_SAFE;
 #ifdef VL_THREADED
     /// Set the mtaskId, called when an mtask starts
     static void mtaskId(vluint32_t id) VL_MT_SAFE { t_s.t_mtaskId = id; }

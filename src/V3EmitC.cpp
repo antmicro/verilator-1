@@ -405,7 +405,7 @@ public:
             visit_call_args(nodep);
             puts(", ");
             puts(nodep->funcp()->slow() ? "true" : "false");
-            puts(");\n");
+            puts(", \"" + funcp->nameProtect() + "\");\n");;
             puts(funcp->nameProtect() + "__thread.kick();\n");;
         } else {
             visit_call(nodep);
@@ -791,6 +791,20 @@ public:
     }
     virtual void visit(AstJumpLabel* nodep) VL_OVERRIDE {
         puts("__Vlabel" + cvtToStr(nodep->blockp()->labelNum()) + ": ;\n");
+    }
+    virtual void visit(AstDelay *nodep) VL_OVERRIDE {
+        // Make the waiting for the event local to reuse variable nates
+        puts("{\n");
+
+        puts("Verilated::timedQPush(vlSymsp, VL_TIME_Q() + ");
+        iterateAndNextNull(nodep->lhsp());
+        puts(", self);\n");
+        puts("while (self->idle() && !self->should_exit()) {\n");
+        puts("Verilated::timedQWait(vlSymsp, self->m_delay_mtx);\n");
+        puts("}\n");
+        puts("if (self->should_exit()) return;\n");
+
+        puts("}\n");
     }
     virtual void visit(AstWhile* nodep) VL_OVERRIDE {
         iterateAndNextNull(nodep->precondsp());
