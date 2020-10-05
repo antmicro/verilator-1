@@ -20,6 +20,7 @@
 //        MTaskMoveVertex
 //        OrderEitherVertex
 //          OrderInputsVertex
+//          OrderRegionBorderVertex
 //          OrderLogicVertex
 //          OrderVarVertex
 //            OrderVarStdVertex
@@ -150,6 +151,28 @@ public:
     AstSenTree* domainp() const { return m_domainp; }
     void isFromInput(bool flag) { m_isFromInput = flag; }
     bool isFromInput() const { return m_isFromInput; }
+};
+
+class OrderRegionBorderVertex : public OrderEitherVertex {
+    std::string m_name;
+
+    OrderRegionBorderVertex(V3Graph* graphp, const OrderRegionBorderVertex& old)
+        : OrderEitherVertex{graphp, old}
+        , m_name(old.m_name) {}
+
+public:
+    OrderRegionBorderVertex(V3Graph* graphp, AstScope* scopep, const std::string& name)
+        : OrderEitherVertex{graphp, scopep, nullptr}
+        , m_name(name) {}
+    virtual ~OrderRegionBorderVertex() override {}
+    virtual OrderRegionBorderVertex* clone(V3Graph* graphp) const override {
+        return new OrderRegionBorderVertex(graphp, *this);
+    }
+    virtual OrderVEdgeType type() const override { return OrderVEdgeType::VERTEX_LOGIC; }
+    virtual string name() const override { return m_name; }
+    virtual string dotColor() const override { return "purple"; }
+    virtual string dotName() const override { return ""; }
+    virtual bool domainMatters() override { return false; }
 };
 
 class OrderInputsVertex : public OrderEitherVertex {

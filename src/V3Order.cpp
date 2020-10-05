@@ -673,6 +673,7 @@ private:
     int m_pomNewStmts = 0;  // Statements in function being created
     V3Graph m_pomGraph;  // Graph of logic elements to move
     V3List<OrderMoveVertex*> m_pomWaiting;  // List of nodes needing inputs to become ready
+    OrderEitherVertex* m_activeReactiveBorderp = nullptr; // Represents the separation between the active and reactive regions
 protected:
     friend class OrderMoveDomScope;
     V3List<OrderMoveDomScope*> m_pomReadyDomScope;  // List of ready domain/scope pairs, by loopId
@@ -986,6 +987,19 @@ private:
         }
     }
     virtual void visit(AstClass*) override {}
+    virtual void visit(AstNodeStmt* nodep) override {
+        if (!m_activeReactiveBorderp) {
+            m_activeReactiveBorderp = new OrderRegionBorderVertex(&m_graph, m_scopep, "ACTIVE/REACTIVE");
+        }
+        auto nodeVxp = new OrderLogicVertex(&m_graph, m_scopep, m_activep->sensesp(), nodep);
+        if (nodep->region() == VRegion::REACTIVE ||
+            nodep->region() == VRegion::REINACTIVE ||
+            nodep->region() == VRegion::RENBA) {
+            new OrderEdge(&m_graph, m_activeReactiveBorderp, nodeVxp, WEIGHT_MEDIUM);
+        } else {
+            new OrderEdge(&m_graph, nodeVxp, m_activeReactiveBorderp, WEIGHT_MEDIUM);
+        }
+    }
     virtual void visit(AstScope* nodep) override {
         UINFO(4, " SCOPE " << nodep << endl);
         m_scopep = nodep;
