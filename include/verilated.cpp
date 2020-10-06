@@ -796,7 +796,11 @@ void _vl_vsformat(std::string& output, const char* formatp, va_list ap) VL_MT_SA
                 WData qlwp[VL_WQ_WORDS_E];
                 WDataInP lwp = nullptr;
                 if (lbits <= VL_QUADSIZE) {
-                    ld = _VL_VA_ARG_Q(ap, lbits);
+                    if (lbits <= VL_IDATASIZE) {
+                        ld = va_arg(ap, IData);
+                    } else {
+                        ld = va_arg(ap, QData);
+                    }
                     VL_SET_WQ(qlwp, ld);
                     lwp = qlwp;
                 } else {
@@ -818,7 +822,11 @@ void _vl_vsformat(std::string& output, const char* formatp, va_list ap) VL_MT_SA
                     for (; lsb >= 0; --lsb) {
                         lsb = (lsb / 8) * 8;  // Next digit
                         IData charval = VL_BITRSHIFT_W(lwp, lsb) & 0xff;
-                        field += (charval == 0) ? ' ' : charval;
+                        if (charval == 0) {
+                            field += ' ';
+                        } else {
+                            field += charval;
+                        }
                     }
                     std::string padding;
                     if (width > field.size()) padding.append(width - field.size(), ' ');
@@ -1263,7 +1271,11 @@ void _VL_VINT_TO_STRING(int obits, char* destoutp, WDataInP sourcep) VL_MT_SAFE 
         lsb = (lsb / 8) * 8;  // Next digit
         IData charval = VL_BITRSHIFT_W(sourcep, lsb) & 0xff;
         if (!start || charval) {
-            *destp++ = (charval == 0) ? ' ' : charval;
+            if (charval == 0) {
+                *destp++ = ' ';
+            } else {
+                *destp++ = charval;
+            }
             start = false;  // Drop leading 0s
         }
     }
@@ -1704,7 +1716,11 @@ std::string VL_CVT_PACK_STR_NW(int lwords, WDataInP lwp) VL_MT_SAFE {
         lsb = (lsb / 8) * 8;  // Next digit
         IData charval = VL_BITRSHIFT_W(lwp, lsb) & 0xff;
         if (!start || charval) {
-            *destp++ = (charval == 0) ? ' ' : charval;
+            if (charval == 0) {
+                *destp++ = ' ';
+            } else {
+                *destp++ = charval;
+            }
             len++;
             start = false;  // Drop leading 0s
         }
@@ -1874,8 +1890,16 @@ bool VlReadMem::get(QData& addrr, std::string& valuer) {
             // Check for hex or binary digits as file format requests
             else if (isxdigit(c) || (!reading_addr && (c == 'x' || c == 'X'))) {
                 c = tolower(c);
-                int value
-                    = (c >= 'a' ? (c == 'x' ? VL_RAND_RESET_I(4) : (c - 'a' + 10)) : (c - '0'));
+                int value;
+                if (c >= 'a') {
+                    if ( c == 'x') {
+                     value = VL_RAND_RESET_I(4);
+                    } else {
+                     value = (c - 'a' + 10);
+                    }
+                } else {
+                    value = (c - '0');
+                }
                 if (reading_addr) {
                     // Decode @ addresses
                     m_addr = (m_addr << 4) + value;
@@ -1908,7 +1932,16 @@ void VlReadMem::setData(void* valuep, const std::string& rhs) {
     // Shift value in
     for (const auto& i : rhs) {
         char c = tolower(i);
-        int value = (c >= 'a' ? (c == 'x' ? VL_RAND_RESET_I(4) : (c - 'a' + 10)) : (c - '0'));
+        int value;
+        if (c >= 'a') {
+            if ( c == 'x') {
+             value = VL_RAND_RESET_I(4);
+            } else {
+             value = (c - 'a' + 10);
+            }
+        } else {
+            value = (c - '0');
+        }
         if (m_bits <= 8) {
             CData* datap = reinterpret_cast<CData*>(valuep);
             if (!innum) { *datap = 0; }

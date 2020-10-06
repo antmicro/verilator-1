@@ -72,7 +72,94 @@
 
 //=========================================================================
 // Basic types
+//
+template<typename T>
+class MonitoredValue {
+    public:
 
+        MonitoredValue(): value() { }
+
+        template <class U> MonitoredValue(U v) {
+            value = v;
+        }
+
+        operator T() const {
+            return value;
+        };
+
+        MonitoredValue& operator&=(const MonitoredValue& v) {
+            value &= v;
+            return *this;
+        }
+        MonitoredValue& operator|=(const MonitoredValue& v) {
+            value |= v;
+            return *this;
+        }
+        MonitoredValue& operator^=(const MonitoredValue& v) {
+            value ^= v;
+            return *this;
+        }
+        MonitoredValue& operator+=(const MonitoredValue& v) {
+            value += v;
+            return *this;
+        }
+        MonitoredValue& operator-=(const MonitoredValue& v) {
+            value -= v;
+            return *this;
+        }
+        MonitoredValue& operator*=(const MonitoredValue& v) {
+            value *= v;
+            return *this;
+        }
+
+        MonitoredValue& operator>>=(int s) {
+            value >>= s;
+            return *this;
+        }
+
+        MonitoredValue& operator--() {
+            --value;
+            return *this;
+        }
+        MonitoredValue operator--(int) {
+            MonitoredValue v(value--);
+            return v;
+        }
+        MonitoredValue& operator++() {
+            ++value;
+            return *this;
+        }
+        MonitoredValue operator++(int) {
+            MonitoredValue v(value++);
+            return v;
+        }
+
+        template <class U>
+        bool operator==(const U &b) {
+            return value == b;
+        }
+        template <class U>
+        bool operator>(const U &b) {
+            return value > b;
+        }
+        template <class U>
+        bool operator>=(const U &b) {
+            return value >= b;
+        }
+        template <class U>
+        bool operator<(const U &b) {
+            return value < b;
+        }
+        template <class U>
+        bool operator<=(const U &b) {
+            return value <= b;
+        }
+
+    private:
+        T value;
+};
+
+#if 0
 // clang-format off
 //                   P          // Packed data of bit type (C/S/I/Q/W)
 typedef vluint8_t    CData;     ///< Verilated pack data, 1-8 bits
@@ -85,6 +172,14 @@ typedef EData        WData;     ///< Verilated pack data, >64 bits, as an array
 //      double       D          // No typedef needed; Verilator uses double
 //      string       N          // No typedef needed; Verilator uses string
 // clang-format on
+#else
+typedef MonitoredValue<vluint8_t> CData;
+typedef MonitoredValue<vluint16_t> SData;
+typedef MonitoredValue<vluint32_t> IData;
+typedef MonitoredValue<vluint64_t> QData;
+typedef MonitoredValue<vluint32_t> EData;
+typedef MonitoredValue<vluint32_t> WData;
+#endif
 
 typedef const WData* WDataInP;  ///< Array input to a function
 typedef WData* WDataOutP;  ///< Array output from a function
@@ -879,26 +974,26 @@ extern FILE* VL_CVT_I_FP(IData lhs) VL_MT_SAFE;
 // Use a union to avoid cast-to-different-size warnings
 /// Return void* from QData
 static inline void* VL_CVT_Q_VP(QData lhs) VL_PURE {
-    union { void* fp; QData q; } u;
+    union { void* fp; vluint64_t q; } u;
     u.q = lhs;
     return u.fp;
 }
-/// Return QData from const void*
-static inline QData VL_CVT_VP_Q(const void* fp) VL_PURE {
-    union { const void* fp; QData q; } u;
+/// Return QData from void*
+static inline QData VL_CVT_VP_Q(void* fp) VL_PURE {
+    union { const void* fp; vluint64_t q; } u;
     u.q = 0;
     u.fp = fp;
     return u.q;
 }
 /// Return double from QData (bits, not numerically)
 static inline double VL_CVT_D_Q(QData lhs) VL_PURE {
-    union { double d; QData q; } u;
+    union { double d; vluint64_t q; } u;
     u.q = lhs;
     return u.d;
 }
 /// Return QData from double (bits, not numerically)
 static inline QData VL_CVT_Q_D(double lhs) VL_PURE {
-    union { double d; QData q; } u;
+    union { double d; vluint64_t q; } u;
     u.d = lhs;
     return u.q;
 }
