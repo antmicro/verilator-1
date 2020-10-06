@@ -673,7 +673,8 @@ private:
     int m_pomNewStmts = 0;  // Statements in function being created
     V3Graph m_pomGraph;  // Graph of logic elements to move
     V3List<OrderMoveVertex*> m_pomWaiting;  // List of nodes needing inputs to become ready
-    OrderEitherVertex* m_activeReactiveBorderp = nullptr; // Represents the separation between the active and reactive regions
+    OrderEitherVertex* m_activeObservedBorderp = nullptr; // Represents the separation between the active and observed regions
+    OrderEitherVertex* m_observedReactiveBorderp = nullptr; // Represents the separation between the observed and reactive regions
 protected:
     friend class OrderMoveDomScope;
     V3List<OrderMoveDomScope*> m_pomReadyDomScope;  // List of ready domain/scope pairs, by loopId
@@ -987,28 +988,41 @@ private:
         }
     }
     virtual void visit(AstClass*) override {}
-    virtual void visit(AstNodeStmt* nodep) override {
-        if (!m_activeReactiveBorderp) {
-            m_activeReactiveBorderp = new OrderRegionBorderVertex(&m_graph, m_scopep, "ACTIVE/REACTIVE");
-        }
-        auto nodeVxp = new OrderLogicVertex(&m_graph, m_scopep, m_activep->sensesp(), nodep);
-        if (nodep->region() == VRegion::REACTIVE ||
-            nodep->region() == VRegion::REINACTIVE ||
-            nodep->region() == VRegion::RENBA) {
-            new OrderEdge(&m_graph, m_activeReactiveBorderp, nodeVxp, WEIGHT_MEDIUM);
-        } else {
-            new OrderEdge(&m_graph, nodeVxp, m_activeReactiveBorderp, WEIGHT_MEDIUM);
-        }
-    }
     virtual void visit(AstScope* nodep) override {
         UINFO(4, " SCOPE " << nodep << endl);
         m_scopep = nodep;
+        m_activeObservedBorderp = new OrderRegionBorderVertex(&m_graph, m_scopep, "ACTIVE / OBSERVED");
+        m_observedReactiveBorderp = new OrderRegionBorderVertex(&m_graph, m_scopep, "OBSERVED / REACTIVE");
+        new OrderEdge(&m_graph, m_activeObservedBorderp, m_observedReactiveBorderp, WEIGHT_NORMAL);
         m_logicVxp = nullptr;
         m_activeSenVxp = nullptr;
         nodep->user1p(m_modp);
         // Iterate
         iterateChildren(nodep);
+        m_activeObservedBorderp = nullptr;
+        m_observedReactiveBorderp = nullptr;
         m_scopep = nullptr;
+    }
+    virtual void visit(AstNodeStmt* nodep) override {
+        UINFO(4, " STMT " << nodep << endl);
+        auto nodeVxp = new OrderLogicVertex(&m_graph, m_scopep, m_activep->sensesp(), nodep);
+        switch (nodep->region()) {
+            case VRegion::ACTIVE:
+            case VRegion::INACTIVE:
+            case VRegion::NBA:
+                new OrderEdge(&m_graph, nodeVxp, m_activeObservedBorderp, WEIGHT_NORMAL);
+                break;
+            case VRegion::OBSERVED:
+                new OrderEdge(&m_graph, m_activeObservedBorderp, nodeVxp, WEIGHT_NORMAL);
+                new OrderEdge(&m_graph, nodeVxp, m_observedReactiveBorderp, WEIGHT_NORMAL);
+                break;
+            case VRegion::REACTIVE:
+            case VRegion::REINACTIVE:
+            case VRegion::RENBA:
+                new OrderEdge(&m_graph, m_observedReactiveBorderp, nodeVxp, WEIGHT_NORMAL);
+                break;
+            default: break;
+        }
     }
     virtual void visit(AstActive* nodep) override {
         // Create required activation blocks and add to module
