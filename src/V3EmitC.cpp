@@ -831,12 +831,28 @@ public:
         puts("}\n");
     }
     virtual void visit(AstTimingControl* nodep) override {
-        puts("/* [@ statement was here]\n");
-        puts("--- sentree ---\n");
+        puts("/* [@ statement] */\n");
+        puts("{\n");
+        puts("std::mutex mtx;\n");
+        puts("self->idle(true);\n");
+        puts("while (");
         iterateAndNextNull(nodep->sensesp());
-        puts("\n--- statements ---\n");
-        iterateAndNextNull(nodep->stmtsp());
-        puts("\n*/\n");
+        puts(" == 0) {\n");
+        puts("std::unique_lock<std::mutex> lck(mtx);\n");
+        iterateAndNextNull(nodep->sensesp());
+        puts(".waiter()->wait(lck);\n");
+        puts("};\n");
+
+        // XXX zeroing the event variable - should we be doing this???
+        iterateAndNextNull(nodep->sensesp());
+        puts(" = 0;\n");
+
+        puts("self->idle(false);\n");
+        puts("if (self->should_exit()) return;\n");
+        puts("};\n");
+
+        // XXX should we handle this too??
+        // iterateAndNextNull(nodep->stmtsp());
     }
     virtual void visit(AstSenTree *nodep) override {
         iterateAndNextNull(nodep->sensesp());
@@ -845,10 +861,9 @@ public:
         iterateAndNextNull(nodep->sensp());
     }
     virtual void visit(AstEventTrigger *nodep) override {
-        puts("/* [ -> statement was here ]\n");
-        puts("--- trigger ---\n");
+        puts("/* [ -> statement ] */\n");
         iterateAndNextNull(nodep->trigger());
-        puts("\n*/\n");
+        puts(" = 1;\n");
     }
     virtual void visit(AstWhile* nodep) override {
         iterateAndNextNull(nodep->precondsp());
