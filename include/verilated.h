@@ -77,9 +77,25 @@ template<typename T>
 class MonitoredValue {
     public:
 
-        MonitoredValue(): value() { }
+        MonitoredValue(): value() {
+            mtx = new std::mutex();
+            cv = new std::condition_variable();
+        }
 
-        template <class U> MonitoredValue(U v) {
+        ~MonitoredValue() {
+            // the dynamic fields are not set for MonitoredValues created for
+            // temporary assignments
+            if (mtx != nullptr) {
+                delete mtx;
+                delete cv;
+            }
+        }
+
+        template <class U>
+        MonitoredValue(U v) {
+            mtx = new std::mutex();
+            cv = new std::condition_variable();
+
             value = v;
         }
 
@@ -87,76 +103,124 @@ class MonitoredValue {
             return value;
         };
 
+        MonitoredValue& operator=(const MonitoredValue& v) {
+            std::unique_lock<std::mutex> lck(*mtx);
+            // Assign just the value
+            value = v;
+            written();
+            return *this;
+        }
+
         MonitoredValue& operator&=(const MonitoredValue& v) {
+            std::unique_lock<std::mutex> lck(*mtx);
             value &= v;
+            written();
             return *this;
         }
         MonitoredValue& operator|=(const MonitoredValue& v) {
+            std::unique_lock<std::mutex> lck(*mtx);
             value |= v;
+            written();
             return *this;
         }
         MonitoredValue& operator^=(const MonitoredValue& v) {
+            std::unique_lock<std::mutex> lck(*mtx);
             value ^= v;
+            written();
             return *this;
         }
         MonitoredValue& operator+=(const MonitoredValue& v) {
+            std::unique_lock<std::mutex> lck(*mtx);
             value += v;
+            written();
             return *this;
         }
         MonitoredValue& operator-=(const MonitoredValue& v) {
+            std::unique_lock<std::mutex> lck(*mtx);
             value -= v;
+            written();
             return *this;
         }
         MonitoredValue& operator*=(const MonitoredValue& v) {
+            std::unique_lock<std::mutex> lck(*mtx);
             value *= v;
+            written();
             return *this;
         }
 
         MonitoredValue& operator>>=(int s) {
+            std::unique_lock<std::mutex> lck(*mtx);
             value >>= s;
+            written();
             return *this;
         }
 
         MonitoredValue& operator--() {
+            std::unique_lock<std::mutex> lck(*mtx);
             --value;
+            written();
             return *this;
         }
         MonitoredValue operator--(int) {
+            std::unique_lock<std::mutex> lck(*mtx);
             MonitoredValue v(value--);
+            written();
             return v;
         }
         MonitoredValue& operator++() {
+            std::unique_lock<std::mutex> lck(*mtx);
             ++value;
+            written();
             return *this;
         }
         MonitoredValue operator++(int) {
+            std::unique_lock<std::mutex> lck(*mtx);
             MonitoredValue v(value++);
+            written();
             return v;
         }
 
         template <class U>
         bool operator==(const U &b) {
+            std::unique_lock<std::mutex> lck(*mtx);
             return value == b;
         }
         template <class U>
         bool operator>(const U &b) {
+            std::unique_lock<std::mutex> lck(*mtx);
             return value > b;
         }
         template <class U>
         bool operator>=(const U &b) {
+            std::unique_lock<std::mutex> lck(*mtx);
             return value >= b;
         }
         template <class U>
         bool operator<(const U &b) {
+            std::unique_lock<std::mutex> lck(*mtx);
             return value < b;
         }
         template <class U>
         bool operator<=(const U &b) {
+            std::unique_lock<std::mutex> lck(*mtx);
             return value <= b;
         }
 
+        std::condition_variable* waiter() {
+            return cv;
+        }
+
     private:
+        std::mutex *mtx;
+        std::condition_variable *cv;
+
         T value;
+
+        void written() {
+            if (cv != nullptr) {
+                cv->notify_all();
+            }
+        }
 };
 
 #if 0
