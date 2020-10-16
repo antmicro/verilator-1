@@ -404,7 +404,7 @@ public:
             puts(funcp->nameProtect() + ", ");
             visit_call_args(nodep);
             puts(", ");
-            puts(nodep->funcp()->slow() ? "true" : "false");
+            puts(nodep->funcp()->oneshot() ? "true" : "false");
             puts(", \"" + funcp->nameProtect() + "\");\n");;
             puts(funcp->nameProtect() + "__thread.kick();\n");;
         } else {
@@ -811,9 +811,9 @@ public:
         puts("{\n");
         puts("std::mutex mtx;\n");
         puts("self->idle(true);\n");
-        puts("while (");
+        puts("while (!(self->should_exit()) && (");
         iterateAndNextNull(nodep->sensesp());
-        puts(" == 0) {\n");
+        puts(" == 0)) {\n");
         puts("std::unique_lock<std::mutex> lck(mtx);\n");
         iterateAndNextNull(nodep->sensesp());
         puts(".waiter()->wait(lck);\n");
@@ -1643,10 +1643,10 @@ class EmitCImp : EmitCStmts {
             put_cfunc_body(nodep);
         } else {
             puts("std::unique_lock<std::mutex> lck(self->m_mtx);\n");
-            if (!nodep->slow())
+            if (!nodep->oneshot())
                 puts("do {\n");
 
-            puts("while(!self->ready() && !self->should_exit()) {\n");
+            puts("while (!self->ready() && !self->should_exit()) {\n");
             puts("self->m_cv.wait(lck);\n}\n");
 
             puts("if (self->should_exit()) return;\n");
@@ -1654,7 +1654,7 @@ class EmitCImp : EmitCStmts {
             put_cfunc_body(nodep);
 
             puts("self->ready(false);\n");
-            if (!nodep->slow())
+            if (!nodep->oneshot())
                 puts("} while (!Verilated::gotFinish() && !self->should_exit());\n");
         }
 
@@ -2784,7 +2784,6 @@ void EmitCImp::emitWrapEval(AstNodeModule* modp) {
     puts(protect("_eval_debug_assertions") + "();\n");
     puts("#endif  // VL_DEBUG\n");
     putsDecoration("// Initialize\n");
-    putsDecoration("// XXX start the threads here first\n");
     puts("if (VL_UNLIKELY(!vlSymsp->__Vm_didInit)) " + protect("_eval_initial_loop")
          + "(vlSymsp);\n");
     if (v3Global.opt.inhibitSim()) puts("if (VL_UNLIKELY(__Vm_inhibitSim)) return;\n");

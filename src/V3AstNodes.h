@@ -8413,6 +8413,7 @@ private:
     bool m_declPrivate : 1;  // Declare it private
     bool m_formCallTree : 1;  // Make a global function to call entire tree of functions
     bool m_slow : 1;  // Slow routine, called once or just at init time
+    bool m_oneshot : 1;  // Called once or just at init time
     bool m_funcPublic : 1;  // From user public task/function
     bool m_isConstructor : 1;  // Is C class constructor
     bool m_isDestructor : 1;  // Is C class destructor
@@ -8441,6 +8442,7 @@ public:
         m_declPrivate = false;
         m_formCallTree = false;
         m_slow = false;
+        m_oneshot = false;
         m_funcPublic = false;
         m_isConstructor = false;
         m_isDestructor = false;
@@ -8496,6 +8498,8 @@ public:
     void formCallTree(bool flag) { m_formCallTree = flag; }
     bool slow() const { return m_slow; }
     void slow(bool flag) { m_slow = flag; }
+    bool oneshot() const { return m_oneshot; }
+    void oneshot(bool flag) { m_oneshot = flag; }
     bool funcPublic() const { return m_funcPublic; }
     void funcPublic(bool flag) { m_funcPublic = flag; }
     void argTypes(const string& str) { m_argTypes = str; }
