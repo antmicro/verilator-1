@@ -854,6 +854,11 @@ public:
         // XXX should we handle this too??
         // iterateAndNextNull(nodep->stmtsp());
     }
+    virtual void visit(AstThreadSync* nodep) override {
+        puts("for (auto t: verilated_threads) {\n");
+        puts("t->wait_for_idle();\n");
+        puts("}\n");
+    }
     virtual void visit(AstSenTree *nodep) override {
         iterateAndNextNull(nodep->sensesp());
     }

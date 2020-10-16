@@ -403,6 +403,10 @@ private:
                 } else {
                     clearLastSen();
                     m_lastSenp = nodep->sensesp();
+
+                    AstNode* syncp = new AstThreadSync(nodep->fileline());
+                    addToEvalLoop(syncp);
+
                     // Make a new if statement
                     m_lastIfp = makeActiveIf(m_lastSenp);
                     addToEvalLoop(m_lastIfp);

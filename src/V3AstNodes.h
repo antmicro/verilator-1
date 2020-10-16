@@ -9160,6 +9160,13 @@ public:
     void useType(VUseType useType) { m_useType = useType; }
 };
 
+class AstThreadSync final : public AstNode {
+public:
+    AstThreadSync(FileLine* fl)
+        : ASTGEN_SUPER(fl) {}
+    ASTNODE_NODE_FUNCS(ThreadSync)
+};
+
 class AstMTaskBody final : public AstNode {
     // Hold statements for each MTask
 private:
