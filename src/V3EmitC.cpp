@@ -811,13 +811,9 @@ public:
         puts("{\n");
         puts("std::mutex mtx;\n");
         puts("self->idle(true);\n");
-        puts("while (!(self->should_exit()) && (");
+
         iterateAndNextNull(nodep->sensesp());
-        puts(" == 0)) {\n");
-        puts("std::unique_lock<std::mutex> lck(mtx);\n");
-        iterateAndNextNull(nodep->sensesp());
-        puts(".waiter()->wait(lck);\n");
-        puts("};\n");
+        puts(".wait_for(1, self);\n");
 
         // XXX zeroing the event variable - should we be doing this???
         iterateAndNextNull(nodep->sensesp());

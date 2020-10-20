@@ -46,6 +46,7 @@
 #ifdef VL_THREADED
 # include <atomic>
 # include <mutex>
+# include <set>
 # include <thread>
 #endif
 
@@ -73,8 +74,160 @@
 //=========================================================================
 // Basic types
 //
+
+class VerilatedEvalMsgQueue;
+class VerilatedScopeNameMap;
+class VerilatedTimedQueue;
+class VerilatedVar;
+class VerilatedVarNameMap;
+class VerilatedVcd;
+class VerilatedVcdC;
+class VerilatedVcdSc;
+class VerilatedFst;
+class VerilatedFstC;
+class VerilatedThread;
+
+extern std::vector<VerilatedThread*> verilated_threads;
+
+class VerilatedThread {
+
+public:
+    std::atomic<bool> m_ready;
+    std::atomic<bool> m_oneshot;
+    std::atomic<bool> m_started;
+
+    std::atomic<bool> m_should_exit;
+    std::atomic<bool> m_idle;
+
+    std::thread m_thr;
+    std::mutex m_mtx;
+    std::condition_variable m_cv;
+
+    std::mutex m_delay_mtx;
+    std::mutex m_delay_wait_mtx;
+    std::condition_variable m_delay_wait_cv;
+
+    std::function<void(void*,VerilatedThread*)> m_func;
+
+    VerilatedThread(void (*func)(void*, VerilatedThread*), void* args, bool oneshot, std::string name)
+        : m_ready(false)
+        , m_oneshot(oneshot)
+        , m_started(false)
+        , m_should_exit(false)
+        , m_idle(false)
+        , m_name(name) {
+        verilated_threads.push_back(this);
+
+        m_func = func;
+
+        m_thr = std::thread(m_func, args, this);
+    }
+
+    bool should_exit() {
+        return m_should_exit;
+    }
+
+    void should_exit(bool e) {
+        std::unique_lock<std::mutex> lck(m_delay_wait_mtx);
+        m_should_exit = e;
+        m_delay_wait_cv.notify_all();
+    }
+
+    bool ready() {
+        return m_ready;
+    }
+
+    void ready(bool r) {
+        std::unique_lock<std::mutex> lck(m_delay_wait_mtx);
+        m_ready = r;
+        m_delay_wait_cv.notify_all();
+    }
+
+    void wait_for_idle() {
+        std::unique_lock<std::mutex> lck(m_delay_wait_mtx);
+
+        while(ready() && !should_exit() && !idle()) {
+            m_delay_wait_cv.wait(lck);
+        }
+    }
+
+    bool idle() {
+        return m_idle;
+    }
+
+    void idle(bool w) {
+        std::unique_lock<std::mutex> lck(m_delay_wait_mtx);
+        m_idle = w;
+
+        if (w) {
+            m_delay_wait_cv.notify_all();
+        }
+    }
+
+    void join() {
+        m_thr.join();
+    }
+
+    void exit() {
+        should_exit(true);
+        m_cv.notify_all();
+        m_delay_wait_cv.notify_all();
+        join();
+    }
+
+    void kick() {
+        ready(true);
+        m_cv.notify_all();
+    }
+
+    // debug only
+    std::string m_name;
+    void name(std::string n) {
+        m_name = n;
+    }
+
+    std::string name() {
+        return m_name;
+    }
+
+};
+
+
+class MonitoredValueBase {
+    public:
+        virtual void release() {};
+};
+
+class MonitoredValueControl {
+    private:
+        std::set<MonitoredValueBase*> values;
+        std::mutex mtx;
+
+    public:
+        void add(MonitoredValueBase* v) {
+            std::unique_lock<std::mutex> lck(mtx);
+
+            values.insert(v);
+        }
+        void del(MonitoredValueBase* v) {
+            std::unique_lock<std::mutex> lck(mtx);
+
+            values.erase(v);
+        }
+
+        void release_all() {
+            std::unique_lock<std::mutex> lck(mtx);
+
+            for (auto v: values) {
+                v->release();
+            }
+        }
+};
+
+extern MonitoredValueControl verilated_value_ctrl;
+
 template<typename T>
-class MonitoredValue {
+class MonitoredValue : public MonitoredValueBase {
     public:
 
         MonitoredValue(): value(), mtx(), cv() {
@@ -201,8 +354,20 @@ class MonitoredValue {
             return value <= b;
         }
 
-        std::condition_variable* waiter() {
-            return &cv;
+        void wait_for(T nvalue, VerilatedThread* owner) {
+            std::unique_lock<std::mutex> lck(mtx);
+
+            verilated_value_ctrl.add(this);
+
+            while (!owner->should_exit() && value != nvalue) {
+                cv.wait(lck);
+            }
+
+            verilated_value_ctrl.del(this);
+        }
+
+        void release() {
+            cv.notify_all();
         }
 
     private:
@@ -240,123 +405,6 @@ typedef MonitoredValue<vluint32_t> WData;
 
 typedef const WData* WDataInP;  ///< Array input to a function
 typedef WData* WDataOutP;  ///< Array output from a function
-
-class VerilatedEvalMsgQueue;
-class VerilatedScopeNameMap;
-class VerilatedTimedQueue;
-class VerilatedVar;
-class VerilatedVarNameMap;
-class VerilatedVcd;
-class VerilatedVcdC;
-class VerilatedVcdSc;
-class VerilatedFst;
-class VerilatedFstC;
-class VerilatedThread;
-
-extern std::vector<VerilatedThread*> verilated_threads;
-
-class VerilatedThread {
-
-public:
-    std::atomic<bool> m_ready;
-    std::atomic<bool> m_oneshot;
-    std::atomic<bool> m_started;
-
-    std::atomic<bool> m_should_exit;
-    std::atomic<bool> m_idle;
-
-    std::thread m_thr;
-    std::mutex m_mtx;
-    std::condition_variable m_cv;
-
-    std::mutex m_delay_mtx;
-    std::mutex m_delay_wait_mtx;
-    std::condition_variable m_delay_wait_cv;
-
-    std::function<void(void*,VerilatedThread*)> m_func;
-
-    VerilatedThread(void (*func)(void*, VerilatedThread*), void* args, bool oneshot, std::string name)
-        : m_ready(false)
-        , m_oneshot(oneshot)
-        , m_started(false)
-        , m_should_exit(false)
-        , m_idle(false)
-        , m_name(name) {
-        verilated_threads.push_back(this);
-
-        m_func = func;
-
-        m_thr = std::thread(m_func, args, this);
-    }
-
-    bool should_exit() {
-        return m_should_exit;
-    }
-
-    void should_exit(bool e) {
-        std::unique_lock<std::mutex> lck(m_delay_wait_mtx);
-        m_should_exit = e;
-        m_delay_wait_cv.notify_all();
-    }
-
-    bool ready() {
-        return m_ready;
-    }
-
-    void ready(bool r) {
-        std::unique_lock<std::mutex> lck(m_delay_wait_mtx);
-        m_ready = r;
-        m_delay_wait_cv.notify_all();
-    }
-
-    void wait_for_idle() {
-        std::unique_lock<std::mutex> lck(m_delay_wait_mtx);
-
-        while(ready() && !should_exit() && !idle()) {
-            m_delay_wait_cv.wait(lck);
-        }
-    }
-
-    bool idle() {
-        return m_idle;
-    }
-
-    void idle(bool w) {
-        std::unique_lock<std::mutex> lck(m_delay_wait_mtx);
-        m_idle = w;
-
-        if (w) {
-            m_delay_wait_cv.notify_all();
-        }
-    }
-
-    void join() {
-        m_thr.join();
-    }
-
-    void exit() {
-        should_exit(true);
-        m_cv.notify_all();
-        m_delay_wait_cv.notify_all();
-        join();
-    }
-
-    void kick() {
-        ready(true);
-        m_cv.notify_all();
-    }
-
-    // debug only
-    std::string m_name;
-    void name(std::string n) {
-        m_name = n;
-    }
-
-    std::string name() {
-        return m_name;
-    }
-
-};
 
 enum VerilatedVarType {
     VLVT_UNKNOWN = 0,
