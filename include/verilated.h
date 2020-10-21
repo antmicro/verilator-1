@@ -658,6 +658,9 @@ inline IData VL_URANDOM_RANGE_I(IData hi, IData lo) {
     }
 }
 
+inline IData VL_STD_RANDOMIZE_I(IData& data, int obits) VL_MT_SAFE { data = VL_RANDOM_I(obits); return 1; }
+inline QData VL_STD_RANDOMIZE_Q(QData& data, int obits) VL_MT_SAFE { data = VL_RANDOM_Q(obits); return 1; }
+
 /// Init time only, so slow is fine
 extern IData VL_RAND_RESET_I(int obits);  ///< Random reset a signal
 extern QData VL_RAND_RESET_Q(int obits);  ///< Random reset a signal

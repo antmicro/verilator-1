@@ -5964,6 +5964,28 @@ public:
     AstNode* filep() const { return lhsp(); }
 };
 
+class AstStdRandomize : public AstNodeUniop {
+    // Randomize the specified variable (std::randomize)
+public:
+    AstStdRandomize(FileLine* fl, AstNodeDType* dtp, AstNodeVarRef* varp)
+        : AstNodeUniop(AstType::atStdRandomize, fl, varp) {
+        dtypep(dtp);
+        didWidth(true);
+    }
+    ASTNODE_NODE_FUNCS(StdRandomize)
+    virtual string emitVerilog() override { return "std::randomize(%l);\n"; }
+    virtual string emitC() override { return ("VL_STD_RANDOMIZE_%lq(%li, %lw);\n"); }
+    virtual bool cleanOut() const override { return true; }
+    virtual bool isGateOptimizable() const override { return false; }
+    virtual bool isPredictOptimizable() const override { return false; }
+    virtual int instrCount() const override { return instrCountPli(); }
+    virtual V3Hash sameHash() const override { return V3Hash(); }
+    virtual bool same(const AstNode* samep) const override { return true; }
+    virtual void numberOperate(V3Number& out, const V3Number& lhs) override { V3ERROR_NA; }
+    virtual bool cleanLhs() const override { return false; }
+    virtual bool sizeMattersLhs() const override { return false; }
+};
+
 class AstFError : public AstNodeMath {
 public:
     AstFError(FileLine* fl, AstNode* filep, AstNode* strp)

@@ -2612,11 +2612,39 @@ private:
         VL_DANGLING(index_exprp);  // May have been edited
         return VN_CAST(nodep->pinsp(), Arg)->exprp();
     }
+    void randomizeCallClass(AstMethodCall* nodep, AstClass* classp) {
+        auto* ftaskp = classp->findMember(nodep->name());
+        if (!ftaskp) {
+            auto* randTaskp = new AstTask(nodep->fileline(), "randomize", nullptr);
+            auto* memberp = classp->stmtsp();
+            while (memberp){
+                if (VN_IS(memberp, Var)) {
+                    if (VN_IS(memberp->dtypep(), BasicDType)) {
+                        auto* memberVarp = VN_CAST(memberp, Var);
+                        auto* memberRefp = new AstVarRef(nodep->fileline(), memberVarp, VAccess::WRITE);
+                        auto* stdRandp = new AstStdRandomize(nodep->fileline(), memberp->dtypep(), memberRefp);
+                        randTaskp->addStmtsp(stdRandp);
+                    } else if (VN_IS(memberp->dtypep(), ClassRefDType)) {
+                        auto* memberVarp = VN_CAST(memberp, Var);
+                        auto* memberRefp = new AstVarRef(nodep->fileline(), memberVarp, VAccess::WRITE);
+                        auto* randCallp = new AstMethodCall(nodep->fileline(), memberRefp, "randomize", nullptr);
+                        randTaskp->addStmtsp(randCallp);
+                    }
+                }
+                memberp = memberp->nextp();
+            }
+            randTaskp->classMethod(true);
+            classp->addMembersp(randTaskp);
+        }
+    }
     void methodCallClass(AstMethodCall* nodep, AstClassRefDType* adtypep) {
         // No need to width-resolve the class, as it was done when we did the child
         AstClass* first_classp = adtypep->classp();
         UASSERT_OBJ(first_classp, nodep, "Unlinked");
         for (AstClass* classp = first_classp; classp;) {
+            if (nodep->name() == "randomize") {
+                randomizeCallClass(nodep, classp);
+            }
             if (AstNodeFTask* ftaskp = VN_CAST(classp->findMember(nodep->name()), NodeFTask)) {
                 userIterate(ftaskp, nullptr);
                 nodep->taskp(ftaskp);
