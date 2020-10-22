@@ -2107,6 +2107,7 @@ private:
     virtual void visit(AstClass* nodep) override {
         if (nodep->didWidthAndSet()) return;
         userIterateChildren(nodep, nullptr);  // First size all members
+        visit(addRandomizeMethod(nodep));
         nodep->repairCache();
     }
     virtual void visit(AstClassRefDType* nodep) override {
@@ -2612,12 +2613,15 @@ private:
         VL_DANGLING(index_exprp);  // May have been edited
         return VN_CAST(nodep->pinsp(), Arg)->exprp();
     }
-    void randomizeCallClass(AstMethodCall* nodep, AstClass* classp) {
-        auto* ftaskp = classp->findMember(nodep->name());
-        if (!ftaskp) {
-            auto* randTaskp = new AstTask(nodep->fileline(), "randomize", nullptr);
+    AstTask* addRandomizeMethod(AstClass* nodep) {
+        auto* randTaskp = new AstTask(nodep->fileline(), "randomize", nullptr);
+        nodep->addMembersp(randTaskp);
+        randTaskp->classMethod(true);
+        randTaskp->isVirtual(true);
+        auto* classp = nodep;
+        do {
             auto* memberp = classp->stmtsp();
-            while (memberp){
+            while (memberp) {
                 if (VN_IS(memberp, Var)) {
                     if (VN_IS(memberp->dtypep(), BasicDType)) {
                         auto* memberVarp = VN_CAST(memberp, Var);
@@ -2633,18 +2637,15 @@ private:
                 }
                 memberp = memberp->nextp();
             }
-            randTaskp->classMethod(true);
-            classp->addMembersp(randTaskp);
-        }
+            classp = classp->extendsp() ? classp->extendsp()->classp() : nullptr;
+        } while (classp);
+        return randTaskp;
     }
     void methodCallClass(AstMethodCall* nodep, AstClassRefDType* adtypep) {
         // No need to width-resolve the class, as it was done when we did the child
         AstClass* first_classp = adtypep->classp();
         UASSERT_OBJ(first_classp, nodep, "Unlinked");
         for (AstClass* classp = first_classp; classp;) {
-            if (nodep->name() == "randomize") {
-                randomizeCallClass(nodep, classp);
-            }
             if (AstNodeFTask* ftaskp = VN_CAST(classp->findMember(nodep->name()), NodeFTask)) {
                 userIterate(ftaskp, nullptr);
                 nodep->taskp(ftaskp);
