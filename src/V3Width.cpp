@@ -2622,7 +2622,7 @@ private:
         do {
             auto* memberp = classp->stmtsp();
             while (memberp) {
-                if (VN_IS(memberp, Var)) {
+                if (VN_IS(memberp, Var) && VN_CAST(memberp, Var)->isRand()) {
                     if (VN_IS(memberp->dtypep(), BasicDType)) {
                         auto* memberVarp = VN_CAST(memberp, Var);
                         auto* memberRefp = new AstVarRef(nodep->fileline(), memberVarp, VAccess::WRITE);

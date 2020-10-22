@@ -50,7 +50,7 @@ struct VMemberQualifiers {
         struct {
             uint32_t m_local : 1;  // Local class item (ignored until warning implemented)
             uint32_t m_protected : 1;  // Protected class item (ignored until warning implemented)
-            uint32_t m_rand : 1;  // Rand property/member qualifier (ignored until supported)
+            uint32_t m_rand : 1;  // Rand property/member qualifier
             uint32_t m_randc : 1;  // Randc property/member qualifier (ignored until supported)
             uint32_t m_virtual : 1;  // Virtual property/method qualifier
             uint32_t m_automatic : 1;  // Automatic property/method qualifier
@@ -85,8 +85,8 @@ struct VMemberQualifiers {
         for (AstVar* nodep = nodesp; nodep; nodep = VN_CAST(nodep->nextp(), Var)) {
             // Ignored for now: m_local
             // Ignored for now: m_protected
-            // Ignored for now: m_rand
             // Ignored for now: m_randc
+            if (m_rand) nodep->isRand(true);
             if (m_automatic) nodep->lifetime(VLifetime::AUTOMATIC);
             if (m_static) nodep->lifetime(VLifetime::STATIC);
             if (m_const) nodep->isConst(true);
