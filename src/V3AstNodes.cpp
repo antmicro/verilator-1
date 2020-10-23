@@ -1089,6 +1089,13 @@ const char* AstClassPackage::broken() const {
     BROKEN_RTN(m_classp && !m_classp->brokeExists());
     return nullptr;
 }
+void AstClass::declareRandomizeMethod() {
+    auto* dtypep = new AstBasicDType(fileline(), VFlagBitPacked(), 1);
+    auto* randFuncp = new AstFunc(fileline(), "randomize", nullptr, dtypep);
+    addMembersp(randFuncp);
+    randFuncp->classMethod(true);
+    randFuncp->isVirtual(true);
+}
 void AstClass::insertCache(AstNode* nodep) {
     bool doit = (VN_IS(nodep, Var) || VN_IS(nodep, EnumItemRef)
                  || (VN_IS(nodep, NodeFTask) && !VN_CAST(nodep, NodeFTask)->isExternProto()));

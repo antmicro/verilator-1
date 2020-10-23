@@ -2107,7 +2107,7 @@ private:
     virtual void visit(AstClass* nodep) override {
         if (nodep->didWidthAndSet()) return;
         userIterateChildren(nodep, nullptr);  // First size all members
-        visit(addRandomizeMethod(nodep));
+        visit(defineRandomizeMethod(nodep));
         nodep->repairCache();
     }
     virtual void visit(AstClassRefDType* nodep) override {
@@ -2613,33 +2613,45 @@ private:
         VL_DANGLING(index_exprp);  // May have been edited
         return VN_CAST(nodep->pinsp(), Arg)->exprp();
     }
-    AstTask* addRandomizeMethod(AstClass* nodep) {
-        auto* randTaskp = new AstTask(nodep->fileline(), "randomize", nullptr);
-        nodep->addMembersp(randTaskp);
-        randTaskp->classMethod(true);
-        randTaskp->isVirtual(true);
+    AstFunc* defineRandomizeMethod(AstClass* nodep) {
+        auto* randFuncp = VN_CAST(nodep->findMember("randomize"), Func);
+        randFuncp->addStmtsp(new AstAssign(
+            nodep->fileline(),
+            new AstVarRef(nodep->fileline(), VN_CAST(randFuncp->fvarp(), Var), VAccess::WRITE),
+            new AstConst(nodep->fileline(), AstConst::WidthedValue(), 1, 1)));
+        randFuncp->didWidth(false);
         auto* classp = nodep;
         do {
             auto* memberp = classp->stmtsp();
             while (memberp) {
                 if (VN_IS(memberp, Var) && VN_CAST(memberp, Var)->isRand()) {
+                    AstNode* stmtp = nullptr;
+                    auto* refp
+                        = new AstVarRef(nodep->fileline(), VN_CAST(memberp, Var), VAccess::WRITE);
                     if (VN_IS(memberp->dtypep(), BasicDType)) {
-                        auto* memberVarp = VN_CAST(memberp, Var);
-                        auto* memberRefp = new AstVarRef(nodep->fileline(), memberVarp, VAccess::WRITE);
-                        auto* stdRandp = new AstStdRandomize(nodep->fileline(), memberp->dtypep(), memberRefp);
-                        randTaskp->addStmtsp(stdRandp);
+                        stmtp = new AstStdRandomize(nodep->fileline(), refp);
                     } else if (VN_IS(memberp->dtypep(), ClassRefDType)) {
-                        auto* memberVarp = VN_CAST(memberp, Var);
-                        auto* memberRefp = new AstVarRef(nodep->fileline(), memberVarp, VAccess::WRITE);
-                        auto* randCallp = new AstMethodCall(nodep->fileline(), memberRefp, "randomize", nullptr);
-                        randTaskp->addStmtsp(randCallp);
+                        stmtp = new AstMethodCall(nodep->fileline(), refp, "randomize", nullptr);
+                    }
+                    if (stmtp) {
+                        stmtp = new AstAnd(nodep->fileline(),
+                                           new AstVarRef(nodep->fileline(),
+                                                         VN_CAST(randFuncp->fvarp(), Var),
+                                                         VAccess::READ),
+                                           stmtp);
+                        auto* assignp = new AstAssign(
+                            nodep->fileline(),
+                            new AstVarRef(nodep->fileline(), VN_CAST(randFuncp->fvarp(), Var),
+                                          VAccess::WRITE),
+                            stmtp);
+                        randFuncp->addStmtsp(assignp);
                     }
                 }
                 memberp = memberp->nextp();
             }
             classp = classp->extendsp() ? classp->extendsp()->classp() : nullptr;
         } while (classp);
-        return randTaskp;
+        return randFuncp;
     }
     void methodCallClass(AstMethodCall* nodep, AstClassRefDType* adtypep) {
         // No need to width-resolve the class, as it was done when we did the child
