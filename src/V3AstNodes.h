@@ -1886,7 +1886,7 @@ private:
     bool m_attrSFormat : 1;  // User sformat attribute
     bool m_attrSplitVar : 1;  // declared with split_var metacomment
     bool m_fileDescr : 1;  // File descriptor
-    bool m_isRand : 1; // Random variable
+    bool m_isRand : 1;  // Random variable
     bool m_isConst : 1;  // Table contains constant data
     bool m_isStatic : 1;  // Static C variable (for Verilog see instead isAutomatic)
     bool m_isPulldown : 1;  // Tri0
