@@ -1090,8 +1090,9 @@ const char* AstClassPackage::broken() const {
     return nullptr;
 }
 void AstClass::declareRandomizeMethod() {
-    auto* dtypep = new AstBasicDType(fileline(), VFlagBitPacked(), 1);
-    auto* randFuncp = new AstFunc(fileline(), "randomize", nullptr, dtypep);
+    auto* dtypep = findBitDType(32, 1, VSigning::SIGNED);  // IEEE says int return of 0/1
+    auto* fvarp = new AstVar(fileline(), AstVarType::BLOCKTEMP, "result", dtypep);
+    auto* randFuncp = new AstFunc(fileline(), "randomize", nullptr, fvarp);
     addMembersp(randFuncp);
     randFuncp->classMethod(true);
     randFuncp->isVirtual(true);
