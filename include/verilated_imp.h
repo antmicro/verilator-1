@@ -263,7 +263,7 @@ public:
         while (VL_LIKELY(!m_timeq.empty() && m_timeq.top().first <= time)) {
             VerilatedThread* thread = m_timeq.top().second;
             thread->idle(false);
-            VL_DEBUG_IF(VL_DBG_MSGF("+    activate %p\n", eventp););
+            VL_DEBUG_IF(VL_DBG_MSGF("+    activate %p\n", thread););
             m_timeq.pop();
         }
         m_cv.notify_all();
