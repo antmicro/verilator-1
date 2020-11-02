@@ -359,9 +359,13 @@ static void process() {
         // Reorder assignments in pipelined blocks
         if (v3Global.opt.oReorder()) V3Split::splitReorderAll(v3Global.rootp());
 
+        // XXX leaving this here to remember to restore it later with a switch
+        // for the static scheduler
+# if 0
         // Create delayed assignments
         // This creates lots of duplicate ACTIVES so ActiveTop needs to be after this step
         V3Delayed::delayedAll(v3Global.rootp());
+# endif
 
         // Make Active's on the top level.
         // Differs from V3Active, because identical clocks may be pushed

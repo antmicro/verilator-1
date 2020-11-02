@@ -58,6 +58,7 @@ private:
     AstSenTree* m_lastSenp = nullptr;  // Last sensitivity match, so we can detect duplicates.
     AstIf* m_lastIfp = nullptr;  // Last sensitivity if active to add more under
     AstMTaskBody* m_mtaskBodyp = nullptr;  // Current mtask body
+    AstVarScope* m_evalCounterVarScopep = nullptr;
 
     // METHODS
     VL_DEBUG_FUNC;  // Declare debug()
@@ -220,6 +221,17 @@ private:
             funcp->entryPoint(true);
             m_topScopep->scopep()->addActivep(funcp);
             m_evalFuncp = funcp;
+
+            // Create counter for the _eval loop
+            string name
+                = "__eval_change_counter";
+            AstVar* cntVarp =
+                new AstVar(nodep->fileline(), AstVarType::MODULETEMP, name,
+                                      VFlagLogicPacked(), 32);
+            m_evalCounterVarScopep = new AstVarScope(m_scopep->fileline(), m_scopep, cntVarp);
+            m_scopep->addVarp(m_evalCounterVarScopep);
+
+            m_modp->addStmtp(cntVarp);
         }
         {
             AstCFunc* funcp
@@ -410,6 +422,17 @@ private:
                     // Make a new if statement
                     m_lastIfp = makeActiveIf(m_lastSenp);
                     addToEvalLoop(m_lastIfp);
+
+                    AstNode* incp = new AstAdd(nodep->fileline(),
+                                               new AstVarRef(nodep->fileline(),
+                                                             m_evalCounterVarScopep, VAccess::WRITE),
+                                               new AstConst(nodep->fileline(), 1));
+                    AstAssign* assignp =
+                        new AstAssign(nodep->fileline(),
+                                      new AstVarRef(nodep->fileline(),
+                                                    m_evalCounterVarScopep, VAccess::WRITE),
+                                      incp);
+                    m_lastIfp->addIfsp(assignp);
                 }
                 // Move statements to if
                 m_lastIfp->addIfsp(stmtsp);

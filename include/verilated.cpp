@@ -97,6 +97,7 @@ struct VerilatedInitializer {
 
 std::vector<VerilatedThread*> verilated_threads;
 MonitoredValueControl verilated_value_ctrl;
+VerilatedNBACtrl verilated_nba_ctrl;
 
 //===========================================================================
 // User definable functions

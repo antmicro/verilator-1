@@ -368,6 +368,17 @@ public:
         if (decind) ofp()->blockDec();
         if (!m_suppressSemi) puts(";\n");
     }
+    virtual void visit(AstAssignDly* nodep) override {
+        if (!VN_IS(nodep->lhsp(), VarRef)) {
+            nodep->v3warn(E_UNSUPPORTED, "Unsupported: delayed assignment type");
+        }
+
+        puts("verilated_nba_ctrl.schedule(&");
+        iterateAndNextNull(nodep->lhsp());
+        puts(", ");
+        iterateAndNextNull(nodep->rhsp());
+        puts(");\n");
+    }
     virtual void visit(AstAlwaysPublic*) override {}
     virtual void visit(AstAssocSel* nodep) override {
         iterateAndNextNull(nodep->fromp());
@@ -415,6 +426,9 @@ public:
             puts(nodep->funcp()->oneshot() ? "true" : "false");
             puts(", \"" + funcp->nameProtect() + "\");\n");;
             puts(funcp->nameProtect() + "__thread.kick();\n");;
+            if (!funcp->oneshot()) {
+                puts(funcp->nameProtect() + "__thread.wait_for_idle();\n");;
+            }
         } else {
             visit_call(nodep);
         }
@@ -854,6 +868,8 @@ public:
         puts("for (auto t: verilated_threads) {\n");
         puts("t->wait_for_idle();\n");
         puts("}\n");
+        puts("if (Verilated::gotFinish()) return;\n");
+
     }
     virtual void visit(AstSenTree *nodep) override {
         iterateAndNextNull(nodep->sensesp());
@@ -2810,7 +2826,11 @@ void EmitCImp::emitSettleLoop(const std::string& eval_call, bool initial) {
     puts("int __VclockLoop = 0;\n");
     puts("QData __Vchange = 1;\n");
     puts("do {\n");
+    puts("do {\n");
+    puts("vlSymsp->TOPp->__eval_change_counter = 0;\n");
     puts(eval_call + "\n");
+    puts("verilated_nba_ctrl.assign();\n");
+    puts("} while (!Verilated::gotFinish() && vlSymsp->TOPp->__eval_change_counter != 0);\n");
     puts("if (VL_UNLIKELY(++__VclockLoop > " + cvtToStr(v3Global.opt.convergeLimit()) + ")) {\n");
     puts("// About to fail, so enable debug to see what's not settling.\n");
     puts("// Note you must run make with OPT=-DVL_DEBUG for debug prints.\n");
