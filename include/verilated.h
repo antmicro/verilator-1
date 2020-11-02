@@ -93,7 +93,6 @@ extern std::vector<VerilatedThread*> verilated_threads;
 class VerilatedThread {
 
 private:
-    std::mutex m_internal_mtx;
     std::function<void(void*,VerilatedThread*)> m_func;
     std::atomic<bool> m_ready;
     std::atomic<bool> m_oneshot;
@@ -109,6 +108,7 @@ public:
 
     // These are used externally (TODO: convert to functions)
     std::mutex m_mtx;
+    std::mutex m_access_mtx;
     std::condition_variable m_cv;
 
     VerilatedThread(void (*func)(void*, VerilatedThread*), void* args, bool oneshot, std::string name)
@@ -126,29 +126,29 @@ public:
     }
 
     bool should_exit() {
-        std::unique_lock<std::mutex> lck_d(m_internal_mtx);
+        std::unique_lock<std::mutex> lck_d(m_access_mtx);
         return m_should_exit;
     }
 
     void should_exit(bool e) {
-        std::unique_lock<std::mutex> lck_d(m_internal_mtx);
+        std::unique_lock<std::mutex> lck_d(m_access_mtx);
         m_should_exit = e;
         m_delay_wait_cv.notify_all();
     }
 
     bool ready() {
-        std::unique_lock<std::mutex> lck_d(m_internal_mtx);
+        std::unique_lock<std::mutex> lck_d(m_access_mtx);
         return m_ready;
     }
 
     void ready(bool r) {
-        std::unique_lock<std::mutex> lck(m_internal_mtx);
+        std::unique_lock<std::mutex> lck(m_access_mtx);
         m_ready = r;
         m_delay_wait_cv.notify_all();
     }
 
     void wait_for_idle() {
-        std::unique_lock<std::mutex> lck(m_internal_mtx);
+        std::unique_lock<std::mutex> lck(m_access_mtx);
 
         while(m_ready && !m_should_exit && !m_idle) {
             m_delay_wait_cv.wait(lck);
@@ -156,12 +156,12 @@ public:
     }
 
     bool idle() {
-        std::unique_lock<std::mutex> lck(m_internal_mtx);
+        std::unique_lock<std::mutex> lck(m_access_mtx);
         return m_idle;
     }
 
     void idle(bool w) {
-        std::unique_lock<std::mutex> lck(m_internal_mtx);
+        std::unique_lock<std::mutex> lck(m_access_mtx);
         m_idle = w;
 
         if (w) {
