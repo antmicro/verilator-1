@@ -838,7 +838,7 @@ public:
         iterateAndNextNull(nodep->lhsp());
         puts(", self);\n");
         puts("while (self->idle() && !self->should_exit()) {\n");
-        puts("Verilated::timedQWait(vlSymsp, self->m_delay_mtx);\n");
+        puts("Verilated::timedQWait(vlSymsp, self->m_access_mtx);\n");
         puts("}\n");
         puts("if (self->should_exit()) return;\n");
 
