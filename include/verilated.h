@@ -36,6 +36,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <vector>
+#include <map>
 #include <thread>
 #include <condition_variable>
 #include <functional>
@@ -46,7 +47,7 @@
 #ifdef VL_THREADED
 # include <atomic>
 # include <mutex>
-# include <set>
+# include <algorithm>
 # include <thread>
 #endif
 
@@ -201,23 +202,25 @@ public:
 class MonitoredValueBase {
     public:
         virtual void release() {};
+        virtual void assign(vluint64_t) {};
 };
 
 class MonitoredValueControl {
     private:
-        std::set<MonitoredValueBase*> values;
+        std::vector<MonitoredValueBase*> values;
         std::mutex mtx;
 
     public:
         void add(MonitoredValueBase* v) {
             std::unique_lock<std::mutex> lck(mtx);
 
-            values.insert(v);
+            values.push_back(v);
         }
         void del(MonitoredValueBase* v) {
             std::unique_lock<std::mutex> lck(mtx);
 
-            values.erase(v);
+            values.erase(std::remove(values.begin(), values.end(), v),
+                         values.end());
         }
 
         void release_all() {
@@ -244,6 +247,7 @@ class MonitoredValue : public MonitoredValueBase {
 
         template <class U>
         MonitoredValue(U v): mtx(), cv() {
+            std::unique_lock<std::mutex> lck(mtx);
             value = v;
         }
 
@@ -254,7 +258,7 @@ class MonitoredValue : public MonitoredValueBase {
 
         operator T() const {
             return value;
-        };
+        }
 
         MonitoredValue& operator=(const MonitoredValue& v) {
             std::unique_lock<std::mutex> lck(mtx);
@@ -359,6 +363,10 @@ class MonitoredValue : public MonitoredValueBase {
             return value <= b;
         }
 
+        virtual void assign(vluint64_t v) {
+            value = T(v);
+        }
+
         void wait_for(T nvalue, VerilatedThread* owner) {
             std::unique_lock<std::mutex> lck(mtx);
 
@@ -410,6 +418,31 @@ typedef MonitoredValue<vluint32_t> WData;
 
 typedef const WData* WDataInP;  ///< Array input to a function
 typedef WData* WDataOutP;  ///< Array output from a function
+
+class VerilatedNBACtrl {
+    private:
+        std::map<MonitoredValueBase*, vluint64_t> data;
+        std::mutex mtx;
+
+    public:
+
+        void schedule(MonitoredValueBase* var, vluint64_t val) {
+            std::unique_lock<std::mutex> lck(mtx);
+
+            data[var] = val;
+        }
+
+        void assign() {
+            std::unique_lock<std::mutex> lck(mtx);
+
+            for (auto const& v : data) {
+                v.first->assign(v.second);
+            }
+            data.clear();
+        }
+};
+
+extern VerilatedNBACtrl verilated_nba_ctrl;
 
 enum VerilatedVarType {
     VLVT_UNKNOWN = 0,

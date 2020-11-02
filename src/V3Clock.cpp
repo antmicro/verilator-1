@@ -58,6 +58,7 @@ private:
     AstSenTree* m_lastSenp;  // Last sensitivity match, so we can detect duplicates.
     AstIf* m_lastIfp;  // Last sensitivity if active to add more under
     AstMTaskBody* m_mtaskBodyp;  // Current mtask body
+    AstVarScope* m_evalCounterVarScopep;
 
     // METHODS
     VL_DEBUG_FUNC;  // Declare debug()
@@ -180,6 +181,17 @@ private:
             funcp->entryPoint(true);
             m_scopep->addActivep(funcp);
             m_evalFuncp = funcp;
+
+            // Create counter for the _eval loop
+            string name
+                = "__eval_change_counter";
+            AstVar* cntVarp =
+                new AstVar(nodep->fileline(), AstVarType::MODULETEMP, name,
+                                      VFlagLogicPacked(), 32);
+            m_evalCounterVarScopep = new AstVarScope(m_scopep->fileline(), m_scopep, cntVarp);
+            m_scopep->addVarp(m_evalCounterVarScopep);
+
+            m_modp->addStmtp(cntVarp);
         }
         {
             AstCFunc* funcp = new AstCFunc(nodep->fileline(), "_eval_initial", m_scopep);
@@ -369,6 +381,17 @@ private:
                     // Make a new if statement
                     m_lastIfp = makeActiveIf(m_lastSenp);
                     addToEvalLoop(m_lastIfp);
+
+                    AstNode* incp = new AstAdd(nodep->fileline(),
+                                               new AstVarRef(nodep->fileline(),
+                                                             m_evalCounterVarScopep, false),
+                                               new AstConst(nodep->fileline(), 1));
+                    AstAssign* assignp =
+                        new AstAssign(nodep->fileline(),
+                                      new AstVarRef(nodep->fileline(),
+                                                    m_evalCounterVarScopep, true),
+                                      incp);
+                    m_lastIfp->addIfsp(assignp);
                 }
                 // Move statements to if
                 m_lastIfp->addIfsp(stmtsp);

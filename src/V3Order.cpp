@@ -707,6 +707,7 @@ private:
             // If inside combo logic, ignore the domain, we'll assign one based on interconnect
             AstSenTree* startDomainp = m_activep->sensesp();
             if (startDomainp->hasCombo()) startDomainp = NULL;
+            OrderLogicVertex* logicVxOldp = m_logicVxp;
             m_logicVxp = new OrderLogicVertex(&m_graph, m_scopep, startDomainp, nodep);
             if (m_activeSenVxp) {
                 // If in a clocked activation, add a link from the sensitivity to this block
@@ -715,7 +716,7 @@ private:
             }
             nodep->user1p(m_modp);
             iterateChildren(nodep);
-            m_logicVxp = NULL;
+            m_logicVxp = logicVxOldp;
         }
     }
 
@@ -1765,6 +1766,8 @@ AstActive* OrderVisitor::processMoveOneLogic(const OrderLogicVertex* lvertexp,
     UASSERT(modp, "NULL");
     if (VN_IS(nodep, SenTree)) {
         // Just ignore sensitivities, we'll deal with them when we move statements that need them
+    } else if (VN_IS(nodep, AssignPre) || VN_IS(nodep, AssignPost)) {
+        // Ignore assign pre and assign post for now
     } else {  // Normal logic
         // Make or borrow a CFunc to contain the new statements
         if (v3Global.opt.profCFuncs()
