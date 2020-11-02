@@ -91,23 +91,24 @@ extern std::vector<VerilatedThread*> verilated_threads;
 
 class VerilatedThread {
 
-public:
+private:
+    std::mutex m_internal_mtx;
+    std::function<void(void*,VerilatedThread*)> m_func;
     std::atomic<bool> m_ready;
     std::atomic<bool> m_oneshot;
     std::atomic<bool> m_started;
 
     std::atomic<bool> m_should_exit;
     std::atomic<bool> m_idle;
-
     std::thread m_thr;
-    std::mutex m_mtx;
-    std::condition_variable m_cv;
 
-    std::mutex m_delay_mtx;
-    std::mutex m_delay_wait_mtx;
     std::condition_variable m_delay_wait_cv;
 
-    std::function<void(void*,VerilatedThread*)> m_func;
+public:
+
+    // These are used externally (TODO: convert to functions)
+    std::mutex m_mtx;
+    std::condition_variable m_cv;
 
     VerilatedThread(void (*func)(void*, VerilatedThread*), void* args, bool oneshot, std::string name)
         : m_ready(false)
@@ -124,39 +125,42 @@ public:
     }
 
     bool should_exit() {
+        std::unique_lock<std::mutex> lck_d(m_internal_mtx);
         return m_should_exit;
     }
 
     void should_exit(bool e) {
-        std::unique_lock<std::mutex> lck(m_delay_wait_mtx);
+        std::unique_lock<std::mutex> lck_d(m_internal_mtx);
         m_should_exit = e;
         m_delay_wait_cv.notify_all();
     }
 
     bool ready() {
+        std::unique_lock<std::mutex> lck_d(m_internal_mtx);
         return m_ready;
     }
 
     void ready(bool r) {
-        std::unique_lock<std::mutex> lck(m_delay_wait_mtx);
+        std::unique_lock<std::mutex> lck(m_internal_mtx);
         m_ready = r;
         m_delay_wait_cv.notify_all();
     }
 
     void wait_for_idle() {
-        std::unique_lock<std::mutex> lck(m_delay_wait_mtx);
+        std::unique_lock<std::mutex> lck(m_internal_mtx);
 
-        while(ready() && !should_exit() && !idle()) {
+        while(m_ready && !m_should_exit && !m_idle) {
             m_delay_wait_cv.wait(lck);
         }
     }
 
     bool idle() {
+        std::unique_lock<std::mutex> lck(m_internal_mtx);
         return m_idle;
     }
 
     void idle(bool w) {
-        std::unique_lock<std::mutex> lck(m_delay_wait_mtx);
+        std::unique_lock<std::mutex> lck(m_internal_mtx);
         m_idle = w;
 
         if (w) {
@@ -176,6 +180,7 @@ public:
     }
 
     void kick() {
+        std::unique_lock<std::mutex> lck(m_mtx);
         ready(true);
         m_cv.notify_all();
     }
