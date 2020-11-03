@@ -229,6 +229,8 @@ private:
                 new AstVar(nodep->fileline(), AstVarType::MODULETEMP, name,
                                       VFlagLogicPacked(), 32);
             m_evalCounterVarScopep = new AstVarScope(m_scopep->fileline(), m_scopep, cntVarp);
+            cntVarp->sigPublic(true); // public sig so it's never optimized out
+
             m_scopep->addVarp(m_evalCounterVarScopep);
 
             m_modp->addStmtp(cntVarp);
