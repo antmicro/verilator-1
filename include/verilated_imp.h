@@ -193,29 +193,6 @@ public:
 //======================================================================
 // Dynamic Scheduling
 
-# if 0
-class VerilatedThread {
-    bool ready;
-    bool oneshot;
-    bool started;
-    std::thread thr;
-    std::mutex mtx;
-
-    VerilatedThread() {}
-    VerilatedThread(const std::function<void(void*,VerilatedThread*)>& func, void* args, bool oneshot)
-        : ready(false)
-        , oneshot(oneshot)
-        , started(false) {
-        thr = std::thread(func, args, this);
-    }
-
-    void join() {
-        thr.join();
-    }
-
-};
-# endif
-
 //======================================================================
 // VerilatedTimedQueue
 /// A priority queue of events to activate at a given time
