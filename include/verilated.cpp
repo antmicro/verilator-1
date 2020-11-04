@@ -678,9 +678,9 @@ std::string _vl_vsformat_time(char* tmp, double ld, bool left, size_t width) {
     int shift = prec - userUnits + fracDigits;  // 0..-15
     double shiftd = vl_time_multiplier(shift);
     double scaled = ld * shiftd;
-    QData fracDiv = static_cast<QData>(vl_time_multiplier(fracDigits));
-    QData whole = static_cast<QData>(scaled) / fracDiv;
-    QData fraction = static_cast<QData>(scaled) % fracDiv;
+    vluint64_t fracDiv = static_cast<QData>(vl_time_multiplier(fracDigits));
+    vluint64_t whole = static_cast<QData>(scaled) / fracDiv;
+    vluint64_t fraction = static_cast<QData>(scaled) % fracDiv;
     int digits = 0;
     if (!fracDigits) {
         digits = sprintf(tmp, "%" VL_PRI64 "u%s", whole, suffix.c_str());
@@ -695,7 +695,7 @@ std::string _vl_vsformat_time(char* tmp, double ld, bool left, size_t width) {
 }
 
 // Do a va_arg returning a quad, assuming input argument is anything less than wide
-#define _VL_VA_ARG_Q(ap, bits) (((bits) <= VL_IDATASIZE) ? va_arg(ap, IData) : va_arg(ap, QData))
+#define _VL_VA_ARG_Q(ap, bits) (((bits) <= VL_IDATASIZE) ? va_arg(ap, vluint32_t) : va_arg(ap, vluint64_t))
 
 void _vl_vsformat(std::string& output, const char* formatp, va_list ap) VL_MT_SAFE {
     // Format a Verilog $write style format into the output list
@@ -799,9 +799,9 @@ void _vl_vsformat(std::string& output, const char* formatp, va_list ap) VL_MT_SA
                 WDataInP lwp = nullptr;
                 if (lbits <= VL_QUADSIZE) {
                     if (lbits <= VL_IDATASIZE) {
-                        ld = va_arg(ap, IData);
+                        ld = va_arg(ap, vluint32_t);
                     } else {
-                        ld = va_arg(ap, QData);
+                        ld = va_arg(ap, vluint64_t);
                     }
                     VL_SET_WQ(qlwp, ld);
                     lwp = qlwp;
