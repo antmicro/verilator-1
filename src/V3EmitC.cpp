@@ -48,6 +48,7 @@ private:
     int m_labelNum;  // Next label number
     int m_splitSize;  // # of cfunc nodes placed into output file
     int m_splitFilenum;  // File number being created, 0 = primary
+    bool m_primitiveCast;
 
 public:
     // METHODS
@@ -1180,6 +1181,18 @@ public:
     }
     // Terminals
     virtual void visit(AstVarRef* nodep) VL_OVERRIDE {
+        if (m_primitiveCast) {
+            int width = nodep->varp()->dtypep()->width();
+            puts("(");
+            switch (width) {
+                case 8: puts("vluint8_t"); break;
+                case 16: puts("vluint16_t"); break;
+                case 32: puts("vluint32_t"); break;
+                case 64:
+                default: puts("vluint64_t"); break;
+            }
+            puts(")");
+        }
         puts(nodep->hiernameProtect());
         puts(nodep->varp()->nameProtect());
     }
@@ -2192,6 +2205,7 @@ struct EmitDispState {
 } emitDispState;
 
 void EmitCStmts::displayEmit(AstNode* nodep, bool isScan) {
+    m_primitiveCast = true;
     if (emitDispState.m_format == ""
         && VN_IS(nodep, Display)) {  // not fscanf etc, as they need to return value
         // NOP
@@ -2272,6 +2286,7 @@ void EmitCStmts::displayEmit(AstNode* nodep, bool isScan) {
         // Prep for next
         emitDispState.clear();
     }
+    m_primitiveCast = false;
 }
 
 void EmitCStmts::displayArg(AstNode* dispp, AstNode** elistp, bool isScan, const string& vfmt,

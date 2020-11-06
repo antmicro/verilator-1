@@ -387,18 +387,18 @@ AstVar::VlArgTypeRecursed AstVar::vlArgTypeRecurse(bool forFunc, const AstNodeDT
         } else if (bdtypep->keyword() == AstBasicDTypeKwd::STRING) {
             info.m_type = "std::string";
         } else if (dtypep->widthMin() <= 8) {  // Handle unpacked arrays; not bdtypep->width
-            info.m_type = "CData" + bitvec;
+            info.m_type = "CDataV" + bitvec;
         } else if (dtypep->widthMin() <= 16) {
-            info.m_type = "SData" + bitvec;
+            info.m_type = "SDataV" + bitvec;
         } else if (dtypep->widthMin() <= VL_IDATASIZE) {
-            info.m_type = "IData" + bitvec;
+            info.m_type = "IDataV" + bitvec;
         } else if (dtypep->isQuad()) {
-            info.m_type = "QData" + bitvec;
+            info.m_type = "QDataV" + bitvec;
         } else if (dtypep->isWide()) {
             if (compound) {
                 info.m_type = "VlWide<" + cvtToStr(dtypep->widthWords()) + "> ";
             } else {
-                info.m_type += "WData" + bitvec;  // []'s added later
+                info.m_type += "WDataV" + bitvec;  // []'s added later
                 info.m_dims = "[" + cvtToStr(dtypep->widthWords()) + "]";
             }
         }
