@@ -257,7 +257,7 @@ class MonitoredValue : public MonitoredValueBase {
         }
 
         operator T() const {
-            return value;
+            return (T)value;
         }
 
         MonitoredValue& operator=(const MonitoredValue& v) {
@@ -394,7 +394,6 @@ class MonitoredValue : public MonitoredValueBase {
         }
 };
 
-#if 0
 // clang-format off
 //                   P          // Packed data of bit type (C/S/I/Q/W)
 typedef vluint8_t    CData;     ///< Verilated pack data, 1-8 bits
@@ -407,14 +406,13 @@ typedef EData        WData;     ///< Verilated pack data, >64 bits, as an array
 //      double       D          // No typedef needed; Verilator uses double
 //      string       N          // No typedef needed; Verilator uses string
 // clang-format on
-#else
-typedef MonitoredValue<vluint8_t> CData;
-typedef MonitoredValue<vluint16_t> SData;
-typedef MonitoredValue<vluint32_t> IData;
-typedef MonitoredValue<vluint64_t> QData;
-typedef MonitoredValue<vluint32_t> EData;
-typedef MonitoredValue<vluint32_t> WData;
-#endif
+
+typedef MonitoredValue<vluint8_t> CDataV;
+typedef MonitoredValue<vluint16_t> SDataV;
+typedef MonitoredValue<vluint32_t> IDataV;
+typedef MonitoredValue<vluint64_t> QDataV;
+typedef MonitoredValue<vluint32_t> EDataV;
+typedef MonitoredValue<vluint32_t> WDataV;
 
 typedef const WData* WDataInP;  ///< Array input to a function
 typedef WData* WDataOutP;  ///< Array output from a function
