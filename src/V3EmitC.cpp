@@ -3067,6 +3067,13 @@ void EmitCStmts::emitSortedVarList(const VarVec& anons, const VarVec& nonanons,
         } else if (anonMembers > lim) {
             anonL1s = (anonMembers + lim - 1) / lim;
         }
+
+        ////XXX
+        anonL1s = 0;
+        anonL2s = 0;
+        anonL3s = 0;
+        ////XXX
+
         if (anonL1s != 1)
             puts("// Anonymous structures to workaround compiler member-count bugs\n");
         VarVec::const_iterator it = anons.begin();
