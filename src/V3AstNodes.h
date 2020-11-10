@@ -5975,7 +5975,7 @@ class AstStdRandomize : public AstNodeUniop {
 public:
     AstStdRandomize(FileLine* fl, AstNodeVarRef* varp)
         : AstNodeUniop(AstType::atStdRandomize, fl, varp) {
-        dtypeSetBitSized(1, VSigning::NOSIGN);
+        dtypeSetBitSized(32, VSigning::SIGNED);
         didWidth(true);
     }
     ASTNODE_NODE_FUNCS(StdRandomize)

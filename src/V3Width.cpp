@@ -2615,9 +2615,11 @@ private:
     }
     AstFunc* defineRandomizeMethod(AstClass* nodep) {
         auto* randFuncp = VN_CAST(nodep->findMember("randomize"), Func);
+        auto* retVarp = VN_CAST(randFuncp->fvarp(), Var);
+        retVarp->funcReturn(true);
+        retVarp->direction(VDirection::OUTPUT);
         randFuncp->addStmtsp(new AstAssign(
-            nodep->fileline(),
-            new AstVarRef(nodep->fileline(), VN_CAST(randFuncp->fvarp(), Var), VAccess::WRITE),
+            nodep->fileline(), new AstVarRef(nodep->fileline(), retVarp, VAccess::WRITE),
             new AstConst(nodep->fileline(), AstConst::WidthedValue(), 32, 1)));
         randFuncp->didWidth(false);
         auto* classp = nodep;
@@ -2627,25 +2629,25 @@ private:
                     AstNode* stmtp = nullptr;
                     auto* refp
                         = new AstVarRef(nodep->fileline(), VN_CAST(memberp, Var), VAccess::WRITE);
-                    if (VN_IS(memberp->dtypep(), BasicDType)) {
+                    if (VN_IS(memberp->dtypep()->skipRefp(), BasicDType)) {
                         stmtp = new AstStdRandomize(nodep->fileline(), refp);
                     } else if (VN_IS(memberp->dtypep(), ClassRefDType)) {
                         stmtp = new AstMethodCall(nodep->fileline(), refp, "randomize", nullptr);
                     } else {
-                        nodep->v3warn(E_UNSUPPORTED, "Unsupported: random member variables with type '" << memberp->dtypep()->prettyName() << "'");
+                        delete refp;
+                        memberp->v3warn(E_UNSUPPORTED,
+                                        "Unsupported: random member variables with type "
+                                            << memberp->dtypep()->prettyDTypeNameQ());
                     }
                     if (stmtp) {
-                        // Although randomize returns int, we know it is 0/1 so can use faster AstAnd vs AstLogAnd.
-                        stmtp = new AstAnd(nodep->fileline(),
-                                           new AstVarRef(nodep->fileline(),
-                                                         VN_CAST(randFuncp->fvarp(), Var),
-                                                         VAccess::READ),
-                                           stmtp);
+                        // Although randomize returns int, we know it is 0/1 so can use faster
+                        // AstAnd vs AstLogAnd.
+                        stmtp = new AstAnd(
+                            nodep->fileline(),
+                            new AstVarRef(nodep->fileline(), retVarp, VAccess::READ), stmtp);
                         auto* assignp = new AstAssign(
                             nodep->fileline(),
-                            new AstVarRef(nodep->fileline(), VN_CAST(randFuncp->fvarp(), Var),
-                                          VAccess::WRITE),
-                            stmtp);
+                            new AstVarRef(nodep->fileline(), retVarp, VAccess::WRITE), stmtp);
                         randFuncp->addStmtsp(assignp);
                     }
                 }
