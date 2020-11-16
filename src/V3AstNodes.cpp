@@ -398,7 +398,7 @@ AstVar::VlArgTypeRecursed AstVar::vlArgTypeRecurse(bool forFunc, const AstNodeDT
             if (compound) {
                 info.m_type = "VlWide<" + cvtToStr(dtypep->widthWords()) + "> ";
             } else {
-                info.m_type += "WDataV" + bitvec;  // []'s added later
+                info.m_type += "WData" + bitvec;  // []'s added later
                 info.m_dims = "[" + cvtToStr(dtypep->widthWords()) + "]";
             }
         }

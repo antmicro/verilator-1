@@ -417,8 +417,8 @@ typedef MonitoredValue<vluint32_t> WDataV;
 typedef const WData* WDataInP;  ///< Array input to a function
 typedef WData* WDataOutP;  ///< Array output from a function
 
-typedef const WDataV* WDataInPV;  ///< Array input to a function
-typedef WDataV* WDataOutPV;  ///< Array output from a function
+typedef const WData* WDataInPV;  ///< Array input to a function
+typedef WData* WDataOutPV;  ///< Array output from a function
 
 class VerilatedNBACtrl {
     private:
