@@ -125,10 +125,22 @@ inline std::ostream& operator<<(std::ostream& os, const VLifetime& rhs) {
 
 class VAccess {
 public:
-    enum en : uint8_t { READ, WRITE };
+    enum en : uint8_t {
+        READ,  // Read/Consumed, variable not changed
+        WRITE,  // Written/Updated, variable might be updated, but not consumed
+        //      // so variable might be removable if not consumed elsewhere
+        READWRITE,  // Read/Consumed and written/updated, variable both set and
+        //          // also consumed, cannot remove usage of variable.
+        //          // For non-simple data types only e.g. no tristates/delayed vars.
+        NOCHANGE  // No change to previous state, used only in V3LinkLValue
+    };
     enum en m_e;
     const char* ascii() const {
-        static const char* const names[] = {"RD", "WR"};
+        static const char* const names[] = {"RD", "WR", "RW", "--"};
+        return names[m_e];
+    }
+    const char* arrow() const {
+        static const char* const names[] = {"[RV] <-", "[LV] =>", "[LV] <=>", "--"};
         return names[m_e];
     }
     inline VAccess()
@@ -139,9 +151,13 @@ public:
     explicit inline VAccess(int _e)
         : m_e(static_cast<en>(_e)) {}  // Need () or GCC 4.8 false warning
     operator en() const { return m_e; }
-    VAccess invert() const { return (m_e == WRITE) ? VAccess(READ) : VAccess(WRITE); }
-    bool isRead() const { return m_e == READ; }
-    bool isWrite() const { return m_e == WRITE; }
+    VAccess invert() const {
+        return (m_e == READWRITE) ? VAccess(m_e) : (m_e == WRITE ? VAccess(READ) : VAccess(WRITE));
+    }
+    bool isReadOnly() const { return m_e == READ; }  // False with READWRITE
+    bool isReadOrRW() const { return m_e == READ || m_e == READWRITE; }
+    bool isWriteOrRW() const { return m_e == WRITE || m_e == READWRITE; }
+    bool isRW() const { return m_e == READWRITE; }  // False with READWRITE
 };
 inline bool operator==(const VAccess& lhs, const VAccess& rhs) { return lhs.m_e == rhs.m_e; }
 inline bool operator==(const VAccess& lhs, VAccess::en rhs) { return lhs.m_e == rhs; }
@@ -961,8 +977,8 @@ inline std::ostream& operator<<(std::ostream& os, const VParseRefExp& rhs) {
 
 class VNumRange {
 public:
-    int m_hi;  // HI part, HI always >= LO
-    int m_lo;  // LO
+    int m_hi = 0;  // HI part, HI always >= LO
+    int m_lo = 0;  // LO
     union {
         int mu_flags;
         struct {
@@ -985,19 +1001,13 @@ public:
     //
     class LeftRight {};
     VNumRange()
-        : m_hi{0}
-        , m_lo{0}
-        , mu_flags{0} {}
+        : mu_flags{0} {}
     VNumRange(int hi, int lo, bool littleEndian)
-        : m_hi{0}
-        , m_lo{0}
-        , mu_flags{0} {
+        : mu_flags{0} {
         init(hi, lo, littleEndian);
     }
     VNumRange(LeftRight, int left, int right)
-        : m_hi{0}
-        , m_lo{0}
-        , mu_flags{0} {
+        : mu_flags{0} {
         init((right > left) ? right : left, (right > left) ? left : right, (right > left));
     }
     ~VNumRange() {}
@@ -1385,7 +1395,7 @@ public:
     do { \
         if (nodep) { \
             VL_PREFETCH_RD(&((nodep)->m_nextp)); \
-            VL_PREFETCH_RD(&((nodep)->m_iterpp)); \
+            VL_PREFETCH_RD(&((nodep)->m_type)); \
         } \
     } while (false)
 
@@ -1398,22 +1408,21 @@ class AstNode {
     AstNode* m_op3p;  // Generic pointer 3
     AstNode* m_op4p;  // Generic pointer 4
     AstNode** m_iterpp;  // Pointer to node iterating on, change it if we replace this node.
+    const AstType m_type;  // Node sub-type identifier
     // ^ ASTNODE_PREFETCH depends on above ordering of members
 
+    // padding - 2 extra bytes here after m_type
+    int m_cloneCnt;  // Mark of when userp was set
+
+    AstNodeDType* m_dtypep;  // Data type of output or assignment (etc)
     AstNode* m_headtailp;  // When at begin/end of list, the opposite end of the list
-
-    const AstType m_type;  // Node sub-type identifier
-
     FileLine* m_fileline;  // Where it was declared
     vluint64_t m_editCount;  // When it was last edited
     static vluint64_t s_editCntGbl;  // Global edit counter
     // Global edit counter, last value for printing * near node #s
     static vluint64_t s_editCntLast;
 
-    AstNodeDType* m_dtypep;  // Data type of output or assignment (etc)
-
     AstNode* m_clonep;  // Pointer to clone of/ source of this module (for *LAST* cloneTree() ONLY)
-    int m_cloneCnt;  // Mark of when userp was set
     static int s_cloneCntGbl;  // Count of which userp is set
 
     // Attributes
@@ -1734,6 +1743,7 @@ public:
     AstNodeDType* findUInt32DType() { return findBasicDType(AstBasicDTypeKwd::UINT32); }
     AstNodeDType* findUInt64DType() { return findBasicDType(AstBasicDTypeKwd::UINT64); }
     AstNodeDType* findVoidDType() const;
+    AstNodeDType* findQueueIndexDType() const;
     AstNodeDType* findBitDType(int width, int widthMin, VSigning numeric) const;
     AstNodeDType* findLogicDType(int width, int widthMin, VSigning numeric) const;
     AstNodeDType* findLogicRangeDType(const VNumRange& range, int widthMin,
@@ -1804,7 +1814,8 @@ public:
     void dumpTreeGdb();  // For GDB only
     void dumpTreeAndNext(std::ostream& os = std::cout, const string& indent = "    ",
                          int maxDepth = 0) const;
-    void dumpTreeFile(const string& filename, bool append = false, bool doDump = true);
+    void dumpTreeFile(const string& filename, bool append = false, bool doDump = true,
+                      bool doCheck = true);
     static void dumpTreeFileGdb(const char* filenamep = nullptr);
 
     // METHODS - queries
@@ -2446,14 +2457,14 @@ public:
 
 private:
     class CTypeRecursed;
-    CTypeRecursed cTypeRecurse(bool forFunc, bool compound) const;
+    CTypeRecursed cTypeRecurse(bool compound) const;
 };
 
 class AstNodeUOrStructDType : public AstNodeDType {
     // A struct or union; common handling
 private:
     // TYPES
-    typedef std::map<string, AstMemberDType*> MemberNameMap;
+    typedef std::map<const string, AstMemberDType*> MemberNameMap;
     // MEMBERS
     string m_name;  // Name from upper typedef, if any
     bool m_packed;

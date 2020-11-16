@@ -32,7 +32,7 @@ struct GraphPCNode {
     //
     // Unlike the LogicMTasks's, we have no cost info for the generic graph
     // accepted by GraphPathChecker, so assume each node has unit cost.
-    vluint32_t m_cp[GraphWay::NUM_WAYS];
+    std::array<vluint32_t, GraphWay::NUM_WAYS> m_cp;
 
     // Detect if we've seen this node before in a given recursive
     // operation. We'll use this in pathExistsInternal() to avoid checking
@@ -42,7 +42,7 @@ struct GraphPCNode {
 
     // CONSTRUCTORS
     GraphPCNode() {
-        for (int w = 0; w < GraphWay::NUM_WAYS; w++) m_cp[w] = 0;
+        for (unsigned int& w : m_cp) w = 0;
     }
     ~GraphPCNode() {}
 };
@@ -51,8 +51,7 @@ struct GraphPCNode {
 // GraphPathChecker implementation
 
 GraphPathChecker::GraphPathChecker(const V3Graph* graphp, V3EdgeFuncP edgeFuncp)
-    : GraphAlg<const V3Graph>{graphp, edgeFuncp}
-    , m_generation{0} {
+    : GraphAlg<const V3Graph>{graphp, edgeFuncp} {
     for (V3GraphVertex* vxp = graphp->verticesBeginp(); vxp; vxp = vxp->verticesNextp()) {
         // Setup tracking structure for each node.  If delete a vertex
         // there would be a leak, but ok as accept only const V3Graph*'s.

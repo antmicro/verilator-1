@@ -133,7 +133,7 @@ private:
     int m_caseItems = 0;  // Number of caseItem unique values
     bool m_caseNoOverlapsAllCovered = false;  // Proven to be synopsys parallel_case compliant
     // For each possible value, the case branch we need
-    AstNode* m_valueItem[1 << CASE_OVERLAP_WIDTH];
+    std::array<AstNode*, 1 << CASE_OVERLAP_WIDTH> m_valueItem;
 
     // METHODS
     VL_DEBUG_FUNC;  // Declare debug()
@@ -486,7 +486,7 @@ private:
 public:
     // CONSTRUCTORS
     explicit CaseVisitor(AstNetlist* nodep) {
-        for (uint32_t i = 0; i < (1UL << CASE_OVERLAP_WIDTH); ++i) m_valueItem[i] = nullptr;
+        for (auto& itr : m_valueItem) itr = nullptr;
         iterate(nodep);
     }
     virtual ~CaseVisitor() override {

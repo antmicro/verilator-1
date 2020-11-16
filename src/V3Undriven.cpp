@@ -237,7 +237,7 @@ private:
     AstUser2InUse m_inuser2;
 
     // STATE
-    std::vector<UndrivenVarEntry*> m_entryps[3];  // Nodes to delete when we are finished
+    std::array<std::vector<UndrivenVarEntry*>, 3> m_entryps;  // Nodes to delete when finished
     bool m_inBBox = false;  // In black box; mark as driven+used
     bool m_inContAssign = false;  // In continuous assignment
     bool m_inProcAssign = false;  // In procedural assignment
@@ -318,7 +318,7 @@ private:
             for (int usr = 1; usr < (m_alwaysCombp ? 3 : 2); ++usr) {
                 UndrivenVarEntry* entryp = getEntryp(varrefp->varp(), usr);
                 int lsb = constp->toUInt();
-                if (m_inBBox || varrefp->access().isWrite()) {
+                if (m_inBBox || varrefp->access().isWriteOrRW()) {
                     // Don't warn if already driven earlier as "a=0; if(a) a=1;" is fine.
                     if (usr == 2 && m_alwaysCombp
                         && entryp->isUsedNotDrivenBit(lsb, nodep->width())) {
@@ -327,7 +327,8 @@ private:
                     }
                     entryp->drivenBit(lsb, nodep->width());
                 }
-                if (m_inBBox || !varrefp->access().isWrite()) entryp->usedBit(lsb, nodep->width());
+                if (m_inBBox || !varrefp->access().isWriteOrRW())
+                    entryp->usedBit(lsb, nodep->width());
             }
         } else {
             // else other varrefs handled as unknown mess in AstVarRef
@@ -336,7 +337,7 @@ private:
     }
     virtual void visit(AstNodeVarRef* nodep) override {
         // Any variable
-        if (nodep->access().isWrite()
+        if (nodep->access().isWriteOrRW()
             && !VN_IS(nodep, VarXRef)) {  // Ignore interface variables and similar ugly items
             if (m_inProcAssign && !nodep->varp()->varType().isProcAssignable()
                 && !nodep->varp()->isDeclTyped()  //
@@ -355,16 +356,16 @@ private:
         }
         for (int usr = 1; usr < (m_alwaysCombp ? 3 : 2); ++usr) {
             UndrivenVarEntry* entryp = getEntryp(nodep->varp(), usr);
-            bool fdrv = nodep->access().isWrite()
+            bool fdrv = nodep->access().isWriteOrRW()
                         && nodep->varp()->attrFileDescr();  // FD's are also being read from
-            if (m_inBBox || nodep->access().isWrite()) {
+            if (m_inBBox || nodep->access().isWriteOrRW()) {
                 if (usr == 2 && m_alwaysCombp && entryp->isUsedNotDrivenAny()) {
                     UINFO(9, " Full bus.  Entryp=" << cvtToHex(entryp) << endl);
                     warnAlwCombOrder(nodep);
                 }
                 entryp->drivenWhole();
             }
-            if (m_inBBox || !nodep->access().isWrite() || fdrv) entryp->usedWhole();
+            if (m_inBBox || nodep->access().isReadOrRW() || fdrv) entryp->usedWhole();
         }
     }
 

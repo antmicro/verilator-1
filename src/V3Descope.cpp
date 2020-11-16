@@ -268,6 +268,8 @@ private:
         // nodep->funcp()->scopep(nullptr);
     }
     virtual void visit(AstCFunc* nodep) override {
+        VL_RESTORER(m_needThis);
+        VL_RESTORER(m_allowThis);
         if (!nodep->user1()) {
             m_needThis = false;
             m_allowThis = nodep->isStatic().falseUnknown();  // Non-static or unknown if static
@@ -302,6 +304,7 @@ public:
 
 void V3Descope::descopeAll(AstNetlist* nodep) {
     UINFO(2, __FUNCTION__ << ": " << endl);
+    v3Global.assertScoped(false);
     { DescopeVisitor visitor(nodep); }  // Destruct before checking
     V3Global::dumpCheckGlobalTree("descope", 0, v3Global.opt.dumpTreeLevel(__FILE__) >= 3);
 }

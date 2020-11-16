@@ -284,7 +284,7 @@ private:
         if (it != m_cp.end()) return it->second;
         return 0;
     }
-    uint32_t cost(const V3GraphVertex*) const { return 1; }
+    static uint32_t cost(const V3GraphVertex*) { return 1; }
     void partInitCriticalPaths(bool checkOnly) {
         // Set up the FORWARD cp's only.  This test only looks in one
         // direction, it assumes REVERSE is symmetrical and would be
@@ -306,9 +306,9 @@ private:
     }
     void go() {
         // Generate a pseudo-random graph
-        vluint64_t rngState[2] = {0x12345678ULL, 0x9abcdef0ULL};
+        std::array<vluint64_t, 2> rngState = {0x12345678ULL, 0x9abcdef0ULL};
         // Create 50 vertices
-        for (unsigned i = 0; i < 50; ++i) m_vx[i] = new V3GraphVertex(&m_graph);
+        for (auto& i : m_vx) i = new V3GraphVertex(&m_graph);
         // Create 250 edges at random. Edges must go from
         // lower-to-higher index vertices, so we get a DAG.
         for (unsigned i = 0; i < 250; ++i) {
@@ -328,10 +328,8 @@ private:
 
         // Seed the propagator with every input node;
         // This should result in the complete graph getting all CP's assigned.
-        for (unsigned i = 0; i < 50; ++i) {
-            if (!m_vx[i]->inBeginp()) {
-                prop.cpHasIncreased(m_vx[i], 1 /* inclusive CP starts at 1 */);
-            }
+        for (const auto& i : m_vx) {
+            if (!i->inBeginp()) prop.cpHasIncreased(i, 1 /* inclusive CP starts at 1 */);
         }
 
         // Run the propagator.
@@ -427,7 +425,7 @@ private:
     // Cost of critical paths going FORWARD from graph-start to the start
     // of this vertex, and also going REVERSE from the end of the graph to
     // the end of the vertex. Same units as m_cost.
-    uint32_t m_critPathCost[GraphWay::NUM_WAYS];
+    std::array<uint32_t, GraphWay::NUM_WAYS> m_critPathCost;
 
     uint32_t m_serialId;  // Unique MTask ID number
 
@@ -445,13 +443,13 @@ private:
     // relatives in longest-to-shortest CP order.  We rely on this ordering
     // in more than one place.
     typedef SortByValueMap<LogicMTask*, uint32_t, CmpLogicMTask> EdgeSet;
-    EdgeSet m_edges[GraphWay::NUM_WAYS];
+    std::array<EdgeSet, GraphWay::NUM_WAYS> m_edges;
 
 public:
     // CONSTRUCTORS
     LogicMTask(V3Graph* graphp, MTaskMoveVertex* mtmvVxp)
         : AbstractLogicMTask{graphp} {
-        for (int i = 0; i < GraphWay::NUM_WAYS; ++i) m_critPathCost[i] = 0;
+        for (unsigned int& i : m_critPathCost) i = 0;
         if (mtmvVxp) {  // Else null for test
             m_vertices.push_back(mtmvVxp);
             if (OrderLogicVertex* olvp = mtmvVxp->logicp()) {
@@ -726,10 +724,10 @@ class SiblingMC : public MergeCandidate {
 private:
     LogicMTask* m_ap;
     LogicMTask* m_bp;
-    // CONSTRUCTORS
-    SiblingMC() = delete;
 
 public:
+    // CONSTRUCTORS
+    SiblingMC() = delete;
     SiblingMC(LogicMTask* ap, LogicMTask* bp) {
         // Assign 'ap' and 'bp' in a canonical order, so we can more easily
         // compare pairs of SiblingMCs
@@ -745,7 +743,7 @@ public:
     // METHODS
     LogicMTask* ap() const { return m_ap; }
     LogicMTask* bp() const { return m_bp; }
-    bool mergeWouldCreateCycle() const {
+    bool mergeWouldCreateCycle() const override {
         return (LogicMTask::pathExistsFrom(m_ap, m_bp, nullptr)
                 || LogicMTask::pathExistsFrom(m_bp, m_ap, nullptr));
     }
@@ -2254,8 +2252,8 @@ void V3Partition::debugMTaskGraphStats(const V3Graph* graphp, const string& stag
     UINFO(4, " Stats for " << stage << endl);
     uint32_t mtaskCount = 0;
     uint32_t totalCost = 0;
-    uint32_t mtaskCostHist[32];
-    memset(mtaskCostHist, 0, sizeof(mtaskCostHist));
+    std::array<uint32_t, 32> mtaskCostHist;
+    mtaskCostHist.fill(0);
 
     for (const V3GraphVertex* mtaskp = graphp->verticesBeginp(); mtaskp;
          mtaskp = mtaskp->verticesNextp()) {

@@ -41,7 +41,7 @@ private:
     // MEMBERS
     AstNodeModule* m_modInsertp;  // Current module to insert AstCUse under
     typedef std::pair<VUseType, string> UseString;
-    std::map<UseString, AstCUse*> m_didUse;  // What we already used
+    std::map<const UseString, AstCUse*> m_didUse;  // What we already used
 
     // NODE STATE
     // Entire netlist:
@@ -148,7 +148,7 @@ class CUseVisitor : public AstNVisitor {
         funcp->isStatic(false);
         funcp->protect(false);
         AstNode* exprp = new AstCMath(nodep->fileline(),
-                                      "std::string(\"'{\") + to_string_middle() + \"}\"", 0);
+                                      R"(std::string("'{") + to_string_middle() + "}")", 0);
         exprp->dtypeSetString();
         funcp->addStmtsp(new AstCReturn(nodep->fileline(), exprp));
         nodep->addStmtp(funcp);

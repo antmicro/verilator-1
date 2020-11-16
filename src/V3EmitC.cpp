@@ -23,6 +23,7 @@
 #include "V3EmitCBase.h"
 #include "V3Number.h"
 #include "V3PartitionGraph.h"
+#include "V3Task.h"
 #include "V3TSP.h"
 
 #include <algorithm>
@@ -424,6 +425,18 @@ public:
         if (nodep->isStatement()) puts(";\n");
         UASSERT_OBJ(!nodep->isStatement() || VN_IS(nodep->dtypep(), VoidDType), nodep,
                     "Statement of non-void data type");
+    }
+    virtual void visit(AstLambdaArgRef* nodep) override { putbs(nodep->nameProtect()); }
+    virtual void visit(AstWith* nodep) override {
+        // With uses a C++11 lambda
+        putbs("[=](");
+        if (auto* argrefp = nodep->argrefp()) {
+            putbs(argrefp->dtypep()->cType(nodep->argrefp()->nameProtect(), false, false));
+        }
+        // Probably fragile, V3Task may need to convert to a AstCReturn
+        puts(") { return ");
+        iterateAndNextNull(nodep->exprp());
+        puts("; }\n");
     }
     virtual void visit(AstIntfRef* nodep) override {
         putsQuoted(VIdProtect::protectWordsIf(AstNode::vcdName(nodep->name()), nodep->protect()));
@@ -1232,7 +1245,6 @@ public:
         nodep->v3fatalSrc("Unknown node type reached emitter: " << nodep->prettyTypeName());
     }
 
-public:
     EmitCStmts() {
         m_suppressSemi = false;
         m_wideTempRefp = nullptr;
@@ -1282,8 +1294,8 @@ public:
     // Returns the number of elements in set_a that don't appear in set_b
     static int diffs(const MTaskIdSet& set_a, const MTaskIdSet& set_b) {
         int diffs = 0;
-        for (MTaskIdSet::iterator it = set_a.begin(); it != set_a.end(); ++it) {
-            if (set_b.find(*it) == set_b.end()) ++diffs;
+        for (int i : set_a) {
+            if (set_b.find(i) == set_b.end()) ++diffs;
         }
         return diffs;
     }
@@ -1575,6 +1587,39 @@ class EmitCImp : EmitCStmts {
         }
     }
 
+    virtual void visit(AstConsAssoc* nodep) override {
+        putbs(nodep->dtypep()->cType("", false, false));
+        puts("()");
+        if (nodep->defaultp()) {
+            putbs(".setDefault(");
+            iterateAndNextNull(nodep->defaultp());
+            puts(")");
+        }
+    }
+    virtual void visit(AstSetAssoc* nodep) override {
+        iterateAndNextNull(nodep->lhsp());
+        putbs(".set(");
+        iterateAndNextNull(nodep->keyp());
+        puts(", ");
+        putbs("");
+        iterateAndNextNull(nodep->valuep());
+        puts(")");
+    }
+    virtual void visit(AstConsDynArray* nodep) override {
+        putbs(nodep->dtypep()->cType("", false, false));
+        if (!nodep->lhsp()) {
+            puts("()");
+        } else {
+            puts("::cons(");
+            iterateAndNextNull(nodep->lhsp());
+            if (nodep->rhsp()) {
+                puts(", ");
+                putbs("");
+            }
+            iterateAndNextNull(nodep->rhsp());
+            puts(")");
+        }
+    }
     virtual void visit(AstConsQueue* nodep) override {
         putbs(nodep->dtypep()->cType("", false, false));
         if (!nodep->lhsp()) {
@@ -1686,10 +1731,9 @@ class EmitCImp : EmitCStmts {
                     puts("}\n");
                 }
                 const AstInitArray::KeyItemMap& mapr = initarp->map();
-                for (AstInitArray::KeyItemMap::const_iterator it = mapr.begin(); it != mapr.end();
-                     ++it) {
-                    AstNode* valuep = it->second->valuep();
-                    emitSetVarConstant(varp->nameProtect() + "[" + cvtToStr(it->first) + "]",
+                for (const auto& itr : mapr) {
+                    AstNode* valuep = itr.second->valuep();
+                    emitSetVarConstant(varp->nameProtect() + "[" + cvtToStr(itr.first) + "]",
                                        VN_CAST(valuep, Const));
                 }
             } else {
@@ -1859,6 +1903,16 @@ void EmitCStmts::emitVarDecl(const AstVar* nodep, const string& prefixIfImp) {
         puts(");\n");
     } else {
         // strings and other fundamental c types
+        if (nodep->isFuncLocal() && nodep->isString()) {
+            const string name = nodep->name();
+            const string suffix = V3Task::dpiTemporaryVarSuffix();
+            // string temporary variable for DPI-C needs to be static because c_str() will be
+            // passed to C code and the lifetime of the variable must be long enough. See also
+            // Issue 2622.
+            const bool beStatic = name.size() >= suffix.size()
+                                  && name.substr(name.size() - suffix.size()) == suffix;
+            if (beStatic) puts("static VL_THREAD_LOCAL ");
+        }
         puts(nodep->vlArgType(true, false, false, prefixIfImp));
         puts(";\n");
     }
@@ -2181,7 +2235,12 @@ void EmitCStmts::displayArg(AstNode* dispp, AstNode** elistp, bool isScan, const
     }
     emitDispState.pushFormat(pfmt);
     if (!ignore) {
-        emitDispState.pushArg(' ', nullptr, cvtToStr(argp->widthMin()));
+        if (argp->dtypep()->basicp()->keyword() == AstBasicDTypeKwd::STRING) {
+            // string in SystemVerilog is std::string in C++ which is not POD
+            emitDispState.pushArg(' ', nullptr, "-1");
+        } else {
+            emitDispState.pushArg(' ', nullptr, cvtToStr(argp->widthMin()));
+        }
         emitDispState.pushArg(fmtLetter, argp, "");
     } else {
         emitDispState.pushArg(fmtLetter, nullptr, "");
@@ -2292,7 +2351,7 @@ void EmitCStmts::displayNode(AstNode* nodep, AstScopeName* scopenamep, const str
 //######################################################################
 // Internal EmitC
 
-void EmitCImp::emitCoverageDecl(AstNodeModule* modp) {
+void EmitCImp::emitCoverageDecl(AstNodeModule*) {
     if (v3Global.opt.coverage()) {
         ofp()->putsPrivate(true);
         putsDecoration("// Coverage\n");
@@ -2339,7 +2398,7 @@ void EmitCImp::emitMTaskVertexCtors(bool* firstp) {
 void EmitCImp::emitCtorImp(AstNodeModule* modp) {
     puts("\n");
     bool first = true;
-    string section("");
+    string section;
     emitParams(modp, true, &first, section /*ref*/);
 
     if (VN_IS(modp, Class)) {
@@ -2419,7 +2478,7 @@ void EmitCImp::emitConfigureImp(AstNodeModule* modp) {
     splitSizeInc(10);
 }
 
-void EmitCImp::emitCoverageImp(AstNodeModule* modp) {
+void EmitCImp::emitCoverageImp(AstNodeModule*) {
     if (v3Global.opt.coverage()) {
         puts("\n// Coverage\n");
         // Rather than putting out VL_COVER_INSERT calls directly, we do it via this function
@@ -2842,8 +2901,8 @@ void EmitCStmts::emitVarSort(const VarSortMap& vmap, VarVec* sortedp) {
     if (!v3Global.opt.mtasks()) {
         // Plain old serial mode. Sort by size, from small to large,
         // to optimize for both packing and small offsets in code.
-        for (VarSortMap::const_iterator it = vmap.begin(); it != vmap.end(); ++it) {
-            for (VarVec::const_iterator jt = it->second.begin(); jt != it->second.end(); ++jt) {
+        for (const auto& itr : vmap) {
+            for (VarVec::const_iterator jt = itr.second.begin(); jt != itr.second.end(); ++jt) {
                 sortedp->push_back(*jt);
             }
         }
@@ -2851,7 +2910,7 @@ void EmitCStmts::emitVarSort(const VarSortMap& vmap, VarVec* sortedp) {
     }
 
     // MacroTask mode.  Sort by MTask-affinity group first, size second.
-    typedef std::map<MTaskIdSet, VarSortMap> MTaskVarSortMap;
+    typedef std::map<const MTaskIdSet, VarSortMap> MTaskVarSortMap;
     MTaskVarSortMap m2v;
     for (VarSortMap::const_iterator it = vmap.begin(); it != vmap.end(); ++it) {
         int size_class = it->first;
@@ -2972,7 +3031,7 @@ void EmitCImp::emitMTaskState() {
     puts("bool __Vm_even_cycle;\n");
 }
 
-void EmitCImp::emitIntTop(AstNodeModule* modp) {
+void EmitCImp::emitIntTop(AstNodeModule*) {
     // Always have this first; gcc has short circuiting if #ifdef is first in a file
     ofp()->putsGuard();
     puts("\n");
@@ -3168,13 +3227,13 @@ void EmitCImp::emitInt(AstNodeModule* modp) {
 
     puts("\n// INTERNAL METHODS\n");
     if (modp->isTop()) {
-        ofp()->putsPrivate(true);  // private:
+        ofp()->putsPrivate(false);  // public: as accessed by another VL_MODULE
         puts("static void " + protect("_eval_initial_loop") + "(" + EmitCBaseVisitor::symClassVar()
              + ");\n");
         if (v3Global.needTraceDumper()) {
-            if (!optSystemC()) puts("void _traceDump();");
-            puts("void _traceDumpOpen();");
-            puts("void _traceDumpClose();");
+            if (!optSystemC()) puts("void _traceDump();\n");
+            puts("void _traceDumpOpen();\n");
+            puts("void _traceDumpClose();\n");
         }
     }
 
@@ -3349,7 +3408,7 @@ class EmitCTrace : EmitCStmts {
     AstUser1InUse m_inuser1;
 
     // MEMBERS
-    AstCFunc* m_funcp = nullptr;  // Function we're in now
+    AstCFunc* m_cfuncp = nullptr;  // Function we're in now
     bool m_slow;  // Making slow file
     int m_enumNum = 0;  // Enumeration number (whole netlist)
     int m_baseCode = -1;  // Code of first AstTraceInc in this function
@@ -3681,8 +3740,9 @@ class EmitCTrace : EmitCStmts {
     virtual void visit(AstNodeModule* nodep) override { iterateChildren(nodep); }
     virtual void visit(AstCFunc* nodep) override {
         if (nodep->slow() != m_slow) return;
+        VL_RESTORER(m_cfuncp);
         if (nodep->funcType().isTrace()) {  // TRACE_*
-            m_funcp = nodep;
+            m_cfuncp = nodep;
 
             if (splitNeeded()) {
                 // Splitting file, so using parallel build.
@@ -3752,7 +3812,6 @@ class EmitCTrace : EmitCStmts {
             }
             puts("}\n");
         }
-        m_funcp = nullptr;
     }
     virtual void visit(AstTraceDecl* nodep) override {
         int enumNum = emitTraceDeclDType(nodep->dtypep());
