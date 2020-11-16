@@ -70,6 +70,7 @@
 #include "V3Width.h"
 #include "V3Number.h"
 #include "V3Const.h"
+#include "V3RandomizeMethod.h"
 #include "V3String.h"
 #include "V3Task.h"
 
@@ -2107,7 +2108,6 @@ private:
     virtual void visit(AstClass* nodep) override {
         if (nodep->didWidthAndSet()) return;
         userIterateChildren(nodep, nullptr);  // First size all members
-        visit(defineRandomizeMethod(nodep));
         nodep->repairCache();
     }
     virtual void visit(AstClassRefDType* nodep) override {
@@ -2613,52 +2613,13 @@ private:
         VL_DANGLING(index_exprp);  // May have been edited
         return VN_CAST(nodep->pinsp(), Arg)->exprp();
     }
-    AstFunc* defineRandomizeMethod(AstClass* nodep) {
-        auto* randFuncp = VN_CAST(nodep->findMember("randomize"), Func);
-        auto* retVarp = VN_CAST(randFuncp->fvarp(), Var);
-        retVarp->funcReturn(true);
-        retVarp->direction(VDirection::OUTPUT);
-        randFuncp->addStmtsp(new AstAssign(
-            nodep->fileline(), new AstVarRef(nodep->fileline(), retVarp, VAccess::WRITE),
-            new AstConst(nodep->fileline(), AstConst::WidthedValue(), 32, 1)));
-        randFuncp->didWidth(false);
-        auto* classp = nodep;
-        do {
-            for (auto* memberp = classp->stmtsp(); memberp; memberp = memberp->nextp()) {
-                if (VN_IS(memberp, Var) && VN_CAST(memberp, Var)->isRand()) {
-                    AstNode* stmtp = nullptr;
-                    auto* refp
-                        = new AstVarRef(nodep->fileline(), VN_CAST(memberp, Var), VAccess::WRITE);
-                    if (VN_IS(memberp->dtypep()->skipRefp(), BasicDType)) {
-                        stmtp = new AstStdRandomize(nodep->fileline(), refp);
-                    } else if (VN_IS(memberp->dtypep(), ClassRefDType)) {
-                        stmtp = new AstMethodCall(nodep->fileline(), refp, "randomize", nullptr);
-                    } else {
-                        delete refp;
-                        memberp->v3warn(E_UNSUPPORTED,
-                                        "Unsupported: random member variables with type "
-                                            << memberp->dtypep()->prettyDTypeNameQ());
-                    }
-                    if (stmtp) {
-                        // Although randomize returns int, we know it is 0/1 so can use faster
-                        // AstAnd vs AstLogAnd.
-                        stmtp = new AstAnd(
-                            nodep->fileline(),
-                            new AstVarRef(nodep->fileline(), retVarp, VAccess::READ), stmtp);
-                        auto* assignp = new AstAssign(
-                            nodep->fileline(),
-                            new AstVarRef(nodep->fileline(), retVarp, VAccess::WRITE), stmtp);
-                        randFuncp->addStmtsp(assignp);
-                    }
-                }
-            }
-            classp = classp->extendsp() ? classp->extendsp()->classp() : nullptr;
-        } while (classp);
-        return randFuncp;
-    }
     void methodCallClass(AstMethodCall* nodep, AstClassRefDType* adtypep) {
         // No need to width-resolve the class, as it was done when we did the child
         AstClass* first_classp = adtypep->classp();
+        if (nodep->name() == "randomize") {
+            v3Global.defineRandomizeMethods(true);
+            V3RandomizeMethod::declareIn(first_classp);
+        }
         UASSERT_OBJ(first_classp, nodep, "Unlinked");
         for (AstClass* classp = first_classp; classp;) {
             if (AstNodeFTask* ftaskp = VN_CAST(classp->findMember(nodep->name()), NodeFTask)) {

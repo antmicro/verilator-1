@@ -75,6 +75,7 @@
 #include "V3PreShell.h"
 #include "V3Premit.h"
 #include "V3ProtectLib.h"
+#include "V3RandomizeMethod.h"
 #include "V3Reloop.h"
 #include "V3Scope.h"
 #include "V3Scoreboard.h"
@@ -167,6 +168,8 @@ static void process() {
 
     // Calculate and check widths, edit tree to TRUNC/EXTRACT any width mismatches
     V3Width::width(v3Global.rootp());
+
+    if (v3Global.defineRandomizeMethods()) { V3RandomizeMethod::defineIfNeeded(v3Global.rootp()); }
 
     V3Error::abortIfErrors();
 

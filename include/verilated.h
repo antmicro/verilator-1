@@ -658,11 +658,19 @@ inline IData VL_URANDOM_RANGE_I(IData hi, IData lo) {
     }
 }
 
-inline IData VL_STD_RANDOMIZE_I(IData& data, int obits) VL_MT_SAFE {
+inline IData VL_STD_RANDOMIZE(CData& data, int obits) VL_MT_SAFE {
     data = VL_RANDOM_I(obits);
     return 1;
 }
-inline QData VL_STD_RANDOMIZE_Q(QData& data, int obits) VL_MT_SAFE {
+inline IData VL_STD_RANDOMIZE(SData& data, int obits) VL_MT_SAFE {
+    data = VL_RANDOM_I(obits);
+    return 1;
+}
+inline IData VL_STD_RANDOMIZE(IData& data, int obits) VL_MT_SAFE {
+    data = VL_RANDOM_I(obits);
+    return 1;
+}
+inline IData VL_STD_RANDOMIZE(QData& data, int obits) VL_MT_SAFE {
     data = VL_RANDOM_Q(obits);
     return 1;
 }

@@ -306,14 +306,11 @@ class AstClass : public AstNodeModule {
     AstClassPackage* m_packagep = nullptr;  // Class package this is under
     bool m_virtual = false;  // Virtual class
     bool m_extended = false;  // Is extension or extended by other classes
-    void declareRandomizeMethod();
     void insertCache(AstNode* nodep);
 
 public:
     AstClass(FileLine* fl, const string& name)
-        : ASTGEN_SUPER(fl, name) {
-        declareRandomizeMethod();
-    }
+        : ASTGEN_SUPER(fl, name) {}
     ASTNODE_NODE_FUNCS(Class)
     virtual string verilogKwd() const override { return "class"; }
     virtual bool isHeavy() const override { return true; }
@@ -5980,7 +5977,7 @@ public:
     }
     ASTNODE_NODE_FUNCS(StdRandomize)
     virtual string emitVerilog() override { return "std::randomize(%l)"; }
-    virtual string emitC() override { return "VL_STD_RANDOMIZE_%lq(%li, %lw)"; }
+    virtual string emitC() override { return "VL_STD_RANDOMIZE(%li, %lw)"; }
     virtual bool cleanOut() const override { return true; }
     virtual bool isGateOptimizable() const override { return false; }
     virtual bool isPredictOptimizable() const override { return false; }
