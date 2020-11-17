@@ -54,5 +54,9 @@ int main(int argc, char* argv[]) {
     printf("\nTesting\n");
     for (i = 0; i < 100; i++)
         StepSim(sim, random() % 3, random() % 2, random() % 2, random() % 3);
+
+    sim->final();
+    VL_DO_DANGLING(delete sim, sim);
+
     printf("*-* All Finished *-*\n");
 }

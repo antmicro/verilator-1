@@ -80,6 +80,9 @@ int main()
         }
     }
 
+    tb->final();
+    VL_DO_DANGLING(delete tb, tb);
+
     if (pass) {
         VL_PRINTF("*-* All Finished *-*\n");
     } else {

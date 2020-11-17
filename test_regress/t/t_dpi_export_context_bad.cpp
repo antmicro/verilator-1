@@ -42,5 +42,8 @@ int main(int argc, char* argv[]) {
 
     topp->eval();
     dpix_task();  // Missing svSetScope
+
+    topp->final();
+    VL_DO_DANGLING(delete topp, topp);
     return 1;
 }
