@@ -370,15 +370,17 @@ public:
         if (!m_suppressSemi) puts(";\n");
     }
     virtual void visit(AstAssignDly* nodep) override {
-        if (!VN_IS(nodep->lhsp(), VarRef)) {
+        if (VN_IS(nodep->lhsp(), VarRef) ||
+            VN_IS(nodep->lhsp(), ArraySel)) {
+            puts("verilated_nba_ctrl.schedule(&");
+            iterateAndNextNull(nodep->lhsp());
+            puts(", ");
+            iterateAndNextNull(nodep->rhsp());
+            puts(");\n");
+        } else {
             nodep->v3warn(E_UNSUPPORTED, "Unsupported: delayed assignment type");
+            nodep->dumpTree(cout, "    ");
         }
-
-        puts("verilated_nba_ctrl.schedule(&");
-        iterateAndNextNull(nodep->lhsp());
-        puts(", ");
-        iterateAndNextNull(nodep->rhsp());
-        puts(");\n");
     }
     virtual void visit(AstAlwaysPublic*) override {}
     virtual void visit(AstAssocSel* nodep) override {
