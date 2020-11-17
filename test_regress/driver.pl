@@ -864,6 +864,7 @@ sub compile_vlt_flags {
                           @{$param{v_flags2}},
                           @{$param{verilator_flags}},
                           @{$param{verilator_flags2}},
+                          "--output-split-cfuncs 1 -LDFLAGS -lpthread -CFLAGS -DVL_THREADED",
                           @{$param{verilator_flags3}});
     $self->{sc} = 1 if ($checkflags =~ /-sc\b/);
     $self->{trace} = ($opt_trace || $checkflags =~ /-trace\b/
@@ -911,6 +912,7 @@ sub compile_vlt_flags {
                    "--prefix ".$param{VM_PREFIX},
                    @verilator_flags,
                    @{$param{verilator_flags2}},
+                   "--output-split-cfuncs 1 -LDFLAGS -lpthread -CFLAGS -DVL_THREADED",
                    @{$param{verilator_flags3}},
                    @{$param{v_flags}},
                    @{$param{v_flags2}},
