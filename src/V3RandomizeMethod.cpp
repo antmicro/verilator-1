@@ -21,31 +21,19 @@
 // Visitor that marks classes needing a randomize() method
 
 class RandomizeMethodMarkVisitor : public AstNVisitor {
+private:
+    // NODE STATE
+    // Cleared on Netlist
+    //  AstClass::user1()       -> bool.  Set true to indicate needs randomize processing
+    AstUser1InUse m_inuser1;
+
     typedef std::unordered_set<AstClass*> DerivedSet;
     typedef std::unordered_map<AstClass*, DerivedSet> BaseToDerivedMap;
 
     BaseToDerivedMap m_baseToDerivedMap;  // Mapping from base classes to classes that extend them
 
-    virtual void visit(AstNode* nodep) override { iterateChildren(nodep); }
-
-    virtual void visit(AstClass* nodep) override {
-        iterateChildren(nodep);
-        if (nodep->extendsp()) {
-            // Save pointer to derived class
-            auto* basep = nodep->extendsp()->classp();
-            m_baseToDerivedMap[basep].insert(nodep);
-        }
-    }
-
-    virtual void visit(AstMethodCall* nodep) override {
-        iterateChildren(nodep);
-        if (nodep->name() != "randomize") return;
-        if (AstClassRefDType* classRefp = VN_CAST(nodep->fromp()->dtypep(), ClassRefDType)) {
-            auto* classp = classRefp->classp();
-            classp->user1(true);
-            markMembers(classp);
-        }
-    }
+    // METHODS
+    VL_DEBUG_FUNC;
 
     void markMembers(AstClass* nodep) {
         for (auto* memberp = nodep->stmtsp(); memberp; memberp = memberp->nextp()) {
@@ -71,86 +59,125 @@ class RandomizeMethodMarkVisitor : public AstNVisitor {
         }
     }
 
-public:
     void markAllDerived() {
         for (auto p : m_baseToDerivedMap) {
             if (p.first->user1()) { markDerived(p.first); }
         }
     }
+
+    // VISITORS
+    virtual void visit(AstClass* nodep) override {
+        iterateChildren(nodep);
+        if (nodep->extendsp()) {
+            // Save pointer to derived class
+            auto* basep = nodep->extendsp()->classp();
+            m_baseToDerivedMap[basep].insert(nodep);
+        }
+    }
+
+    virtual void visit(AstMethodCall* nodep) override {
+        iterateChildren(nodep);
+        if (nodep->name() != "randomize") return;
+        if (AstClassRefDType* classRefp = VN_CAST(nodep->fromp()->dtypep(), ClassRefDType)) {
+            auto* classp = classRefp->classp();
+            classp->user1(true);
+            markMembers(classp);
+        }
+    }
+
+    virtual void visit(AstNode* nodep) override { iterateChildren(nodep); }
+
+public:
+    // CONSTRUCTORS
+    explicit RandomizeMethodMarkVisitor(AstNetlist* nodep) {
+        iterate(nodep);
+        markAllDerived();
+    }
+    virtual ~RandomizeMethodMarkVisitor() override {}
 };
 
 //######################################################################
 // Visitor that defines a randomize method where needed
 
 class RandomizeMethodVisitor : public AstNVisitor {
-    virtual void visit(AstNode* nodep) override { iterateChildren(nodep); }
+private:
+    // NODE STATE
+    // Cleared on Netlist
+    //  AstClass::user1()       -> bool.  Set true to indicate needs randomize processing
+    // AstUser1InUse    m_inuser1;      (Allocated for use in RandomizeMethodMarkVisitor)
 
+    // METHODS
+    VL_DEBUG_FUNC;
+
+    // VISITORS
     virtual void visit(AstClass* nodep) override {
         iterateChildren(nodep);
-        if (nodep->user1()) {
-            auto* funcp = V3RandomizeMethod::declareIn(nodep);
-            auto* fvarp = VN_CAST(funcp->fvarp(), Var);
-            funcp->addStmtsp(new AstAssign(
-                nodep->fileline(), new AstVarRef(nodep->fileline(), fvarp, VAccess::WRITE),
-                new AstConst(nodep->fileline(), AstConst::WidthedValue(), 32, 1)));
-            auto* classp = nodep;
-            for (auto* classp = nodep; classp;
-                 classp = classp->extendsp() ? classp->extendsp()->classp() : nullptr) {
-                for (auto* memberp = classp->stmtsp(); memberp; memberp = memberp->nextp()) {
-                    auto* memberVarp = VN_CAST(memberp, Var);
-                    if (!memberVarp || !memberVarp->isRand()) continue;
-                    AstNode* stmtp = nullptr;
+        if (!nodep->user1()) return;  // Doesn't need randomize, or already processed
+        auto* funcp = V3RandomizeMethod::newRandomizeFunc(nodep);
+        auto* fvarp = VN_CAST(funcp->fvarp(), Var);
+        funcp->addStmtsp(new AstAssign(
+            nodep->fileline(), new AstVarRef(nodep->fileline(), fvarp, VAccess::WRITE),
+            new AstConst(nodep->fileline(), AstConst::WidthedValue(), 32, 1)));
+        auto* classp = nodep;
+        for (auto* classp = nodep; classp;
+             classp = classp->extendsp() ? classp->extendsp()->classp() : nullptr) {
+            for (auto* memberp = classp->stmtsp(); memberp; memberp = memberp->nextp()) {
+                auto* memberVarp = VN_CAST(memberp, Var);
+                if (!memberVarp || !memberVarp->isRand()) continue;
+                AstNode* stmtp = nullptr;
+                if (VN_IS(memberp->dtypep()->skipRefp(), BasicDType)) {
                     auto* refp = new AstVarRef(nodep->fileline(), memberVarp, VAccess::WRITE);
-                    if (VN_IS(memberp->dtypep()->skipRefp(), BasicDType)) {
-                        stmtp = new AstStdRandomize(nodep->fileline(), refp);
-                    } else if (auto* classRefp = VN_CAST(memberp->dtypep(), ClassRefDType)) {
-                        auto* funcp = V3RandomizeMethod::declareIn(classRefp->classp());
-                        auto* callp
-                            = new AstMethodCall(nodep->fileline(), refp, "randomize", nullptr);
-                        callp->taskp(funcp);
-                        callp->dtypeFrom(funcp);
-                        stmtp = callp;
-                    } else {
-                        delete refp;
-                        memberp->v3warn(E_UNSUPPORTED,
-                                        "Unsupported: random member variables with type "
-                                            << memberp->dtypep()->prettyDTypeNameQ());
-                    }
-                    if (stmtp) {
-                        // Although randomize returns int, we know it is 0/1 so can use faster
-                        // AstAnd vs AstLogAnd.
-                        stmtp = new AstAnd(nodep->fileline(),
-                                           new AstVarRef(nodep->fileline(), fvarp, VAccess::READ),
-                                           stmtp);
-                        auto* assignp = new AstAssign(
-                            nodep->fileline(),
-                            new AstVarRef(nodep->fileline(), fvarp, VAccess::WRITE), stmtp);
-                        funcp->addStmtsp(assignp);
-                    }
+                    stmtp = new AstStdRandomize(nodep->fileline(), refp);
+                } else if (auto* classRefp = VN_CAST(memberp->dtypep(), ClassRefDType)) {
+                    auto* refp = new AstVarRef(nodep->fileline(), memberVarp, VAccess::WRITE);
+                    auto* funcp = V3RandomizeMethod::newRandomizeFunc(classRefp->classp());
+                    auto* callp = new AstMethodCall(nodep->fileline(), refp, "randomize", nullptr);
+                    callp->taskp(funcp);
+                    callp->dtypeFrom(funcp);
+                    stmtp = callp;
+                } else {
+                    memberp->v3warn(E_UNSUPPORTED,
+                                    "Unsupported: random member variables with type "
+                                        << memberp->dtypep()->prettyDTypeNameQ());
+                }
+                if (stmtp) {
+                    // Although randomize returns int, we know it is 0/1 so can use faster
+                    // AstAnd vs AstLogAnd.
+                    stmtp = new AstAnd(nodep->fileline(),
+                                       new AstVarRef(nodep->fileline(), fvarp, VAccess::READ),
+                                       stmtp);
+                    auto* assignp = new AstAssign(
+                        nodep->fileline(), new AstVarRef(nodep->fileline(), fvarp, VAccess::WRITE),
+                        stmtp);
+                    funcp->addStmtsp(assignp);
                 }
             }
-            nodep->user1(false);
         }
+        nodep->user1(false);
     }
+
+    virtual void visit(AstNode* nodep) override { iterateChildren(nodep); }
+
+public:
+    // CONSTRUCTORS
+    explicit RandomizeMethodVisitor(AstNetlist* nodep) { iterate(nodep); }
+    virtual ~RandomizeMethodVisitor() override {}
 };
 
 //######################################################################
 // Randomize method class functions
 
-void V3RandomizeMethod::defineIfNeeded(AstNetlist* nodep) {
+void V3RandomizeMethod::randomizeNetlist(AstNetlist* nodep) {
     UINFO(2, __FUNCTION__ << ": " << endl);
     {
-        RandomizeMethodMarkVisitor prepVisitor;
-        prepVisitor.iterate(nodep);
-        prepVisitor.markAllDerived();
-        RandomizeMethodVisitor visitor;
-        visitor.iterate(nodep);
+        RandomizeMethodMarkVisitor markVisitor(nodep);
+        RandomizeMethodVisitor visitor(nodep);
     }
     V3Global::dumpCheckGlobalTree("randomize_method", 0,
                                   v3Global.opt.dumpTreeLevel(__FILE__) >= 3);
 }
 
-AstFunc* V3RandomizeMethod::declareIn(AstClass* nodep) {
+AstFunc* V3RandomizeMethod::newRandomizeFunc(AstClass* nodep) {
     auto* funcp = VN_CAST(nodep->findMember("randomize"), Func);
     if (!funcp) {
         auto* dtypep

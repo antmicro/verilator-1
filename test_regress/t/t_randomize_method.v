@@ -55,30 +55,50 @@ class DerivedB extends Base;
 endclass
 
 module t (/*AUTOARG*/);
+   bit ok = 0;
+   longint checksum;
+
+   task checksum_next(longint x);
+      checksum = x ^ {checksum[62:0],checksum[63]^checksum[2]^checksum[0]};
+   endtask;
+
    DerivedA derivedA;
    DerivedB derivedB;
    Base base;
 
    initial begin
       int rand_result;
+      longint prev_checksum;
       derivedA = new;
       derivedB = new;
       base = derivedA;
-      rand_result = base.randomize();
-      rand_result = derivedB.randomize();
-      if (derivedA.i.a == 0) $stop;
-      if (derivedA.i.b == 0) $stop;
-      if (derivedA.i.c == 0) $stop;
-      if (derivedA.i.d == 0) $stop;
-      if (derivedA.i.e != 0) $stop;
-      if (derivedA.j == 0) $stop;
-      if (derivedA.k != 0) $stop;
-      if (derivedB.v != 0) $stop;
-      if (derivedB.w == 0) $stop;
-      if (derivedB.x == 0) $stop;
-      if (derivedB.y == 0) $stop;
-      if (derivedB.z == 0) $stop;
-      $write("*-* All Finished *-*\n");
-      $finish;
+      for (int i = 0; i < 10; i++) begin
+         checksum = 0;
+         rand_result = base.randomize();
+         rand_result = derivedB.randomize();
+         checksum_next(longint'(derivedA.i.a));
+         checksum_next(longint'(derivedA.i.b));
+         checksum_next(longint'(derivedA.i.c));
+         checksum_next(longint'(derivedA.i.d));
+         checksum_next(longint'(derivedA.i.e));
+         checksum_next(longint'(derivedA.j));
+         checksum_next(longint'(derivedA.k));
+         checksum_next(longint'(derivedB.v));
+         checksum_next(longint'(derivedB.w));
+         checksum_next(longint'(derivedB.x));
+         checksum_next(longint'(derivedB.y));
+         checksum_next(longint'(derivedB.z));
+         $write("checksum: %d\n", checksum);
+         if (i > 0 && checksum != prev_checksum) begin
+            ok = 1;
+            break;
+         end
+         prev_checksum = checksum;
+      end
+      if (ok) begin
+         $write("*-* All Finished *-*\n");
+         $finish;
+      end
+      else $stop;
    end
 endmodule

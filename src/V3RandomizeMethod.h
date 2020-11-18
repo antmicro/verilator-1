@@ -24,9 +24,9 @@
 
 class V3RandomizeMethod {
 public:
-    static void defineIfNeeded(AstNetlist* nodep);
+    static void randomizeNetlist(AstNetlist* nodep);
 
-    static AstFunc* declareIn(AstClass* nodep);
+    static AstFunc* newRandomizeFunc(AstClass* nodep);
 };
 
 #endif  // Guard

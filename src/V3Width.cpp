@@ -2868,8 +2868,8 @@ private:
         // No need to width-resolve the class, as it was done when we did the child
         AstClass* first_classp = adtypep->classp();
         if (nodep->name() == "randomize") {
-            v3Global.defineRandomizeMethods(true);
-            V3RandomizeMethod::declareIn(first_classp);
+            v3Global.useRandomizeMethods(true);
+            V3RandomizeMethod::newRandomizeFunc(first_classp);
         }
         UASSERT_OBJ(first_classp, nodep, "Unlinked");
         for (AstClass* classp = first_classp; classp;) {
