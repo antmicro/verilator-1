@@ -547,7 +547,9 @@ public:
 /// Remember the calling thread at construction time, and make sure later calls use same thread
 class VerilatedAssertOneThread {
     // MEMBERS
-#if defined(VL_THREADED) && defined(VL_DEBUG)
+    // XXX should not matter for this multi threaded implementation
+#if 0
+    defined(VL_THREADED) && defined(VL_DEBUG)
     vluint32_t m_threadid;  /// Thread that is legal
 public:
     // CONSTRUCTORS
@@ -573,6 +575,7 @@ public:
 public:
     void check() {}
     void changeThread() {}
+    static void fatal_different() VL_MT_SAFE;
 #endif
 };
 
