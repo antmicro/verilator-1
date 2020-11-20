@@ -1794,7 +1794,7 @@ sub _make_main {
     _print_advance_time($self, $fh, 10);
     print $fh "    }\n";
 
-    print $fh "    while ((sc_time_stamp() < sim_time * MAIN_TIME_MULTIPLIER)\n";
+    print $fh "    while ((1)\n";
     print $fh "           && !Verilated::gotFinish()) {\n";
     for (my $i=0; $i<5; $i++) {
         my $action = 0;
