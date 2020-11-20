@@ -125,9 +125,10 @@ private:
                 auto* memberVarp = VN_CAST(memberp, Var);
                 if (!memberVarp || !memberVarp->isRand()) continue;
                 AstNode* stmtp = nullptr;
-                if (VN_IS(memberp->dtypep()->skipRefp(), BasicDType)) {
+                if (VN_IS(memberp->dtypep()->skipRefp(), BasicDType)
+                    || VN_IS(memberp->dtypep()->skipRefp(), StructDType)) {
                     auto* refp = new AstVarRef(nodep->fileline(), memberVarp, VAccess::WRITE);
-                    stmtp = new AstStdRandomize(nodep->fileline(), refp);
+                    stmtp = AstStdRandomize::newStdRandomize(nodep->fileline(), refp);
                 } else if (auto* classRefp = VN_CAST(memberp->dtypep(), ClassRefDType)) {
                     auto* refp = new AstVarRef(nodep->fileline(), memberVarp, VAccess::WRITE);
                     auto* funcp = V3RandomizeMethod::newRandomizeFunc(classRefp->classp());
@@ -138,7 +139,7 @@ private:
                 } else {
                     memberp->v3warn(E_UNSUPPORTED,
                                     "Unsupported: random member variables with type "
-                                        << memberp->dtypep()->prettyDTypeNameQ());
+                                        << memberp->dtypep()->skipRefp()->type().ascii());
                 }
                 if (stmtp) {
                     // Although randomize returns int, we know it is 0/1 so can use faster

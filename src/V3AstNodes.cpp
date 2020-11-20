@@ -1073,6 +1073,33 @@ string AstBasicDType::prettyDTypeName() const {
 void AstNodeMath::dump(std::ostream& str) const { this->AstNode::dump(str); }
 void AstNodeUniop::dump(std::ostream& str) const { this->AstNodeMath::dump(str); }
 
+AstNodeMath* AstStdRandomize::newStdRandomize(FileLine* fl, AstNodeVarRef* varp, int offset,
+                                              AstMemberDType* memberp) {
+    AstStructDType* structDtp;
+    if (memberp)
+        structDtp = VN_CAST(memberp->subDTypep()->subDTypep(), StructDType);
+    else
+        structDtp = VN_CAST(varp->dtypep()->skipRefp(), StructDType);
+    if (structDtp) {
+        AstNodeMath* rand = nullptr;
+        auto* memberp = structDtp->membersp();
+        for (; memberp && memberp->nextp(); memberp = VN_CAST(memberp->nextp(), MemberDType))
+            ;
+        for (; memberp; memberp = VN_CAST(memberp->backp(), MemberDType)) {
+            if (!rand) {
+                rand = newStdRandomize(fl, varp, offset, memberp);
+            } else {
+                rand = new AstAnd(fl, rand,
+                                  newStdRandomize(fl, varp->cloneTree(false), offset, memberp));
+            }
+            offset += memberp->width();
+        }
+        return rand;
+    } else {
+        return new AstStdRandomize(fl, varp, offset, memberp);
+    }
+}
+
 void AstCCast::dump(std::ostream& str) const {
     this->AstNodeUniop::dump(str);
     str << " sz" << size();

@@ -1223,6 +1223,45 @@ public:
         }
     }
 
+    void emitStdRandomizePartial(AstNode* argp, AstNodeDType* dtypep) {
+        if (auto enumDType = VN_CAST(dtypep, EnumDType)) {
+            size_t itemCount = 0;  // Number of enum items
+            for (auto* itemp = enumDType->itemsp(); itemp;
+                 itemp = VN_CAST(itemp->nextp(), EnumItem))
+                itemCount++;
+            puts("VL_RANDOMIZE_ENUM_VAR<");
+            puts(cvtToStr(itemCount));
+            puts(">(");
+            iterateAndNextNull(argp);
+            puts(", {");
+            for (auto* itemp = enumDType->itemsp(); itemp;
+                 itemp = VN_CAST(itemp->nextp(), EnumItem)) {
+                if (itemp != enumDType->itemsp()) { puts(", "); }
+                visit(VN_CAST(itemp->valuep(), Const));
+            }
+            puts("}");
+        } else {
+            puts("VL_RANDOMIZE_VAR(");
+            iterateAndNextNull(argp);
+        }
+    }
+    virtual void visit(AstStdRandomize* nodep) override {
+        if (nodep->varMemberp()) {
+            emitStdRandomizePartial(nodep->lhsp(), nodep->varMemberp()->subDTypep()->subDTypep());
+            puts(", ");
+            puts(cvtToStr(nodep->varMemberOffset()));
+            puts(", ");
+            puts(cvtToStr(nodep->varMemberp()->width()));
+        } else {
+            emitStdRandomizePartial(nodep->lhsp(), nodep->lhsp()->dtypep()->subDTypep());
+            if (!VN_IS(nodep->lhsp()->dtypep()->subDTypep(), EnumDType)) {
+                puts(", ");
+                puts(cvtToStr(nodep->lhsp()->width()));
+            }
+        }
+        puts(")");
+    }
+
     // Just iterate
     virtual void visit(AstNetlist* nodep) override { iterateChildren(nodep); }
     virtual void visit(AstTopScope* nodep) override { iterateChildren(nodep); }

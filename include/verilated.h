@@ -35,6 +35,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <array>
 // <iostream> avoided to reduce compile time
 // <map> avoided and instead in verilated_heavy.h to reduce compile time
 // <string> avoided and instead in verilated_heavy.h to reduce compile time
@@ -656,23 +657,6 @@ inline IData VL_URANDOM_RANGE_I(IData hi, IData lo) {
     } else {
         return (rnd % (lo - hi)) + hi;
     }
-}
-
-inline IData VL_STD_RANDOMIZE(CData& data, int obits) VL_MT_SAFE {
-    data = VL_RANDOM_I(obits);
-    return 1;
-}
-inline IData VL_STD_RANDOMIZE(SData& data, int obits) VL_MT_SAFE {
-    data = VL_RANDOM_I(obits);
-    return 1;
-}
-inline IData VL_STD_RANDOMIZE(IData& data, int obits) VL_MT_SAFE {
-    data = VL_RANDOM_I(obits);
-    return 1;
-}
-inline IData VL_STD_RANDOMIZE(QData& data, int obits) VL_MT_SAFE {
-    data = VL_RANDOM_Q(obits);
-    return 1;
 }
 
 /// Init time only, so slow is fine
@@ -2502,6 +2486,44 @@ static inline void VL_ASSIGNSEL_WIIQ(int obits, int lsb, WDataOutP owp, QData rh
 }
 static inline void VL_ASSIGNSEL_WIIW(int obits, int lsb, WDataOutP owp, WDataInP rwp) VL_MT_SAFE {
     _VL_INSERT_WW(obits, owp, rwp, lsb + obits - 1, lsb);
+}
+
+//======================================================================
+// Variable randomization (std::randomize, randomize method)
+
+#define VL_DEF_RANDOMIZE_VAR(varType) \
+inline IData VL_RANDOMIZE_VAR(varType& odata, int obits) VL_MT_SAFE { \
+    odata = VL_RANDOM_Q(obits); \
+    return 1; \
+}
+VL_DEF_RANDOMIZE_VAR(CData)
+VL_DEF_RANDOMIZE_VAR(SData)
+VL_DEF_RANDOMIZE_VAR(IData)
+VL_DEF_RANDOMIZE_VAR(QData)
+
+#include <iostream>
+
+inline IData VL_RANDOMIZE_VAR(WDataOutP odata, int lsb, int obits) VL_MT_SAFE {
+    VL_ASSIGNSEL_WIIQ(obits, lsb, odata, VL_RANDOM_Q(obits));
+    return 1;
+}
+
+#define VL_DEF_RANDOMIZE_ENUM_VAR(varType) \
+template<size_t valCnt> \
+inline IData VL_RANDOMIZE_ENUM_VAR(varType& odata, const std::array<varType, valCnt>& values) VL_MT_SAFE { \
+    odata = values[vl_rand64() % values.size()]; \
+    return 1; \
+}
+
+VL_DEF_RANDOMIZE_ENUM_VAR(CData)
+VL_DEF_RANDOMIZE_ENUM_VAR(SData)
+VL_DEF_RANDOMIZE_ENUM_VAR(IData)
+VL_DEF_RANDOMIZE_ENUM_VAR(QData)
+
+template<size_t valCnt>
+inline IData VL_RANDOMIZE_ENUM_VAR(WDataOutP odata, const std::array<QData, valCnt>& values, int lsb, int obits) VL_MT_SAFE {
+    VL_ASSIGNSEL_WIIQ(obits, lsb, odata, values[vl_rand64() % values.size()]);
+    return 1;
 }
 
 //======================================================================

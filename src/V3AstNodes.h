@@ -6098,15 +6098,22 @@ public:
 
 class AstStdRandomize : public AstNodeUniop {
     // Randomize the specified variable (std::randomize)
-public:
-    AstStdRandomize(FileLine* fl, AstNodeVarRef* varp)
+private:
+    AstMemberDType* m_varMemberp = nullptr;  // Var member to randomize (if var is of complex type)
+    int m_varMemberOffset
+        = 0;  // Bit offset of var member; needed for structs contained within structs
+    AstStdRandomize(FileLine* fl, AstNode* varp, int offset, AstMemberDType* memberp)
         : AstNodeUniop(AstType::atStdRandomize, fl, varp) {
         dtypeSetBitSized(32, VSigning::SIGNED);
         didWidth(true);
+        m_varMemberOffset = offset;
+        m_varMemberp = memberp;
     }
+
+public:
     ASTNODE_NODE_FUNCS(StdRandomize)
     virtual string emitVerilog() override { return "std::randomize(%l)"; }
-    virtual string emitC() override { return "VL_STD_RANDOMIZE(%li, %lw)"; }
+    virtual string emitC() override { V3ERROR_NA_RETURN(""); }
     virtual bool cleanOut() const override { return true; }
     virtual bool isGateOptimizable() const override { return false; }
     virtual bool isPredictOptimizable() const override { return false; }
@@ -6116,6 +6123,10 @@ public:
     virtual void numberOperate(V3Number& out, const V3Number& lhs) override { V3ERROR_NA; }
     virtual bool cleanLhs() const override { return false; }
     virtual bool sizeMattersLhs() const override { return false; }
+    AstMemberDType* varMemberp() { return m_varMemberp; }
+    int varMemberOffset() { return m_varMemberOffset; }
+    static AstNodeMath* newStdRandomize(FileLine* fl, AstNodeVarRef* varp, int offset = 0,
+                                        AstMemberDType* memberp = nullptr);
 };
 
 class AstFError : public AstNodeMath {

@@ -4,6 +4,26 @@
 // any use, without warranty, 2020 by Wilson Snyder.
 // SPDX-License-Identifier: CC0-1.0
 
+typedef enum {
+   ONE   = 3,
+   TWO   = 5,
+   THREE = 8,
+   FOUR  = 13
+} Enum;
+
+typedef struct packed {
+   int  a;
+   bit  b;
+   Enum c;
+} StructInner;
+
+typedef struct packed {
+   bit         x;
+   StructInner s;
+   Enum        y;
+   longint     z;
+} StructOuter;
+
 class Base;
 endclass
 
@@ -28,11 +48,13 @@ class DerivedA extends Base;
    rand Inner i;
    rand int j;
    int k;
+   rand Enum l;
 
-function new;
+   function new;
       i = new;
       j = 0;
       k = 0;
+      l = ONE;
    endfunction
 
 endclass
@@ -43,6 +65,7 @@ class DerivedB extends Base;
    rand logic[47:0] x;
    rand logic[31:0] y;
    rand logic[23:0] z;
+   rand StructOuter str;
 
    function new;
       v = 0;
@@ -50,6 +73,7 @@ class DerivedB extends Base;
       x = 0;
       y = 0;
       z = 0;
+      str = '{x: 1'b0, y: ONE, z: 64'd0, s: '{a: 32'd0, b: 1'b0, c: ONE}};
    endfunction
 
 endclass
@@ -76,22 +100,30 @@ module t (/*AUTOARG*/);
          checksum = 0;
          rand_result = base.randomize();
          rand_result = derivedB.randomize();
+         if (!(derivedA.l inside {ONE, TWO, THREE, FOUR})) $stop;
+         if (!(derivedB.str.s.c inside {ONE, TWO, THREE, FOUR})) $stop;
+         if (!(derivedB.str.y inside {ONE, TWO, THREE, FOUR})) $stop;
+         if (derivedA.i.e != 0) $stop;
+         if (derivedA.k != 0) $stop;
+         if (derivedB.v != 0) $stop;
          checksum_next(longint'(derivedA.i.a));
          checksum_next(longint'(derivedA.i.b));
          checksum_next(longint'(derivedA.i.c));
-         checksum_next(longint'(derivedA.i.d));
-         checksum_next(longint'(derivedA.i.e));
          checksum_next(longint'(derivedA.j));
-         checksum_next(longint'(derivedA.k));
-         checksum_next(longint'(derivedB.v));
+         checksum_next(longint'(derivedA.l));
          checksum_next(longint'(derivedB.w));
          checksum_next(longint'(derivedB.x));
          checksum_next(longint'(derivedB.y));
          checksum_next(longint'(derivedB.z));
+         checksum_next(longint'(derivedB.str.x));
+         checksum_next(longint'(derivedB.str.y));
+         checksum_next(longint'(derivedB.str.z));
+         checksum_next(longint'(derivedB.str.s.a));
+         checksum_next(longint'(derivedB.str.s.b));
+         checksum_next(longint'(derivedB.str.s.c));
          $write("checksum: %d\n", checksum);
          if (i > 0 && checksum != prev_checksum) begin
             ok = 1;
-            break;
          end
          prev_checksum = checksum;
       end
