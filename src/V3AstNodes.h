@@ -4303,6 +4303,14 @@ public:
         addNOp3p(bodysp);
     }
     ASTNODE_NODE_FUNCS(Wait)
+    virtual string verilogKwd() const { return "wait(%l)"; }
+    virtual bool isGateOptimizable() const { return false; }
+    virtual bool isPredictOptimizable() const { return false; }
+    virtual bool isPure() const { return false; }
+    virtual bool isOutputter() const { return false; }
+    virtual int instrCount() const { return 0; }
+    virtual V3Hash sameHash() const { return V3Hash(); }
+    AstNode* condp() const { return op2p(); }
     AstNode* bodysp() const { return op3p(); }  // op3 = body of loop
 };
 
