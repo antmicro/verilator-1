@@ -1183,8 +1183,10 @@ public:
     }
     // Terminals
     virtual void visit(AstVarRef* nodep) VL_OVERRIDE {
-        if (m_primitiveCast) {
-            int width = nodep->varp()->dtypep()->width();
+        AstNodeDType* dtypep = nodep->varp()->dtypep();
+
+        if (!dtypep->isDouble() && !dtypep->isString() && m_primitiveCast) {
+            int width = dtypep->width();
             puts("(");
             switch (width) {
                 case 8: puts("vluint8_t"); break;
