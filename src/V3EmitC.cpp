@@ -1078,6 +1078,8 @@ public:
         if (nodep->expr1p()->isWide()) {
             emitOpName(nodep, nodep->emitC(), nodep->condp(), nodep->expr1p(), nodep->expr2p());
         } else {
+            bool primitiveCastPre = m_primitiveCast;
+            m_primitiveCast = true;
             putbs("(");
             iterateAndNextNull(nodep->condp());
             putbs(" ? ");
@@ -1085,6 +1087,7 @@ public:
             putbs(" : ");
             iterateAndNextNull(nodep->expr2p());
             puts(")");
+            m_primitiveCast = primitiveCastPre;
         }
     }
     virtual void visit(AstMemberSel* nodep) override {
@@ -2269,6 +2272,7 @@ struct EmitDispState {
 } emitDispState;
 
 void EmitCStmts::displayEmit(AstNode* nodep, bool isScan) {
+    bool primitiveCastPre = m_primitiveCast;
     m_primitiveCast = true;
     if (emitDispState.m_format == ""
         && VN_IS(nodep, Display)) {  // not fscanf etc, as they need to return value
@@ -2351,7 +2355,7 @@ void EmitCStmts::displayEmit(AstNode* nodep, bool isScan) {
         // Prep for next
         emitDispState.clear();
     }
-    m_primitiveCast = false;
+    m_primitiveCast = primitiveCastPre;
 }
 
 void EmitCStmts::displayArg(AstNode* dispp, AstNode** elistp, bool isScan, const string& vfmt,
