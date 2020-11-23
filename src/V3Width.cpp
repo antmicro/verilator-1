@@ -4577,6 +4577,9 @@ private:
         }
         userIterateChildren(nodep, nullptr);
     }
+    virtual void visit(AstWait* nodep) override {
+        userIterateChildren(nodep, WidthVP(SELF, PRELIM).p());
+    }
     virtual void visit(AstNode* nodep) override {
         // Default: Just iterate
         UASSERT_OBJ(!m_vup, nodep,
