@@ -1222,42 +1222,31 @@ public:
             emitConstant(nodep, nullptr, "");
         }
     }
-
-    void emitStdRandomizePartial(AstNode* argp, AstNodeDType* dtypep) {
-        if (auto enumDType = VN_CAST(dtypep, EnumDType)) {
+    virtual void visit(AstStdRandomize* nodep) override {
+        auto* dtypep = nodep->varMemberp() ? nodep->varMemberp()->subDTypep()->subDTypep()
+                                           : nodep->varRefp()->dtypep()->subDTypep();
+        if (auto* enumDTypep = nodep->varEnumDTypep()) {
             size_t itemCount = 0;  // Number of enum items
-            for (auto* itemp = enumDType->itemsp(); itemp;
+            for (auto* itemp = enumDTypep->itemsp(); itemp;
                  itemp = VN_CAST(itemp->nextp(), EnumItem))
                 itemCount++;
-            puts("VL_RANDOMIZE_ENUM_VAR<");
+            puts("VL_RANDOMIZE_ENUM_VAR(");
+            iterateAndNextNull(nodep->varValueTabRefp());
+            puts(", ");
             puts(cvtToStr(itemCount));
-            puts(">(");
-            iterateAndNextNull(argp);
-            puts(", {");
-            for (auto* itemp = enumDType->itemsp(); itemp;
-                 itemp = VN_CAST(itemp->nextp(), EnumItem)) {
-                if (itemp != enumDType->itemsp()) { puts(", "); }
-                visit(VN_CAST(itemp->valuep(), Const));
-            }
-            puts("}");
+            puts(", ");
         } else {
             puts("VL_RANDOMIZE_VAR(");
-            iterateAndNextNull(argp);
         }
-    }
-    virtual void visit(AstStdRandomize* nodep) override {
+        iterateAndNextNull(nodep->varRefp());
         if (nodep->varMemberp()) {
-            emitStdRandomizePartial(nodep->lhsp(), nodep->varMemberp()->subDTypep()->subDTypep());
             puts(", ");
-            puts(cvtToStr(nodep->varMemberOffset()));
+            puts(cvtToStr(nodep->varMemberLSB()));
             puts(", ");
             puts(cvtToStr(nodep->varMemberp()->width()));
-        } else {
-            emitStdRandomizePartial(nodep->lhsp(), nodep->lhsp()->dtypep()->subDTypep());
-            if (!VN_IS(nodep->lhsp()->dtypep()->subDTypep(), EnumDType)) {
-                puts(", ");
-                puts(cvtToStr(nodep->lhsp()->width()));
-            }
+        } else if (!nodep->varEnumDTypep()) {
+            puts(", ");
+            puts(cvtToStr(nodep->varRefp()->width()));
         }
         puts(")");
     }

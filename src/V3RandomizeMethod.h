@@ -22,7 +22,7 @@
 
 #include "V3Ast.h"
 
-class V3RandomizeMethod {
+class V3RandomizeMethod final {
 public:
     static void randomizeNetlist(AstNetlist* nodep);
 

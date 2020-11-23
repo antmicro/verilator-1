@@ -1073,31 +1073,39 @@ string AstBasicDType::prettyDTypeName() const {
 void AstNodeMath::dump(std::ostream& str) const { this->AstNode::dump(str); }
 void AstNodeUniop::dump(std::ostream& str) const { this->AstNodeMath::dump(str); }
 
-AstNodeMath* AstStdRandomize::newStdRandomize(FileLine* fl, AstNodeVarRef* varp, int offset,
-                                              AstMemberDType* memberp) {
-    AstStructDType* structDtp;
-    if (memberp)
-        structDtp = VN_CAST(memberp->subDTypep()->subDTypep(), StructDType);
-    else
-        structDtp = VN_CAST(varp->dtypep()->skipRefp(), StructDType);
-    if (structDtp) {
-        AstNodeMath* rand = nullptr;
-        auto* memberp = structDtp->membersp();
-        for (; memberp && memberp->nextp(); memberp = VN_CAST(memberp->nextp(), MemberDType))
-            ;
-        for (; memberp; memberp = VN_CAST(memberp->backp(), MemberDType)) {
-            if (!rand) {
-                rand = newStdRandomize(fl, varp, offset, memberp);
-            } else {
-                rand = new AstAnd(fl, rand,
-                                  newStdRandomize(fl, varp->cloneTree(false), offset, memberp));
-            }
-            offset += memberp->width();
-        }
-        return rand;
-    } else {
-        return new AstStdRandomize(fl, varp, offset, memberp);
+AstStdRandomize::ValueTableMap AstStdRandomize::m_enumValueTabMap;
+
+AstVar* AstStdRandomize::enumValueTabp(AstEnumDType* nodep) {
+    const auto pos = m_enumValueTabMap.find(nodep);
+    if (pos != m_enumValueTabMap.end()) return pos->second;
+    UINFO(9, "Construct Venumvaltab " << nodep << endl);
+    size_t itemCount = 0;  // Number of enum items
+    for (auto* itemp = nodep->itemsp(); itemp; itemp = VN_CAST(itemp->nextp(), EnumItem))
+        itemCount++;
+    AstNodeArrayDType* vardtypep = new AstUnpackArrayDType(
+        nodep->fileline(), nodep->dtypep(), new AstRange(nodep->fileline(), itemCount, 0));
+    AstInitArray* initp = new AstInitArray(nodep->fileline(), vardtypep, nullptr);
+    v3Global.rootp()->typeTablep()->addTypesp(vardtypep);
+    AstVar* varp = new AstVar(nodep->fileline(), AstVarType::MODULETEMP,
+                              "__Venumvaltab_" + cvtToStr(m_enumValueTabMap.size()), vardtypep);
+    varp->isConst(true);
+    varp->isStatic(true);
+    varp->valuep(initp);
+    // Add to root, as don't know module we are in, and aids later structure sharing
+    v3Global.rootp()->dollarUnitPkgAddp()->addStmtp(varp);
+    UASSERT_OBJ(nodep->itemsp(), nodep, "Enum without items");
+    for (AstEnumItem* itemp = nodep->itemsp(); itemp; itemp = VN_CAST(itemp->nextp(), EnumItem)) {
+        AstConst* vconstp = VN_CAST(itemp->valuep(), Const);
+        UASSERT_OBJ(vconstp, nodep, "Enum item without constified value");
+        initp->addValuep(vconstp->cloneTree(false));
     }
+    m_enumValueTabMap.insert(make_pair(nodep, varp));
+    return varp;
+}
+void AstStdRandomize::enumVarPrep(FileLine* fl) {
+    AstVarRef* varrefp = new AstVarRef(fl, enumValueTabp(m_enumDTypep), VAccess::READ);
+    varrefp->packagep(v3Global.rootp()->dollarUnitPkgAddp());
+    setOp2p(varrefp);
 }
 
 void AstCCast::dump(std::ostream& str) const {

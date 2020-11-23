@@ -6096,21 +6096,35 @@ public:
     AstNode* filep() const { return lhsp(); }
 };
 
-class AstStdRandomize : public AstNodeUniop {
+class AstStdRandomize final : public AstNodeMath {
     // Randomize the specified variable (std::randomize)
+    // op1p is reference to var being randomized
+    // op2p is reference to table containing enum values (if randomized var is enum)
 private:
+    typedef std::unordered_map<AstNodeDType*, AstVar*> ValueTableMap;
+    static ValueTableMap m_enumValueTabMap;  // Tables with enum values
+    static AstVar* enumValueTabp(AstEnumDType* nodep);
+
+    // Reference to enum type (if randomized var is enum), needed here because at emit stage type
+    // info is missing if enum has specified base type
+    AstEnumDType* m_enumDTypep = nullptr;
     AstMemberDType* m_varMemberp = nullptr;  // Var member to randomize (if var is of complex type)
-    int m_varMemberOffset
-        = 0;  // Bit offset of var member; needed for structs contained within structs
-    AstStdRandomize(FileLine* fl, AstNode* varp, int offset, AstMemberDType* memberp)
-        : AstNodeUniop(AstType::atStdRandomize, fl, varp) {
-        dtypeSetBitSized(32, VSigning::SIGNED);
-        didWidth(true);
-        m_varMemberOffset = offset;
-        m_varMemberp = memberp;
-    }
+    int m_varBitOffset = 0;  // Bit offset of var; used for structs contained within structs
+    void enumVarPrep(FileLine* fl);
 
 public:
+    AstStdRandomize(FileLine* fl, AstNode* varp, int offset, AstMemberDType* memberp)
+        : ASTGEN_SUPER(fl)
+        , m_enumDTypep{VN_CAST(memberp ? memberp->subDTypep()->subDTypep()
+                                       : varp->dtypep()->subDTypep(),
+                               EnumDType)}
+        , m_varBitOffset{offset}
+        , m_varMemberp{memberp} {
+        setOp1p(varp);
+        if (m_enumDTypep) enumVarPrep(fl);
+        dtypeSetBitSized(32, VSigning::SIGNED);
+        didWidth(true);
+    }
     ASTNODE_NODE_FUNCS(StdRandomize)
     virtual string emitVerilog() override { return "std::randomize(%l)"; }
     virtual string emitC() override { V3ERROR_NA_RETURN(""); }
@@ -6120,13 +6134,11 @@ public:
     virtual int instrCount() const override { return instrCountPli(); }
     virtual V3Hash sameHash() const override { return V3Hash(); }
     virtual bool same(const AstNode* samep) const override { return true; }
-    virtual void numberOperate(V3Number& out, const V3Number& lhs) override { V3ERROR_NA; }
-    virtual bool cleanLhs() const override { return false; }
-    virtual bool sizeMattersLhs() const override { return false; }
+    AstVarRef* varRefp() { return VN_CAST(op1p(), VarRef); }
+    AstVarRef* varValueTabRefp() { return VN_CAST(op2p(), VarRef); }
+    AstEnumDType* varEnumDTypep() { return m_enumDTypep; }
     AstMemberDType* varMemberp() { return m_varMemberp; }
-    int varMemberOffset() { return m_varMemberOffset; }
-    static AstNodeMath* newStdRandomize(FileLine* fl, AstNodeVarRef* varp, int offset = 0,
-                                        AstMemberDType* memberp = nullptr);
+    int varMemberLSB() { return m_varBitOffset + m_varMemberp->lsb(); }
 };
 
 class AstFError : public AstNodeMath {

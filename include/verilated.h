@@ -2491,38 +2491,59 @@ static inline void VL_ASSIGNSEL_WIIW(int obits, int lsb, WDataOutP owp, WDataInP
 //======================================================================
 // Variable randomization (std::randomize, randomize method)
 
-#define VL_DEF_RANDOMIZE_VAR(varType) \
-inline IData VL_RANDOMIZE_VAR(varType& odata, int obits) VL_MT_SAFE { \
-    odata = VL_RANDOM_Q(obits); \
-    return 1; \
+inline IData VL_RANDOMIZE_VAR(CData& odata, int obits) VL_MT_SAFE {
+    odata = VL_RANDOM_Q(obits);
+    return 1;
 }
-VL_DEF_RANDOMIZE_VAR(CData)
-VL_DEF_RANDOMIZE_VAR(SData)
-VL_DEF_RANDOMIZE_VAR(IData)
-VL_DEF_RANDOMIZE_VAR(QData)
-
-#include <iostream>
+inline IData VL_RANDOMIZE_VAR(SData& odata, int obits) VL_MT_SAFE {
+    odata = VL_RANDOM_Q(obits);
+    return 1;
+}
+inline IData VL_RANDOMIZE_VAR(IData& odata, int obits) VL_MT_SAFE {
+    odata = VL_RANDOM_Q(obits);
+    return 1;
+}
+inline IData VL_RANDOMIZE_VAR(QData& odata, int obits) VL_MT_SAFE {
+    odata = VL_RANDOM_Q(obits);
+    return 1;
+}
 
 inline IData VL_RANDOMIZE_VAR(WDataOutP odata, int lsb, int obits) VL_MT_SAFE {
     VL_ASSIGNSEL_WIIQ(obits, lsb, odata, VL_RANDOM_Q(obits));
     return 1;
 }
 
-#define VL_DEF_RANDOMIZE_ENUM_VAR(varType) \
-template<size_t valCnt> \
-inline IData VL_RANDOMIZE_ENUM_VAR(varType& odata, const std::array<varType, valCnt>& values) VL_MT_SAFE { \
-    odata = values[vl_rand64() % values.size()]; \
-    return 1; \
+inline IData VL_RANDOMIZE_ENUM_VAR(const CData* values, int valCnt, CData& odata) VL_MT_SAFE {
+    odata = values[vl_rand64() % valCnt];
+    return 1;
+}
+inline IData VL_RANDOMIZE_ENUM_VAR(const SData* values, int valCnt, SData& odata) VL_MT_SAFE {
+    odata = values[vl_rand64() % valCnt];
+    return 1;
+}
+inline IData VL_RANDOMIZE_ENUM_VAR(const IData* values, int valCnt, IData& odata) VL_MT_SAFE {
+    odata = values[vl_rand64() % valCnt];
+    return 1;
+}
+inline IData VL_RANDOMIZE_ENUM_VAR(const QData* values, int valCnt, QData& odata) VL_MT_SAFE {
+    odata = values[vl_rand64() % valCnt];
+    return 1;
 }
 
-VL_DEF_RANDOMIZE_ENUM_VAR(CData)
-VL_DEF_RANDOMIZE_ENUM_VAR(SData)
-VL_DEF_RANDOMIZE_ENUM_VAR(IData)
-VL_DEF_RANDOMIZE_ENUM_VAR(QData)
-
-template<size_t valCnt>
-inline IData VL_RANDOMIZE_ENUM_VAR(WDataOutP odata, const std::array<QData, valCnt>& values, int lsb, int obits) VL_MT_SAFE {
-    VL_ASSIGNSEL_WIIQ(obits, lsb, odata, values[vl_rand64() % values.size()]);
+inline IData VL_RANDOMIZE_ENUM_VAR(const CData* values, int valCnt, WDataOutP odata, int lsb, int obits) VL_MT_SAFE {
+    VL_ASSIGNSEL_WIIQ(obits, lsb, odata, values[vl_rand64() % valCnt]);
+    return 1;
+}
+inline IData VL_RANDOMIZE_ENUM_VAR(const SData* values, int valCnt, WDataOutP odata, int lsb, int obits) VL_MT_SAFE {
+    VL_ASSIGNSEL_WIIQ(obits, lsb, odata, values[vl_rand64() % valCnt]);
+    return 1;
+}
+inline IData VL_RANDOMIZE_ENUM_VAR(const IData* values, int valCnt, WDataOutP odata, int lsb, int obits) VL_MT_SAFE {
+    VL_ASSIGNSEL_WIIQ(obits, lsb, odata, values[vl_rand64() % valCnt]);
+    return 1;
+}
+inline IData VL_RANDOMIZE_ENUM_VAR(const QData* values, int valCnt, WDataOutP odata, int lsb, int obits) VL_MT_SAFE {
+    VL_ASSIGNSEL_WIIQ(obits, lsb, odata, values[vl_rand64() % valCnt]);
     return 1;
 }
 

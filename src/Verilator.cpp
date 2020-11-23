@@ -169,8 +169,6 @@ static void process() {
     // Calculate and check widths, edit tree to TRUNC/EXTRACT any width mismatches
     V3Width::width(v3Global.rootp());
 
-    if (v3Global.useRandomizeMethods()) V3RandomizeMethod::randomizeNetlist(v3Global.rootp());
-
     V3Error::abortIfErrors();
 
     // Commit to the widths we've chosen; Make widthMin==width
@@ -181,6 +179,9 @@ static void process() {
     // Coverage insertion
     //    Before we do dead code elimination and inlining, or we'll lose it.
     if (v3Global.opt.coverage()) V3Coverage::coverage(v3Global.rootp());
+
+    // Add randomize() class methods if they are used by the design
+    if (v3Global.useRandomizeMethods()) V3RandomizeMethod::randomizeNetlist(v3Global.rootp());
 
     // Push constants, but only true constants preserving liveness
     // so V3Undriven sees variables to be eliminated, ie "if (0 && foo) ..."
