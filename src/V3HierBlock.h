@@ -37,7 +37,7 @@ class AstVar;
 
 //######################################################################
 
-class V3HierBlock {
+class V3HierBlock final {
 public:
     typedef std::vector<AstVar*> GParams;
     typedef std::set<V3HierBlock*> HierBlockSet;
@@ -95,11 +95,11 @@ public:
 //######################################################################
 
 // Holds relashonship between AstNodeModule and V3HierBlock
-class V3HierBlockPlan {
+class V3HierBlockPlan final {
     typedef std::map<const AstNodeModule*, V3HierBlock*> HierMap;
     HierMap m_blocks;
 
-    V3HierBlockPlan();
+    V3HierBlockPlan() = default;
     VL_UNCOPYABLE(V3HierBlockPlan);
 
 public:

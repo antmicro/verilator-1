@@ -78,25 +78,25 @@
 //######################################################################
 // Matcher classes (for suggestion matching)
 
-class LinkNodeMatcherClass : public VNodeMatcher {
+class LinkNodeMatcherClass final : public VNodeMatcher {
 public:
     virtual bool nodeMatch(const AstNode* nodep) const override { return VN_IS(nodep, Class); }
 };
-class LinkNodeMatcherFTask : public VNodeMatcher {
+class LinkNodeMatcherFTask final : public VNodeMatcher {
 public:
     virtual bool nodeMatch(const AstNode* nodep) const override { return VN_IS(nodep, NodeFTask); }
 };
-class LinkNodeMatcherModport : public VNodeMatcher {
+class LinkNodeMatcherModport final : public VNodeMatcher {
 public:
     virtual bool nodeMatch(const AstNode* nodep) const override { return VN_IS(nodep, Modport); }
 };
-class LinkNodeMatcherVar : public VNodeMatcher {
+class LinkNodeMatcherVar final : public VNodeMatcher {
 public:
     virtual bool nodeMatch(const AstNode* nodep) const override {
         return VN_IS(nodep, Var) || VN_IS(nodep, LambdaArgRef);
     }
 };
-class LinkNodeMatcherVarIO : public VNodeMatcher {
+class LinkNodeMatcherVarIO final : public VNodeMatcher {
 public:
     virtual bool nodeMatch(const AstNode* nodep) const override {
         const AstVar* varp = VN_CAST_CONST(nodep, Var);
@@ -104,7 +104,7 @@ public:
         return varp->isIO();
     }
 };
-class LinkNodeMatcherVarParam : public VNodeMatcher {
+class LinkNodeMatcherVarParam final : public VNodeMatcher {
 public:
     virtual bool nodeMatch(const AstNode* nodep) const override {
         const AstVar* varp = VN_CAST_CONST(nodep, Var);
@@ -116,7 +116,7 @@ public:
 //######################################################################
 // LinkDot state, as a visitor of each AstNode
 
-class LinkDotState {
+class LinkDotState final {
 private:
     // NODE STATE
     // Cleared on Netlist
@@ -180,7 +180,7 @@ public:
                         // left side is what we will import into
                         os << "\t" << samn << "\t" << it->first << " ("
                            << it->first->nodep()->typeName() << ") <- " << it->second << " "
-                           << it->second->nodep() << endl;
+                           << it->second->nodep() << '\n';
                     }
                 }
             }
@@ -269,15 +269,15 @@ public:
             UINFO(4, "Var2 " << fnodep << endl);
             if (nodep->type() == fnodep->type()) {
                 nodep->v3error("Duplicate declaration of "
-                               << nodeTextType(fnodep) << ": " << nodep->prettyNameQ() << endl
-                               << nodep->warnContextPrimary() << endl
+                               << nodeTextType(fnodep) << ": " << nodep->prettyNameQ() << '\n'
+                               << nodep->warnContextPrimary() << '\n'
                                << fnodep->warnOther() << "... Location of original declaration\n"
                                << fnodep->warnContextSecondary());
             } else {
                 nodep->v3error("Unsupported in C: "
                                << ucfirst(nodeTextType(nodep)) << " has the same name as "
-                               << nodeTextType(fnodep) << ": " << nodep->prettyNameQ() << endl
-                               << nodep->warnContextPrimary() << endl
+                               << nodeTextType(fnodep) << ": " << nodep->prettyNameQ() << '\n'
+                               << nodep->warnContextPrimary() << '\n'
                                << fnodep->warnOther() << "... Location of original declaration\n"
                                << fnodep->warnContextSecondary());
             }
@@ -481,7 +481,7 @@ public:
                     ifacerefp->modportFileline()->v3error(
                         "Modport not found under interface "
                         << ifacerefp->prettyNameQ(ifacerefp->ifaceName()) << ": "
-                        << ifacerefp->prettyNameQ(ifacerefp->modportName()) << endl
+                        << ifacerefp->prettyNameQ(ifacerefp->modportName()) << '\n'
                         << (suggest.empty() ? "" : ifacerefp->warnMore() + suggest));
                 }
             }
@@ -705,7 +705,7 @@ LinkDotState* LinkDotState::s_errorThisp = nullptr;
 
 //======================================================================
 
-class LinkDotFindVisitor : public AstNVisitor {
+class LinkDotFindVisitor final : public AstNVisitor {
     // STATE
     LinkDotState* m_statep;  // State to pass between visitors, including symbol table
     AstNodeModule* m_packagep = nullptr;  // Current package
@@ -1081,15 +1081,15 @@ class LinkDotFindVisitor : public AstNVisitor {
                             if (didAnsiWarn++) ansiWarn = false;
                         }
                         nodep->v3error("Duplicate declaration of signal: "
-                                       << nodep->prettyNameQ() << endl
+                                       << nodep->prettyNameQ() << '\n'
                                        << (ansiWarn ? nodep->warnMore()
                                                           + "... note: ANSI ports must have"
                                                             " type declared with the I/O (IEEE "
                                                             "1800-2017 23.2.2.2)\n"
                                                     : "")
-                                       << nodep->warnContextPrimary() << endl
+                                       << nodep->warnContextPrimary() << '\n'
                                        << findvarp->warnOther()
-                                       << "... Location of original declaration" << endl
+                                       << "... Location of original declaration\n"
                                        << findvarp->warnContextSecondary());
                         // Combining most likely reduce other errors
                         findvarp->combineType(nodep);
@@ -1119,8 +1119,8 @@ class LinkDotFindVisitor : public AstNVisitor {
                         && !foundp->nodep()->fileline()->warnIsOff(V3ErrorCode::VARHIDDEN)) {
                         nodep->v3warn(VARHIDDEN,
                                       "Declaration of signal hides declaration in upper scope: "
-                                          << nodep->prettyNameQ() << endl
-                                          << nodep->warnContextPrimary() << endl
+                                          << nodep->prettyNameQ() << '\n'
+                                          << nodep->warnContextPrimary() << '\n'
                                           << foundp->nodep()->warnOther()
                                           << "... Location of original declaration\n"
                                           << foundp->nodep()->warnContextSecondary());
@@ -1204,8 +1204,8 @@ class LinkDotFindVisitor : public AstNVisitor {
             if (foundp->parentp() == m_curSymp  // Only when on same level
                 && !foundp->imported()) {  // and not from package
                 nodep->v3error("Duplicate declaration of enum value: "
-                               << nodep->prettyName() << endl
-                               << nodep->warnContextPrimary() << endl
+                               << nodep->prettyName() << '\n'
+                               << nodep->warnContextPrimary() << '\n'
                                << foundp->nodep()->warnOther()
                                << "... Location of original declaration\n"
                                << foundp->nodep()->warnContextSecondary());
@@ -1215,8 +1215,8 @@ class LinkDotFindVisitor : public AstNVisitor {
                     && !foundp->nodep()->fileline()->warnIsOff(V3ErrorCode::VARHIDDEN)) {
                     nodep->v3warn(VARHIDDEN,
                                   "Declaration of enum value hides declaration in upper scope: "
-                                      << nodep->prettyName() << endl
-                                      << nodep->warnContextPrimary() << endl
+                                      << nodep->prettyName() << '\n'
+                                      << nodep->warnContextPrimary() << '\n'
                                       << foundp->nodep()->warnOther()
                                       << "... Location of original declaration\n"
                                       << nodep->warnContextSecondary());
@@ -1314,12 +1314,12 @@ public:
 
         iterate(rootp);
     }
-    virtual ~LinkDotFindVisitor() override {}
+    virtual ~LinkDotFindVisitor() override = default;
 };
 
 //======================================================================
 
-class LinkDotParamVisitor : public AstNVisitor {
+class LinkDotParamVisitor final : public AstNVisitor {
 private:
     // NODE STATE
     // Cleared on global
@@ -1417,8 +1417,8 @@ private:
         } else {
             if (refp->user4()) {
                 nodep->v3error("Duplicate declaration of port: "
-                               << nodep->prettyNameQ() << endl
-                               << nodep->warnContextPrimary() << endl
+                               << nodep->prettyNameQ() << '\n'
+                               << nodep->warnContextPrimary() << '\n'
                                << refp->warnOther() << "... Location of original declaration\n"
                                << refp->warnContextSecondary());
             }
@@ -1479,12 +1479,12 @@ public:
         UINFO(4, __FUNCTION__ << ": " << endl);
         iterate(rootp);
     }
-    virtual ~LinkDotParamVisitor() override {}
+    virtual ~LinkDotParamVisitor() override = default;
 };
 
 //======================================================================
 
-class LinkDotScopeVisitor : public AstNVisitor {
+class LinkDotScopeVisitor final : public AstNVisitor {
 
     // STATE
     LinkDotState* m_statep;  // State to pass between visitors, including symbol table
@@ -1637,13 +1637,13 @@ public:
         UINFO(4, __FUNCTION__ << ": " << endl);
         iterate(rootp);
     }
-    virtual ~LinkDotScopeVisitor() override {}
+    virtual ~LinkDotScopeVisitor() override = default;
 };
 
 //======================================================================
 
 // Iterate an interface to resolve modports
-class LinkDotIfaceVisitor : public AstNVisitor {
+class LinkDotIfaceVisitor final : public AstNVisitor {
     // STATE
     LinkDotState* m_statep;  // State to pass between visitors, including symbol table
     VSymEnt* m_curSymp;  // Symbol Entry for current table, where to lookup/insert
@@ -1722,7 +1722,7 @@ public:
         m_statep = statep;
         iterate(nodep);
     }
-    virtual ~LinkDotIfaceVisitor() override {}
+    virtual ~LinkDotIfaceVisitor() override = default;
 };
 
 void LinkDotState::computeIfaceModSyms() {
@@ -1736,7 +1736,7 @@ void LinkDotState::computeIfaceModSyms() {
 
 //======================================================================
 
-class LinkDotResolveVisitor : public AstNVisitor {
+class LinkDotResolveVisitor final : public AstNVisitor {
 private:
     // NODE STATE
     // Cleared on global
@@ -1777,7 +1777,7 @@ private:
         bool m_dotErr;  // Error found in dotted resolution, ignore upwards
         string m_dotText;  // String of dotted names found in below parseref
         DotStates() { init(nullptr); }
-        ~DotStates() {}
+        ~DotStates() = default;
         void init(VSymEnt* curSymp) {
             m_dotPos = DP_NONE;
             m_dotSymp = curSymp;
@@ -1811,7 +1811,7 @@ private:
                                                                   LinkNodeMatcherVar());
                     nodep->v3error("Signal definition not found, and implicit disabled with "
                                    "`default_nettype: "
-                                   << nodep->prettyNameQ() << endl
+                                   << nodep->prettyNameQ() << '\n'
                                    << (suggest.empty() ? "" : nodep->warnMore() + suggest));
 
                 }
@@ -1822,7 +1822,7 @@ private:
                                                                   LinkNodeMatcherVar());
                     nodep->v3warn(IMPLICIT,
                                   "Signal definition not found, creating implicitly: "
-                                      << nodep->prettyNameQ() << endl
+                                      << nodep->prettyNameQ() << '\n'
                                       << (suggest.empty() ? "" : nodep->warnMore() + suggest));
                 }
             }
@@ -1876,8 +1876,8 @@ private:
     }
     void markAndCheckPinDup(AstNode* nodep, AstNode* refp, const char* whatp) {
         if (refp->user5p() && refp->user5p() != nodep) {
-            nodep->v3error("Duplicate " << whatp << " connection: " << nodep->prettyNameQ() << endl
-                                        << nodep->warnContextPrimary() << endl
+            nodep->v3error("Duplicate " << whatp << " connection: " << nodep->prettyNameQ() << '\n'
+                                        << nodep->warnContextPrimary() << '\n'
                                         << refp->user5p()->warnOther()
                                         << "... Location of original " << whatp << " connection\n"
                                         << refp->user5p()->warnContextSecondary());
@@ -1973,7 +1973,7 @@ private:
                                       : m_statep->suggestSymFlat(m_pinSymp, nodep->name(),
                                                                  LinkNodeMatcherVarIO()));
                 nodep->v3error(ucfirst(whatp)
-                               << " not found: " << nodep->prettyNameQ() << endl
+                               << " not found: " << nodep->prettyNameQ() << '\n'
                                << (suggest.empty() ? "" : nodep->warnMore() + suggest));
             } else if (AstVar* refp = VN_CAST(foundp->nodep(), Var)) {
                 if (!refp->isIO() && !refp->isParam() && !refp->isIfaceRef()) {
@@ -2327,7 +2327,7 @@ private:
                         string suggest = m_statep->suggestSymFallback(
                             m_ds.m_dotSymp, nodep->name(), VNodeMatcher());
                         nodep->v3error("Can't find definition of "
-                                       << expectWhat << ": " << nodep->prettyNameQ() << endl
+                                       << expectWhat << ": " << nodep->prettyNameQ() << '\n'
                                        << (suggest.empty() ? "" : nodep->warnMore() + suggest));
                     } else {
                         nodep->v3error("Can't find definition of "
@@ -2605,14 +2605,14 @@ private:
                             VL_DO_DANGLING(nodep->deleteTree(), nodep);
                             return;
                         } else {
-                            nodep->v3error("Unsupported or unknown PLI call: "
-                                           << nodep->prettyNameQ() << endl);
+                            nodep->v3error(
+                                "Unsupported or unknown PLI call: " << nodep->prettyNameQ());
                         }
                     } else {
                         string suggest = m_statep->suggestSymFallback(dotSymp, nodep->name(),
                                                                       LinkNodeMatcherFTask());
                         nodep->v3error("Can't find definition of task/function: "
-                                       << nodep->prettyNameQ() << endl
+                                       << nodep->prettyNameQ() << '\n'
                                        << (suggest.empty() ? "" : nodep->warnMore() + suggest));
                     }
                 } else {
@@ -2773,7 +2773,7 @@ private:
                                 m_curSymp, cpackagerefp->name(), LinkNodeMatcherClass{});
                             cpackagerefp->v3error(
                                 "Class to extend not found: "
-                                << cpackagerefp->prettyNameQ() << endl
+                                << cpackagerefp->prettyNameQ() << '\n'
                                 << (suggest.empty() ? "" : cpackagerefp->warnMore() + suggest));
                         }
                     }
@@ -2810,7 +2810,7 @@ private:
                     if (!VN_IS(nodep->packagep(), Class) && !VN_IS(nodep->packagep(), Package)) {
                         cpackagerefp->v3error(
                             "'::' expected to reference a class/package but referenced "
-                            << nodep->packagep()->prettyTypeName() << endl
+                            << nodep->packagep()->prettyTypeName() << '\n'
                             << cpackagerefp->warnMore() + "... Suggest '.' instead of '::'");
                     }
                 }
@@ -2919,7 +2919,7 @@ public:
         UINFO(4, __FUNCTION__ << ": " << endl);
         iterate(rootp);
     }
-    virtual ~LinkDotResolveVisitor() override {}
+    virtual ~LinkDotResolveVisitor() override = default;
 };
 
 //######################################################################

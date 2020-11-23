@@ -36,7 +36,7 @@
 //######################################################################
 // Scope class functions
 
-class ScopeVisitor : public AstNVisitor {
+class ScopeVisitor final : public AstNVisitor {
 private:
     // NODE STATE
     // AstVar::user1p           -> AstVarScope replacement for this variable
@@ -313,13 +313,13 @@ private:
 public:
     // CONSTRUCTORS
     explicit ScopeVisitor(AstNetlist* nodep) { iterate(nodep); }
-    virtual ~ScopeVisitor() override {}
+    virtual ~ScopeVisitor() override = default;
 };
 
 //######################################################################
 // Scope cleanup -- remove unused activates
 
-class ScopeCleanupVisitor : public AstNVisitor {
+class ScopeCleanupVisitor final : public AstNVisitor {
 private:
     // STATE
     AstScope* m_scopep = nullptr;  // Current scope we are building
@@ -391,7 +391,7 @@ private:
 public:
     // CONSTRUCTORS
     explicit ScopeCleanupVisitor(AstNetlist* nodep) { iterate(nodep); }
-    virtual ~ScopeCleanupVisitor() override {}
+    virtual ~ScopeCleanupVisitor() override = default;
 };
 
 //######################################################################

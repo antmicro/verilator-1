@@ -25,6 +25,7 @@
 
 size_t VName::s_minLength = 32;
 size_t VName::s_maxLength = 0;  // Disabled
+std::map<string, string> VName::s_dehashMap;
 
 //######################################################################
 // Wildcard
@@ -344,13 +345,13 @@ void VHashSha256::selfTestOne(const string& data, const string& data2, const str
     VHashSha256 digest(data);
     if (data2 != "") digest.insert(data2);
     if (VL_UNCOVERABLE(digest.digestHex() != exp)) {
-        std::cerr << "%Error: When hashing '" << data + data2 << "'" << endl  // LCOV_EXCL_LINE
-                  << "        ... got=" << digest.digestHex() << endl  // LCOV_EXCL_LINE
+        std::cerr << "%Error: When hashing '" << data + data2 << "'\n"  // LCOV_EXCL_LINE
+                  << "        ... got=" << digest.digestHex() << '\n'  // LCOV_EXCL_LINE
                   << "        ... exp=" << exp << endl;  // LCOV_EXCL_LINE
     }
     if (VL_UNCOVERABLE(digest.digestSymbol() != exp64)) {
-        std::cerr << "%Error: When hashing '" << data + data2 << "'" << endl  // LCOV_EXCL_LINE
-                  << "        ... got=" << digest.digestSymbol() << endl  // LCOV_EXCL_LINE
+        std::cerr << "%Error: When hashing '" << data + data2 << "'\n"  // LCOV_EXCL_LINE
+                  << "        ... got=" << digest.digestSymbol() << '\n'  // LCOV_EXCL_LINE
                   << "        ... exp=" << exp64 << endl;  // LCOV_EXCL_LINE
     }
 }
@@ -377,6 +378,15 @@ void VHashSha256::selfTest() {
 //######################################################################
 // VName
 
+string VName::dehash(const string& in) {
+    const string::size_type pos = in.find("__Vhsh");
+    if (VL_LIKELY(pos == string::npos)) return in;
+    const string vhsh = in.substr(pos);
+    const auto& it = s_dehashMap.find(vhsh);
+    UASSERT(it != s_dehashMap.end(), "String not in reverse hash map '" << vhsh << "'");
+    return in.substr(0, pos) + it->second;
+}
+
 string VName::hashedName() {
     if (m_name == "") return "";
     if (m_hashed != "") return m_hashed;  // Memoized
@@ -387,8 +397,10 @@ string VName::hashedName() {
         VHashSha256 hash(m_name);
         string suffix = "__Vhsh" + hash.digestSymbol();
         if (s_minLength < s_maxLength) {
+            s_dehashMap[suffix] = m_name.substr(s_minLength);
             m_hashed = m_name.substr(0, s_minLength) + suffix;
         } else {
+            s_dehashMap[suffix] = m_name;
             m_hashed = suffix;
         }
         return m_hashed;

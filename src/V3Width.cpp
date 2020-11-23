@@ -104,7 +104,7 @@ std::ostream& operator<<(std::ostream& str, const Determ& rhs) {
 //######################################################################
 // Width state, as a visitor of each AstNode
 
-class WidthVP {
+class WidthVP final {
     // Parameters to pass down hierarchy with visit functions.
     AstNodeDType* m_dtypep;  // Parent's data type to resolve to
     Stage m_stage;  // If true, report errors
@@ -165,7 +165,7 @@ std::ostream& operator<<(std::ostream& str, const WidthVP* vup) {
 
 //######################################################################
 
-class WidthClearVisitor {
+class WidthClearVisitor final {
     // Rather than a AstNVisitor, can just quickly touch every node
     void clearWidthRecurse(AstNode* nodep) {
         for (; nodep; nodep = nodep->nextp()) {
@@ -180,7 +180,7 @@ class WidthClearVisitor {
 public:
     // CONSTRUCTORS
     explicit WidthClearVisitor(AstNetlist* nodep) { clearWidthRecurse(nodep); }
-    virtual ~WidthClearVisitor() {}
+    virtual ~WidthClearVisitor() = default;
 };
 
 //######################################################################
@@ -189,7 +189,7 @@ public:
 
 //######################################################################
 
-class WidthVisitor : public AstNVisitor {
+class WidthVisitor final : public AstNVisitor {
 private:
     // TYPES
     typedef std::map<std::pair<const AstNodeDType*, AstAttrType>, AstVar*> TableMap;
@@ -199,8 +199,7 @@ private:
     // STATE
     WidthVP* m_vup = nullptr;  // Current node state
     bool m_paramsOnly;  // Computing parameter value; limit operation
-    AstRange* m_cellRangep
-        = nullptr;  // Range for arrayed instantiations, nullptr for normal instantiations
+    AstCell* m_cellp = nullptr;  // Current cell for arrayed instantiations
     AstNodeFTask* m_ftaskp = nullptr;  // Current function/task
     AstNodeProcedure* m_procedurep = nullptr;  // Current final/always
     AstLambdaArgRef* m_lambdaArgRefp = nullptr;  // Argument to above lambda
@@ -1145,12 +1144,12 @@ private:
 
     virtual void visit(AstRand* nodep) override {
         if (m_vup->prelim()) {
-            nodep->dtypeSetSigned32();  // Says the spec
-        }
-    }
-    virtual void visit(AstURandom* nodep) override {
-        if (m_vup->prelim()) {
-            nodep->dtypeSetUInt32();  // Says the spec
+            if (nodep->urandom()) {
+                nodep->dtypeSetUInt32();  // Says the spec
+            } else {
+                nodep->dtypeSetSigned32();  // Says the spec
+            }
+            if (nodep->seedp()) iterateCheckSigned32(nodep, "seed", nodep->seedp(), BOTH);
         }
     }
     virtual void visit(AstURandomRange* nodep) override {
@@ -1607,10 +1606,10 @@ private:
     virtual void visit(AstTypedef* nodep) override {
         if (nodep->didWidthAndSet()) return;  // This node is a dtype & not both PRELIMed+FINALed
         if (auto* refp = checkRefToTypedefRecurse(nodep, nodep)) {
-            nodep->v3error("Typedef has self-reference: " << nodep->prettyNameQ() << endl
-                                                          << nodep->warnContextPrimary() << endl
+            nodep->v3error("Typedef has self-reference: " << nodep->prettyNameQ() << '\n'
+                                                          << nodep->warnContextPrimary() << '\n'
                                                           << refp->warnOther()
-                                                          << "... Location of reference" << endl
+                                                          << "... Location of reference\n"
                                                           << refp->warnContextSecondary());
             // May cause internel error but avoids infinite loop on dump
             refp->typedefp(nullptr);
@@ -1961,8 +1960,8 @@ private:
             if (inits.find(num) != inits.end()) {  // IEEE says illegal
                 AstNode* otherp = inits.find(num)->second;
                 itemp->v3error("Overlapping enumeration value: "
-                               << itemp->prettyNameQ() << endl
-                               << itemp->warnContextPrimary() << endl
+                               << itemp->prettyNameQ() << '\n'
+                               << itemp->warnContextPrimary() << '\n'
                                << otherp->warnOther() << "... Location of original declaration\n"
                                << otherp->warnContextSecondary());
             } else {
@@ -2251,7 +2250,7 @@ private:
                 }
                 UINFO(1, "found object " << foundp << endl);
                 nodep->v3fatalSrc("MemberSel of non-variable\n"
-                                  << nodep->warnContextPrimary() << endl
+                                  << nodep->warnContextPrimary() << '\n'
                                   << foundp->warnOther() << "... Location of found object\n"
                                   << foundp->warnContextSecondary());
             }
@@ -4057,8 +4056,8 @@ private:
             if (conDTypep == pinDTypep  // If match, we're golden
                 || similarDTypeRecurse(conDTypep, pinDTypep)) {
                 userIterateAndNext(nodep->exprp(), WidthVP(subDTypep, FINAL).p());
-            } else if (m_cellRangep) {
-                int numInsts = m_cellRangep->elementsConst();
+            } else if (m_cellp->rangep()) {
+                int numInsts = m_cellp->rangep()->elementsConst();
                 if (conwidth == pinwidth) {
                     // Arrayed instants: widths match so connect to each instance
                     subDTypep = conDTypep;  // = same expr dtype
@@ -4074,7 +4073,7 @@ private:
                                    << " requires " << pinwidth << " or " << pinwidth * numInsts
                                    << " bits, but connection's "
                                    << nodep->exprp()->prettyTypeName() << " generates " << conwidth
-                                   << " bits.");
+                                   << " bits. (IEEE 1800-2017 23.3.3)");
                     subDTypep = conDTypep;  // = same expr dtype
                 }
                 userIterateAndNext(nodep->exprp(), WidthVP(subDTypep, FINAL).p());
@@ -4085,7 +4084,7 @@ private:
                                    << " requires matching types;"
                                    << " ref requires " << pinDTypep->prettyDTypeNameQ()
                                    << " data type but connection is "
-                                   << conDTypep->prettyDTypeNameQ() << " data type." << endl);
+                                   << conDTypep->prettyDTypeNameQ() << " data type.");
                 } else if (nodep->modVarp()->isTristate()) {
                     if (pinwidth != conwidth) {
                         nodep->v3warn(E_UNSUPPORTED,
@@ -4143,6 +4142,8 @@ private:
         // if (debug()) nodep->dumpTree(cout, "-  PinOut: ");
     }
     virtual void visit(AstCell* nodep) override {
+        VL_RESTORER(m_cellp);
+        m_cellp = nodep;
         if (!m_paramsOnly) {
             if (VN_IS(nodep->modp(), NotFoundModule)) {
                 // We've resolved parameters and hit a module that we couldn't resolve.  It's
@@ -4152,14 +4153,10 @@ private:
                                                   << nodep->modName() << "'");
                 v3Global.opt.filePathLookedMsg(nodep->modNameFileline(), nodep->modName());
             }
-            if (nodep->rangep()) {
-                m_cellRangep = nodep->rangep();
-                userIterateAndNext(nodep->rangep(), WidthVP(SELF, BOTH).p());
-            }
+            if (nodep->rangep()) userIterateAndNext(nodep->rangep(), WidthVP(SELF, BOTH).p());
             userIterateAndNext(nodep->pinsp(), nullptr);
         }
         userIterateAndNext(nodep->paramsp(), nullptr);
-        m_cellRangep = nullptr;
     }
     virtual void visit(AstGatePin* nodep) override {
         if (m_vup->prelim()) {
@@ -4193,6 +4190,13 @@ private:
             nodep->dtypeSetLogicBool();
             nodep->didWidth(true);
             return;
+        }
+        if (nodep->classMethod() && nodep->name() == "rand_mode") {
+            nodep->v3error("The 'rand_mode' method is built-in and cannot be overridden"
+                           " (IEEE 1800-2017 18.8)");
+        } else if (nodep->classMethod() && nodep->name() == "constraint_mode") {
+            nodep->v3error("The 'constraint_mode' method is built-in and cannot be overridden"
+                           " (IEEE 1800-2017 18.9)");
         }
         // Function hasn't been widthed, so make it so.
         // Would use user1 etc, but V3Width called from too many places to spend a user
@@ -4238,6 +4242,46 @@ private:
         visit(VN_CAST(nodep, NodeFTaskRef));
         nodep->dtypeFrom(nodep->taskp());
         // if (debug()) nodep->dumpTree(cout, "  FuncOut: ");
+    }
+    // Returns true if dtypep0 and dtypep1 have same dimensions
+    static bool areSameSize(AstUnpackArrayDType* dtypep0, AstUnpackArrayDType* dtypep1) {
+        const std::vector<AstUnpackArrayDType*> dims0 = dtypep0->unpackDimensions();
+        const std::vector<AstUnpackArrayDType*> dims1 = dtypep1->unpackDimensions();
+        if (dims0.size() != dims1.size()) return false;
+        for (size_t i = 0; i < dims0.size(); ++i) {
+            if (dims0[i]->elementsConst() != dims1[i]->elementsConst()) return false;
+        }
+        return true;
+    }
+    // Makes sure that port and pin have same size and same datatype
+    void checkUnpackedArrayArgs(AstVar* portp, AstNode* pinp) {
+        if (AstUnpackArrayDType* portDtypep
+            = VN_CAST(portp->dtypep()->skipRefp(), UnpackArrayDType)) {
+            if (AstUnpackArrayDType* pinDtypep
+                = VN_CAST(pinp->dtypep()->skipRefp(), UnpackArrayDType)) {
+                if (!areSameSize(portDtypep, pinDtypep)) {
+                    pinp->v3warn(E_UNSUPPORTED,
+                                 "Shape of the argument does not match the shape of the parameter "
+                                     << "(" << pinDtypep->prettyDTypeNameQ() << " v.s. "
+                                     << portDtypep->prettyDTypeNameQ() << ")");
+                }
+                if (portDtypep->basicp()->width() != pinDtypep->basicp()->width()
+                    || (portDtypep->basicp()->keyword() != pinDtypep->basicp()->keyword()
+                        && !(portDtypep->basicp()->keyword() == AstBasicDTypeKwd::LOGIC_IMPLICIT
+                             && pinDtypep->basicp()->keyword() == AstBasicDTypeKwd::LOGIC)
+                        && !(portDtypep->basicp()->keyword() == AstBasicDTypeKwd::LOGIC
+                             && pinDtypep->basicp()->keyword()
+                                    == AstBasicDTypeKwd::LOGIC_IMPLICIT))) {
+                    pinp->v3warn(E_UNSUPPORTED,
+                                 "Shape of the argument does not match the shape of the parameter "
+                                     << "(" << pinDtypep->basicp()->prettyDTypeNameQ() << " v.s. "
+                                     << portDtypep->basicp()->prettyDTypeNameQ() << ")");
+                }
+            } else {
+                pinp->v3warn(E_UNSUPPORTED, "Argument is not an unpacked array while parameter "
+                                                << portp->prettyNameQ() << " is");
+            }
+        }
     }
     void processFTaskRefArgs(AstNodeFTaskRef* nodep) {
         // For arguments, is assignment-like context; see IEEE rules in AstNodeAssign
@@ -4289,6 +4333,7 @@ private:
                 else if (portp->basicp() && portp->basicp()->keyword() == AstBasicDTypeKwd::STRING
                          && !VN_IS(pinp, CvtPackString)
                          && !VN_IS(pinp, SFormatF)  // Already generates a string
+                         && !VN_IS(portp->dtypep(), UnpackArrayDType)  // Unpacked array must match
                          && !(VN_IS(pinp, VarRef)
                               && VN_CAST(pinp, VarRef)->varp()->basicp()->keyword()
                                      == AstBasicDTypeKwd::STRING)) {
@@ -4312,6 +4357,7 @@ private:
                 AstNode* pinp = argp->exprp();
                 if (!pinp) continue;  // Argument error we'll find later
                 // Change data types based on above accept completion
+                if (nodep->taskp()->dpiImport()) checkUnpackedArrayArgs(portp, pinp);
                 if (portp->isDouble()) VL_DO_DANGLING(spliceCvtD(pinp), pinp);
             }
         }
@@ -5412,9 +5458,7 @@ private:
         case AstType::atMulS: newp = new AstMul(fl, lhsp, rhsp); break;
         case AstType::atShiftR: newp = new AstShiftRS(fl, lhsp, rhsp); break;
         case AstType::atShiftRS: newp = new AstShiftR(fl, lhsp, rhsp); break;
-        default:
-            nodep->v3fatalSrc("Node needs sign change, but bad case: " << nodep << endl);
-            break;
+        default: nodep->v3fatalSrc("Node needs sign change, but bad case: " << nodep); break;
         }
         UINFO(6, "   ReplaceWithUOrSVersion: " << nodep << " w/ " << newp << endl);
         nodep->replaceWith(newp);
@@ -5452,7 +5496,7 @@ private:
         case AstType::atMul:
         case AstType::atMulS: newp = new AstMulD(fl, lhsp, rhsp); break;
         default:
-            nodep->v3fatalSrc("Node needs conversion to double, but bad case: " << nodep << endl);
+            nodep->v3fatalSrc("Node needs conversion to double, but bad case: " << nodep);
             break;
         }
         UINFO(6, "   ReplaceWithDVersion: " << nodep << " w/ " << newp << endl);
@@ -5484,7 +5528,7 @@ private:
         case AstType::atLte:
         case AstType::atLteS: newp = new AstLteN(fl, lhsp, rhsp); break;
         default:
-            nodep->v3fatalSrc("Node needs conversion to string, but bad case: " << nodep << endl);
+            nodep->v3fatalSrc("Node needs conversion to string, but bad case: " << nodep);
             break;
         }
         UINFO(6, "   ReplaceWithNVersion: " << nodep << " w/ " << newp << endl);
@@ -5503,7 +5547,7 @@ private:
         switch (nodep->type()) {
         case AstType::atNegate: newp = new AstNegateD(fl, lhsp); break;
         default:
-            nodep->v3fatalSrc("Node needs conversion to double, but bad case: " << nodep << endl);
+            nodep->v3fatalSrc("Node needs conversion to double, but bad case: " << nodep);
             break;
         }
         UINFO(6, "   ReplaceWithDVersion: " << nodep << " w/ " << newp << endl);
@@ -5914,7 +5958,7 @@ public:
     AstNode* mainAcceptEdit(AstNode* nodep) {
         return userIterateSubtreeReturnEdits(nodep, WidthVP(SELF, BOTH).p());
     }
-    virtual ~WidthVisitor() override {}
+    virtual ~WidthVisitor() override = default;
 };
 
 //######################################################################

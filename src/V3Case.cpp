@@ -50,7 +50,7 @@
 
 //######################################################################
 
-class CaseLintVisitor : public AstNVisitor {
+class CaseLintVisitor final : public AstNVisitor {
 private:
     AstNodeCase* m_caseExprp
         = nullptr;  // Under a CASE value node, if so the relevant case statement
@@ -111,13 +111,13 @@ private:
 public:
     // CONSTRUCTORS
     explicit CaseLintVisitor(AstNodeCase* nodep) { iterate(nodep); }
-    virtual ~CaseLintVisitor() override {}
+    virtual ~CaseLintVisitor() override = default;
 };
 
 //######################################################################
 // Case state, as a visitor of each AstNode
 
-class CaseVisitor : public AstNVisitor {
+class CaseVisitor final : public AstNVisitor {
 private:
     // NODE STATE
     // Cleared each Case

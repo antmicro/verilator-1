@@ -38,7 +38,7 @@
 //######################################################################
 // Link state, as a visitor of each AstNode
 
-class LinkResolveVisitor : public AstNVisitor {
+class LinkResolveVisitor final : public AstNVisitor {
 private:
     // NODE STATE
     //  Entire netlist:
@@ -526,7 +526,7 @@ private:
 public:
     // CONSTRUCTORS
     explicit LinkResolveVisitor(AstNetlist* rootp) { iterate(rootp); }
-    virtual ~LinkResolveVisitor() override {}
+    virtual ~LinkResolveVisitor() override = default;
 };
 
 //######################################################################
@@ -534,7 +534,7 @@ public:
 //      Recurses cells backwards, so we can pick up those things that propagate
 //      from child cells up to the top module.
 
-class LinkBotupVisitor : public AstNVisitor {
+class LinkBotupVisitor final : public AstNVisitor {
 private:
     // STATE
     AstNodeModule* m_modp = nullptr;  // Current module
@@ -565,7 +565,7 @@ private:
 public:
     // CONSTRUCTORS
     explicit LinkBotupVisitor(AstNetlist* rootp) { iterate(rootp); }
-    virtual ~LinkBotupVisitor() override {}
+    virtual ~LinkBotupVisitor() override = default;
 };
 
 //######################################################################

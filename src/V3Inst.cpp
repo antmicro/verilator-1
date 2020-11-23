@@ -34,7 +34,7 @@
 //######################################################################
 // Inst state, as a visitor of each AstNode
 
-class InstVisitor : public AstNVisitor {
+class InstVisitor final : public AstNVisitor {
 private:
     // NODE STATE
     // Cleared each Cell:
@@ -132,12 +132,12 @@ private:
 public:
     // CONSTRUCTORS
     explicit InstVisitor(AstNetlist* nodep) { iterate(nodep); }
-    virtual ~InstVisitor() override {}
+    virtual ~InstVisitor() override = default;
 };
 
 //######################################################################
 
-class InstDeModVarVisitor : public AstNVisitor {
+class InstDeModVarVisitor final : public AstNVisitor {
     // Expand all module variables, and save names for later reference
 private:
     // STATE
@@ -178,18 +178,18 @@ public:
     }
 
     // CONSTRUCTORS
-    explicit InstDeModVarVisitor() {}
+    InstDeModVarVisitor() = default;
+    virtual ~InstDeModVarVisitor() override = default;
     void main(AstNodeModule* nodep) {
         UINFO(8, "  dmMODULE    " << nodep << endl);
         m_modVarNameMap.clear();
         iterate(nodep);
     }
-    virtual ~InstDeModVarVisitor() override {}
 };
 
 //######################################################################
 
-class InstDeVisitor : public AstNVisitor {
+class InstDeVisitor final : public AstNVisitor {
     // Find all cells with arrays, and convert to non-arrayed
 private:
     // STATE
@@ -466,16 +466,16 @@ private:
 public:
     // CONSTRUCTORS
     explicit InstDeVisitor(AstNetlist* nodep) { iterate(nodep); }
-    virtual ~InstDeVisitor() override {}
+    virtual ~InstDeVisitor() override = default;
 };
 
 //######################################################################
 // Inst static function
 
-class InstStatic {
+class InstStatic final {
 private:
     VL_DEBUG_FUNC;  // Declare debug()
-    InstStatic() {}  // Static class
+    InstStatic() = default;  // Static class
 
     static AstNode* extendOrSel(FileLine* fl, AstNode* rhsp, AstNode* cmpWidthp) {
         if (cmpWidthp->width() > rhsp->width()) {

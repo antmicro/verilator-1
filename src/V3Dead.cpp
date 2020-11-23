@@ -46,7 +46,7 @@
 
 //######################################################################
 
-class DeadModVisitor : public AstNVisitor {
+class DeadModVisitor final : public AstNVisitor {
     // In a module that is dead, cleanup the in-use counts of the modules
 private:
     // NODE STATE
@@ -63,13 +63,13 @@ private:
 public:
     // CONSTRUCTORS
     explicit DeadModVisitor(AstNodeModule* nodep) { iterate(nodep); }
-    virtual ~DeadModVisitor() override {}
+    virtual ~DeadModVisitor() override = default;
 };
 
 //######################################################################
 // Dead state, as a visitor of each AstNode
 
-class DeadVisitor : public AstNVisitor {
+class DeadVisitor final : public AstNVisitor {
 private:
     // NODE STATE
     // Entire Netlist:
@@ -461,7 +461,7 @@ public:
         // We may have removed some datatypes, cleanup
         nodep->typeTablep()->repairCache();
     }
-    virtual ~DeadVisitor() override {}
+    virtual ~DeadVisitor() override = default;
 };
 
 //######################################################################

@@ -234,7 +234,7 @@ string V3HierBlock::commandArgsFileName(bool forCMake) const {
 
 //######################################################################
 // Collect how hierarchical blocks are used
-class HierBlockUsageCollectVisitor : public AstNVisitor {
+class HierBlockUsageCollectVisitor final : public AstNVisitor {
     // NODE STATE
     // AstNode::user1()            -> bool. Processed
     AstUser1InUse m_inuser1;
@@ -303,8 +303,6 @@ public:
 };
 
 //######################################################################
-
-V3HierBlockPlan::V3HierBlockPlan() {}
 
 bool V3HierBlockPlan::isHierBlock(const AstNodeModule* modp) const {
     return m_blocks.find(modp) != m_blocks.end();

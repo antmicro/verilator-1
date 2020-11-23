@@ -42,26 +42,26 @@ struct VerilatedCStrCmp {
 };
 
 /// Map of sorted scope names to find associated scope class
-class VerilatedScopeNameMap
+class VerilatedScopeNameMap final
     : public std::map<const char*, const VerilatedScope*, VerilatedCStrCmp> {
 public:
-    VerilatedScopeNameMap() {}
-    ~VerilatedScopeNameMap() {}
+    VerilatedScopeNameMap() = default;
+    ~VerilatedScopeNameMap() = default;
 };
 
 /// Map of sorted variable names to find associated variable class
-class VerilatedVarNameMap : public std::map<const char*, VerilatedVar, VerilatedCStrCmp> {
+class VerilatedVarNameMap final : public std::map<const char*, VerilatedVar, VerilatedCStrCmp> {
 public:
-    VerilatedVarNameMap() {}
-    ~VerilatedVarNameMap() {}
+    VerilatedVarNameMap() = default;
+    ~VerilatedVarNameMap() = default;
 };
 
 typedef std::vector<const VerilatedScope*> VerilatedScopeVector;
 
-class VerilatedHierarchyMap : public std::map<const VerilatedScope*, VerilatedScopeVector> {
+class VerilatedHierarchyMap final : public std::map<const VerilatedScope*, VerilatedScopeVector> {
 public:
-    VerilatedHierarchyMap() {}
-    ~VerilatedHierarchyMap() {}
+    VerilatedHierarchyMap() = default;
+    ~VerilatedHierarchyMap() = default;
 };
 
 #endif  // Guard

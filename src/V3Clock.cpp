@@ -40,7 +40,7 @@
 //######################################################################
 // Clock state, as a visitor of each AstNode
 
-class ClockVisitor : public AstNVisitor {
+class ClockVisitor final : public AstNVisitor {
 private:
     // NODE STATE
     // Cleared each Module:
@@ -454,7 +454,7 @@ public:
         // easily without iterating through the tree.
         nodep->evalp(m_evalFuncp);
     }
-    virtual ~ClockVisitor() override {}
+    virtual ~ClockVisitor() override = default;
 };
 
 //######################################################################

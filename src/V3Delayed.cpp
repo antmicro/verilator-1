@@ -63,7 +63,7 @@
 //######################################################################
 // Delayed state, as a visitor of each AstNode
 
-class DelayedVisitor : public AstNVisitor {
+class DelayedVisitor final : public AstNVisitor {
 private:
     // NODE STATE
     // Cleared each module:
@@ -160,10 +160,10 @@ private:
                 varrefp->varp()->v3warn(
                     MULTIDRIVEN,
                     "Signal has multiple driving blocks with different clocking: "
-                        << varrefp->varp()->prettyNameQ() << endl
-                        << varrefp->warnOther() << "... Location of first driving block" << endl
-                        << varrefp->warnContextPrimary() << endl
-                        << oldactivep->warnOther() << "... Location of other driving block" << endl
+                        << varrefp->varp()->prettyNameQ() << '\n'
+                        << varrefp->warnOther() << "... Location of first driving block\n"
+                        << varrefp->warnContextPrimary() << '\n'
+                        << oldactivep->warnOther() << "... Location of other driving block\n"
                         << oldactivep->warnContextSecondary());
                 varrefp->varp()->user2(true);
             }

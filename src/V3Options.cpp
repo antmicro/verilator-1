@@ -50,7 +50,7 @@
 //######################################################################
 // V3 Internal state
 
-class V3OptionsImp {
+class V3OptionsImp final {
 public:
     // TYPES
     typedef std::map<const string, std::set<string>> DirMap;  // Directory listing
@@ -99,8 +99,8 @@ public:
             m_libExtVs.push_back(libext);
         }
     }
-    V3OptionsImp() {}
-    ~V3OptionsImp() {}
+    V3OptionsImp() = default;
+    ~V3OptionsImp() = default;
 };
 
 //######################################################################
@@ -547,8 +547,7 @@ void V3Options::filePathLookedMsg(FileLine* fl, const string& modname) {
     } else if (!shown_notfound_msg) {
         shown_notfound_msg = true;
         if (m_impp->m_incDirUsers.empty()) {
-            fl->v3error("This may be because there's no search path specified with -I<dir>."
-                        << endl);
+            fl->v3error("This may be because there's no search path specified with -I<dir>.");
         }
         std::cerr << V3Error::warnMore() << "... Looked in:" << endl;
         for (const string& dir : m_impp->m_incDirUsers) {

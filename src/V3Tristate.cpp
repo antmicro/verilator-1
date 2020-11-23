@@ -69,7 +69,7 @@
 
 //######################################################################
 
-class TristateBaseVisitor : public AstNVisitor {
+class TristateBaseVisitor VL_NOT_FINAL : public AstNVisitor {
 public:
     // METHODS
     VL_DEBUG_FUNC;  // Declare debug()
@@ -78,7 +78,7 @@ public:
 //######################################################################
 // Graph support classes
 
-class TristateVertex : public V3GraphVertex {
+class TristateVertex final : public V3GraphVertex {
     AstNode* m_nodep;
     bool m_isTristate = false;  // Logic indicates a tristate
     bool m_feedsTri = false;  // Propagates to a tristate node (on RHS)
@@ -87,7 +87,7 @@ public:
     TristateVertex(V3Graph* graphp, AstNode* nodep)
         : V3GraphVertex{graphp}
         , m_nodep{nodep} {}
-    virtual ~TristateVertex() override {}
+    virtual ~TristateVertex() override = default;
     // ACCESSORS
     AstNode* nodep() const { return m_nodep; }
     AstVar* varp() const { return VN_CAST(nodep(), Var); }
@@ -110,7 +110,7 @@ public:
 
 //######################################################################
 
-class TristateGraph {
+class TristateGraph final {
     // NODE STATE
     //   AstVar::user5p         -> TristateVertex* for variable being built
     // AstUser5InUse     m_inuser5;   // In visitor below
@@ -271,7 +271,7 @@ public:
 // Given a node, flip any VarRef from LValue to RValue (i.e. make it an input)
 // See also V3LinkLValue::linkLValueSet
 
-class TristatePinVisitor : public TristateBaseVisitor {
+class TristatePinVisitor final : public TristateBaseVisitor {
     TristateGraph& m_tgraph;
     bool m_lvalue;  // Flip to be an LVALUE
     // VISITORS
@@ -307,12 +307,12 @@ public:
         , m_lvalue{lvalue} {
         iterate(nodep);
     }
-    virtual ~TristatePinVisitor() override {}
+    virtual ~TristatePinVisitor() override = default;
 };
 
 //######################################################################
 
-class TristateVisitor : public TristateBaseVisitor {
+class TristateVisitor final : public TristateBaseVisitor {
     // NODE STATE
     //   *::user1p              -> pointer to output enable __en expressions
     //   *::user2               -> int - already visited, see U2_ enum
@@ -449,7 +449,7 @@ class TristateVisitor : public TristateBaseVisitor {
         } else {
             if (oldpullp->direction() != pullp->direction()) {
                 pullp->v3warn(E_UNSUPPORTED, "Unsupported: Conflicting pull directions.\n"
-                                                 << pullp->warnContextPrimary() << endl
+                                                 << pullp->warnContextPrimary() << '\n'
                                                  << oldpullp->warnOther()
                                                  << "... Location of conflicting pull.\n"
                                                  << oldpullp->warnContextSecondary());

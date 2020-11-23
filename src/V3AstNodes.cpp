@@ -455,38 +455,99 @@ string AstVar::cPubArgType(bool named, bool forReturn) const {
     return arg;
 }
 
-string AstVar::dpiArgType(bool named, bool forReturn) const {
-    if (forReturn) named = false;
-    string arg;
-    if (isDpiOpenArray()) {
-        arg = "const svOpenArrayHandle";
-    } else if (!basicp()) {
-        arg = "UNKNOWN";
-    } else if (basicp()->isDpiBitVec()) {
-        if (forReturn) {
-            arg = "svBitVecVal";
-        } else if (isReadOnly()) {
-            arg = "const svBitVecVal*";
-        } else {
-            arg = "svBitVecVal*";
-        }
-    } else if (basicp()->isDpiLogicVec()) {
-        if (forReturn) {
-            arg = "svLogicVecVal";
-        } else if (isReadOnly()) {
-            arg = "const svLogicVecVal*";
-        } else {
-            arg = "svLogicVecVal*";
-        }
-    } else {
-        arg = basicp()->keyword().dpiType();
-        if (basicp()->keyword().isDpiUnsignable() && !basicp()->isSigned()) {
-            arg = "unsigned " + arg;
-        }
-        if (!forReturn && isWritable()) arg += "*";
+class dpiTypesToStringConverter VL_NOT_FINAL {
+public:
+    virtual string openArray(const AstVar*) const { return "const svOpenArrayHandle"; }
+    virtual string bitLogicVector(const AstVar* varp, bool isBit) const {
+        return isBit ? "svBitVecVal" : "svLogicVecVal";
     }
-    if (named) arg += " " + name();
-    return arg;
+    virtual string primitive(const AstVar* varp) const {
+        string type;
+        if (varp->basicp()->keyword().isDpiUnsignable() && !varp->basicp()->isSigned()) {
+            type = "unsigned ";
+        }
+        type += varp->basicp()->keyword().dpiType();
+        return type;
+    }
+    string convert(const AstVar* varp) const {
+        if (varp->isDpiOpenArray()) {
+            return openArray(varp);
+        } else if (!varp->basicp()) {
+            return "UNKNOWN";
+        } else if (varp->basicp()->isDpiBitVec() || varp->basicp()->isDpiLogicVec()) {
+            return bitLogicVector(varp, varp->basicp()->isDpiBitVec());
+        } else {
+            return primitive(varp);
+        }
+    }
+};
+
+string AstVar::dpiArgType(bool named, bool forReturn) const {
+    if (forReturn) {
+        return dpiTypesToStringConverter{}.convert(this);
+    } else {
+        class converter final : public dpiTypesToStringConverter {
+            virtual string bitLogicVector(const AstVar* varp, bool isBit) const override {
+                return string(varp->isReadOnly() ? "const " : "")
+                       + dpiTypesToStringConverter::bitLogicVector(varp, isBit) + '*';
+            }
+            virtual string primitive(const AstVar* varp) const override {
+                string type = dpiTypesToStringConverter::primitive(varp);
+                if (varp->isWritable() || VN_IS(varp->dtypep()->skipRefp(), UnpackArrayDType)) {
+                    if (!varp->isWritable()
+                        && varp->basicp()->keyword() != AstBasicDTypeKwd::STRING)
+                        type = "const " + type;
+                    type += "*";
+                }
+                return type;
+            }
+        };
+        string arg = converter{}.convert(this);
+        if (named) arg += " " + name();
+        return arg;
+    }
+}
+
+string AstVar::dpiTmpVarType(const string& varName) const {
+    class converter final : public dpiTypesToStringConverter {
+        string m_name;
+        string arraySuffix(const AstVar* varp, size_t n) const {
+            if (AstUnpackArrayDType* unpackp
+                = VN_CAST(varp->dtypep()->skipRefp(), UnpackArrayDType)) {
+                // Convert multi dimensional unpacked array to 1D array
+                if (n == 0) n = 1;
+                n *= unpackp->arrayUnpackedElements();
+                return '[' + cvtToStr(n) + ']';
+            } else if (n > 0) {
+                return '[' + cvtToStr(n) + ']';
+            } else {
+                return "";
+            }
+        }
+        virtual string openArray(const AstVar* varp) const override {
+            return dpiTypesToStringConverter::openArray(varp) + ' ' + m_name
+                   + arraySuffix(varp, 0);
+        }
+        virtual string bitLogicVector(const AstVar* varp, bool isBit) const override {
+            string type = dpiTypesToStringConverter::bitLogicVector(varp, isBit);
+            type += ' ' + m_name + arraySuffix(varp, varp->widthWords());
+            return type;
+        }
+        virtual string primitive(const AstVar* varp) const override {
+            string type = dpiTypesToStringConverter::primitive(varp);
+            if (varp->isWritable() || VN_IS(varp->dtypep()->skipRefp(), UnpackArrayDType)) {
+                if (!varp->isWritable() && varp->basicp()->keyword() == AstBasicDTypeKwd::CHANDLE)
+                    type = "const " + type;
+            }
+            type += ' ' + m_name + arraySuffix(varp, 0);
+            return type;
+        }
+
+    public:
+        explicit converter(const string& name)
+            : m_name(name) {}
+    };
+    return converter{varName}.convert(this);
 }
 
 string AstVar::scType() const {
@@ -553,7 +614,7 @@ string AstVar::mtasksString() const {
     return os.str();
 }
 
-class AstNodeDType::CTypeRecursed {
+class AstNodeDType::CTypeRecursed final {
 public:
     string m_type;  // The base type, e.g.: "Foo_t"s
     string m_dims;  // Array dimensions, e.g.: "[3][2][1]"
@@ -1382,6 +1443,18 @@ string AstUnpackArrayDType::prettyDTypeName() const {
     os << subp->prettyDTypeName() << "$" << ranges;
     return os.str();
 }
+std::vector<AstUnpackArrayDType*> AstUnpackArrayDType::unpackDimensions() {
+    std::vector<AstUnpackArrayDType*> dims;
+    for (AstUnpackArrayDType* unpackp = this; unpackp;) {
+        dims.push_back(unpackp);
+        if (AstNodeDType* subp = unpackp->subDTypep()) {
+            unpackp = VN_CAST(subp, UnpackArrayDType);
+        } else {
+            unpackp = nullptr;
+        }
+    }
+    return dims;
+}
 void AstNetlist::dump(std::ostream& str) const {
     this->AstNode::dump(str);
     str << " [" << timeunit() << "/" << timeprecision() << "]";
@@ -1432,7 +1505,7 @@ void AstTypeTable::dump(std::ostream& str) const {
     this->AstNode::dump(str);
     for (int i = 0; i < static_cast<int>(AstBasicDTypeKwd::_ENUM_MAX); ++i) {
         if (AstBasicDType* subnodep = m_basicps[i]) {
-            str << endl;  // Newline from caller, so newline first
+            str << '\n';  // Newline from caller, so newline first
             str << "\t\t" << std::setw(8) << AstBasicDTypeKwd(i).ascii();
             str << "  -> ";
             subnodep->dump(str);
@@ -1442,7 +1515,7 @@ void AstTypeTable::dump(std::ostream& str) const {
         const DetailedMap& mapr = m_detailedMap;
         for (const auto& itr : mapr) {
             AstBasicDType* dtypep = itr.second;
-            str << endl;  // Newline from caller, so newline first
+            str << '\n';  // Newline from caller, so newline first
             str << "\t\tdetailed  ->  ";
             dtypep->dump(str);
         }

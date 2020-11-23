@@ -34,7 +34,7 @@
 
 //######################################################################
 
-class DescopeVisitor : public AstNVisitor {
+class DescopeVisitor final : public AstNVisitor {
 private:
     // NODE STATE
     //  Cleared entire netlist
@@ -296,7 +296,7 @@ private:
 public:
     // CONSTRUCTORS
     explicit DescopeVisitor(AstNetlist* nodep) { iterate(nodep); }
-    virtual ~DescopeVisitor() override {}
+    virtual ~DescopeVisitor() override = default;
 };
 
 //######################################################################

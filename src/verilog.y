@@ -3711,9 +3711,8 @@ system_f_call_or_t<nodep>:	// IEEE: part of system_tf_call (can be task or func)
 	|	yD_PAST '(' expr ',' expr ',' expr ')'		{ $$ = $3; BBUNSUP($1, "Unsupported: $past expr2 and clock arguments"); }
 	|	yD_PAST '(' expr ',' expr ',' expr ',' expr')'	{ $$ = $3; BBUNSUP($1, "Unsupported: $past expr2 and clock arguments"); }
 	|	yD_POW '(' expr ',' expr ')'		{ $$ = new AstPowD($1,$3,$5); }
-	//			// Seeding is unsupported as would be slow to invalidate all per-thread RNGs
-	|	yD_RANDOM '(' expr ')'			{ $$ = new AstRand($1); BBUNSUP($1, "Unsupported: Seed on $random. Suggest use +verilator+seed+ runtime flag"); }
-	|	yD_RANDOM parenE			{ $$ = new AstRand($1); }
+	|	yD_RANDOM '(' expr ')'			{ $$ = new AstRand($1, $3, false); }
+	|	yD_RANDOM parenE			{ $$ = new AstRand($1, nullptr, false); }
 	|	yD_REALTIME parenE			{ $$ = new AstTimeD($1, VTimescale(VTimescale::NONE)); }
 	|	yD_REALTOBITS '(' expr ')'		{ $$ = new AstRealToBits($1,$3); }
 	|	yD_REWIND '(' idClassSel ')'		{ $$ = new AstFSeek($1, $3, new AstConst($1, 0), new AstConst($1, 0)); }
@@ -3742,9 +3741,9 @@ system_f_call_or_t<nodep>:	// IEEE: part of system_tf_call (can be task or func)
 	|	yD_TYPENAME '(' exprOrDataType ')'	{ $$ = new AstAttrOf($1, AstAttrType::TYPENAME, $3); }
 	|	yD_UNGETC '(' expr ',' expr ')'		{ $$ = new AstFUngetC($1, $5, $3); }  // Arg swap to file first
 	|	yD_UNPACKED_DIMENSIONS '(' exprOrDataType ')'	{ $$ = new AstAttrOf($1,AstAttrType::DIM_UNPK_DIMENSIONS,$3); }
-	|	yD_UNSIGNED '(' expr ')'		{ $$ = new AstUnsigned($1,$3); }
-	|	yD_URANDOM '(' expr ')'			{ $$ = new AstURandom($1); BBUNSUP($1, "Unsupported: Seed on $urandom. Suggest use +verilator+seed+ runtime flag"); }
-	|	yD_URANDOM parenE			{ $$ = new AstURandom($1); }
+	|	yD_UNSIGNED '(' expr ')'		{ $$ = new AstUnsigned($1, $3); }
+	|	yD_URANDOM '(' expr ')'			{ $$ = new AstRand($1, $3, true); }
+	|	yD_URANDOM parenE			{ $$ = new AstRand($1, nullptr, true); }
 	|	yD_URANDOM_RANGE '(' expr ',' expr ')'	{ $$ = new AstURandomRange($1, $3, $5); }
 	|	yD_VALUEPLUSARGS '(' expr ',' expr ')'	{ $$ = new AstValuePlusArgs($1, $3, $5); }
 	;
@@ -6266,7 +6265,7 @@ vltItem:
 			{ V3Config::addIgnore($1, false, *$3, $5->toUInt(), $7->toUInt()+1); }
 	|	vltOffFront yVLT_D_FILE yaSTRING yVLT_D_MATCH yaSTRING
 			{	if (($1==V3ErrorCode::I_COVERAGE) || ($1==V3ErrorCode::I_TRACING)) {
-					$<fl>1->v3error("Argument -match only supported for lint_off"<<endl);
+					$<fl>1->v3error("Argument -match only supported for lint_off");
 				} else {
 					V3Config::addWaiver($1,*$3,*$5);
 				}}
@@ -6305,11 +6304,11 @@ vltOffFront<errcodeen>:
 	|	yVLT_LINT_OFF				{ $$ = V3ErrorCode::I_LINT; }
 	|	yVLT_LINT_OFF yVLT_D_MSG idAny
 			{ $$ = V3ErrorCode((*$3).c_str());
-			  if ($$ == V3ErrorCode::EC_ERROR) { $1->v3error("Unknown Error Code: "<<*$3<<endl); }
-			  $2->v3warn(DEPRECATED, "Deprecated -msg in configuration files, use -rule instead."<<endl); }
+			  if ($$ == V3ErrorCode::EC_ERROR) { $1->v3error("Unknown Error Code: " << *$3); }
+			  $2->v3warn(DEPRECATED, "Deprecated -msg in configuration files, use -rule instead."); }
 	|	yVLT_LINT_OFF yVLT_D_RULE idAny
 			{ $$ = V3ErrorCode((*$3).c_str());
-			  if ($$ == V3ErrorCode::EC_ERROR) { $1->v3error("Unknown Error Code: "<<*$3<<endl);  } }
+			  if ($$ == V3ErrorCode::EC_ERROR) { $1->v3error("Unknown Error Code: " << *$3);  } }
 	;
 
 vltOnFront<errcodeen>:
@@ -6318,11 +6317,11 @@ vltOnFront<errcodeen>:
 	|	yVLT_LINT_ON				{ $$ = V3ErrorCode::I_LINT; }
 	|	yVLT_LINT_ON yVLT_D_MSG idAny
 			{ $$ = V3ErrorCode((*$3).c_str());
-			  if ($$ == V3ErrorCode::EC_ERROR) { $1->v3error("Unknown Error Code: "<<*$3<<endl);  }
-			  $2->v3warn(DEPRECATED, "Deprecated -msg in configuration files, use -rule instead."<<endl); }
+			  if ($$ == V3ErrorCode::EC_ERROR) { $1->v3error("Unknown Error Code: " << *$3);  }
+			  $2->v3warn(DEPRECATED, "Deprecated -msg in configuration files, use -rule instead."); }
 	|	yVLT_LINT_ON yVLT_D_RULE idAny
 			{ $$ = V3ErrorCode((*$3).c_str());
-			  if ($$ == V3ErrorCode::EC_ERROR) { $1->v3error("Unknown Error Code: "<<*$3<<endl);  } }
+			  if ($$ == V3ErrorCode::EC_ERROR) { $1->v3error("Unknown Error Code: " << *$3);  } }
 	;
 
 vltDModuleE<strp>:

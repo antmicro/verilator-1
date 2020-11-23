@@ -26,7 +26,7 @@
 //######################################################################
 // Assert class functions
 
-class AssertPreVisitor : public AstNVisitor {
+class AssertPreVisitor final : public AstNVisitor {
     // Removes clocks and other pre-optimizations
     // Eventually inlines calls to sequences, properties, etc.
     // We're not parsing the tree, or anything more complicated.
@@ -197,7 +197,7 @@ public:
         // Process
         iterate(nodep);
     }
-    virtual ~AssertPreVisitor() override {}
+    virtual ~AssertPreVisitor() override = default;
 };
 
 //######################################################################

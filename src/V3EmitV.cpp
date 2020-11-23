@@ -28,7 +28,7 @@
 //######################################################################
 // Emit statements and math operators
 
-class EmitVBaseVisitor : public EmitCBaseVisitor {
+class EmitVBaseVisitor VL_NOT_FINAL : public EmitCBaseVisitor {
     // MEMBERS
     bool m_suppressSemi = false;
     bool m_suppressUnknown = false;
@@ -667,13 +667,13 @@ public:
     explicit EmitVBaseVisitor(bool suppressUnknown, AstSenTree* domainp)
         : m_suppressUnknown{suppressUnknown}
         , m_sensesp{domainp} {}
-    virtual ~EmitVBaseVisitor() override {}
+    virtual ~EmitVBaseVisitor() override = default;
 };
 
 //######################################################################
 // Emit to an output file
 
-class EmitVFileVisitor : public EmitVBaseVisitor {
+class EmitVFileVisitor final : public EmitVBaseVisitor {
     // MEMBERS
     V3OutFile* m_ofp;
     // METHODS
@@ -693,13 +693,13 @@ public:
         m_suppressVarSemi = suppressVarSemi;
         iterate(nodep);
     }
-    virtual ~EmitVFileVisitor() override {}
+    virtual ~EmitVFileVisitor() override = default;
 };
 
 //######################################################################
 // Emit to a stream (perhaps stringstream)
 
-class EmitVStreamVisitor : public EmitVBaseVisitor {
+class EmitVStreamVisitor final : public EmitVBaseVisitor {
     // MEMBERS
     std::ostream& m_os;
     // METHODS
@@ -715,13 +715,13 @@ public:
         , m_os(os) {  // Need () or GCC 4.8 false warning
         iterate(nodep);
     }
-    virtual ~EmitVStreamVisitor() override {}
+    virtual ~EmitVStreamVisitor() override = default;
 };
 
 //######################################################################
 // Emit to a stream (perhaps stringstream)
 
-class EmitVPrefixedFormatter : public V3OutFormatter {
+class EmitVPrefixedFormatter final : public V3OutFormatter {
     std::ostream& m_os;
     string m_prefix;  // What to print at beginning of each line
     int m_flWidth;  // Padding of fileline
@@ -763,7 +763,7 @@ public:
     }
 };
 
-class EmitVPrefixedVisitor : public EmitVBaseVisitor {
+class EmitVPrefixedVisitor final : public EmitVBaseVisitor {
     // MEMBERS
     EmitVPrefixedFormatter m_formatter;  // Special verilog formatter (Way down the
                                          // inheritance is another unused V3OutFormatter)
@@ -792,7 +792,7 @@ public:
         if (user3mark) { AstUser3InUse::check(); }
         iterate(nodep);
     }
-    virtual ~EmitVPrefixedVisitor() override {}
+    virtual ~EmitVPrefixedVisitor() override = default;
 };
 
 //######################################################################

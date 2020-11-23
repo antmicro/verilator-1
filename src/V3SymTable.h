@@ -38,7 +38,7 @@ class VSymEnt;
 
 typedef std::set<const VSymEnt*> VSymConstMap;
 
-class VSymEnt {
+class VSymEnt final {
     // Symbol table that can have a "superior" table for resolving upper references
     // MEMBERS
     typedef std::multimap<string, VSymEnt*> IdNameMap;
@@ -72,7 +72,7 @@ public:
         os << "  fallb=se" << cvtToHex(m_fallbackp);
         if (m_symPrefix != "") os << "  symPrefix=" << m_symPrefix;
         os << "  n=" << nodep();
-        os << endl;
+        os << '\n';
         if (VL_UNCOVERABLE(doneSymsr.find(this) != doneSymsr.end())) {
             os << indent << "| ^ duplicate, so no children printed\n";  // LCOV_EXCL_LINE
         } else {
@@ -126,8 +126,7 @@ public:
         if (name != "" && m_idNameMap.find(name) != m_idNameMap.end()) {
             if (!V3Error::errorCount()) {  // Else may have just reported warning
                 if (debug() >= 9 || V3Error::debugDefault()) dump(cout, "- err-dump: ", 1);
-                entp->nodep()->v3fatalSrc("Inserting two symbols with same name: " << name
-                                                                                   << endl);
+                entp->nodep()->v3fatalSrc("Inserting two symbols with same name: " << name);
             }
         } else {
             m_idNameMap.insert(make_pair(name, entp));
@@ -278,7 +277,7 @@ public:
 //######################################################################
 // Symbol tables
 
-class VSymGraph {
+class VSymGraph final {
     // Collection of symbol tables
     // TYPES
     typedef std::vector<VSymEnt*> SymStack;

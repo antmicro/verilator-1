@@ -34,7 +34,7 @@
 /// Remove all $signed, $unsigned, we're done with them.
 /// This step is only called on real V3Width, not intermediate e.g. widthParams
 
-class WidthRemoveVisitor : public AstNVisitor {
+class WidthRemoveVisitor final : public AstNVisitor {
 private:
     // METHODS
     void replaceWithSignedVersion(AstNode* nodep, AstNode* newp) {
@@ -55,8 +55,8 @@ private:
 
 public:
     // CONSTRUCTORS
-    WidthRemoveVisitor() {}
-    virtual ~WidthRemoveVisitor() override {}
+    WidthRemoveVisitor() = default;
+    virtual ~WidthRemoveVisitor() override = default;
     AstNode* mainAcceptEdit(AstNode* nodep) { return iterateSubtreeReturnEdits(nodep); }
 };
 
@@ -64,7 +64,7 @@ public:
 // Now that all widthing is complete,
 // Copy all width() to widthMin().  V3Const expects this
 
-class WidthCommitVisitor : public AstNVisitor {
+class WidthCommitVisitor final : public AstNVisitor {
     // NODE STATE
     // AstVar::user1p           -> bool, processed
     AstUser1InUse m_inuser1;
@@ -171,7 +171,7 @@ public:
         // Don't want to repairCache, as all needed nodes have been added back in
         // a repair would prevent dead nodes from being detected
     }
-    virtual ~WidthCommitVisitor() override {}
+    virtual ~WidthCommitVisitor() override = default;
 };
 
 //######################################################################

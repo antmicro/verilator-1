@@ -29,7 +29,7 @@
 //######################################################################
 // Symbol table emitting
 
-class EmitCSyms : EmitCBaseVisitor {
+class EmitCSyms final : EmitCBaseVisitor {
     // NODE STATE
     // Cleared on Netlist
     //  AstNodeModule::user1()  -> bool.  Set true __Vconfigure called
@@ -467,7 +467,7 @@ void EmitCSyms::emitSymHdr() {
 
     puts("\n// CREATORS\n");
     puts(symClassName() + "(" + topClassName() + "* topp, const char* namep);\n");
-    puts(string("~") + symClassName() + "() {}\n");
+    puts(string("~") + symClassName() + "() = default;\n");
 
     for (const auto& i : m_usesVfinal) {
         puts("void " + symClassName() + "_" + cvtToStr(i.first) + "(");

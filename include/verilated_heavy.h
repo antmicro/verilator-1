@@ -46,7 +46,7 @@ extern std::string VL_TO_STRING_W(int words, WDataInP obj);
 //===================================================================
 // Shuffle RNG
 
-class VlURNG {
+class VlURNG final {
 public:
     typedef size_t result_type;
     static constexpr size_t min() { return 0; }
@@ -57,7 +57,7 @@ public:
 //===================================================================
 // Readmem/Writemem operation classes
 
-class VlReadMem {
+class VlReadMem final {
     bool m_hex;  // Hex format
     int m_bits;  // Bit width of values
     const std::string& m_filename;  // Filename
@@ -74,7 +74,7 @@ public:
     void setData(void* valuep, const std::string& rhs);
 };
 
-class VlWriteMem {
+class VlWriteMem final {
     bool m_hex;  // Hex format
     int m_bits;  // Bit width of values
     FILE* m_fp;  // File handle for filename
@@ -93,7 +93,7 @@ public:
 //
 // Bound here is the maximum size() allowed, e.g. 1 + SystemVerilog bound
 // For dynamic arrays it is always zero
-template <class T_Value, size_t T_MaxSize = 0> class VlQueue {
+template <class T_Value, size_t T_MaxSize = 0> class VlQueue final {
 private:
     // TYPES
     typedef std::deque<T_Value> Deque;
@@ -108,10 +108,13 @@ private:
 
 public:
     // CONSTRUCTORS
-    VlQueue() {
-        // m_defaultValue isn't defaulted. Caller's constructor must do it.
-    }
-    ~VlQueue() {}
+    // m_defaultValue isn't defaulted. Caller's constructor must do it.
+    VlQueue() = default;
+    ~VlQueue() = default;
+    VlQueue(const VlQueue&) = default;
+    VlQueue(VlQueue&&) = default;
+    VlQueue& operator=(const VlQueue&) = default;
+    VlQueue& operator=(VlQueue&&) = default;
 
     // Standard copy constructor works. Verilog: assoca = assocb
     // Also must allow conversion from a different T_MaxSize queue
@@ -421,13 +424,18 @@ template <class T_Value> std::string VL_TO_STRING(const VlQueue<T_Value>& obj) {
 // This is only used when we need an upper-level container and so can't
 // simply use a C style array (which is just a pointer).
 
-template <std::size_t T_Words> class VlWide {
+template <std::size_t T_Words> class VlWide final {
     WData m_storage[T_Words];
 
 public:
     // cppcheck-suppress uninitVar
-    VlWide() {}
-    ~VlWide() {}
+    VlWide() = default;
+    ~VlWide() = default;
+    VlWide(const VlWide&) = default;
+    VlWide(VlWide&&) = default;
+    VlWide& operator=(const VlWide&) = default;
+    VlWide& operator=(VlWide&&) = default;
+    // METHODS
     const WData& at(size_t index) const { return m_storage[index]; }
     WData& at(size_t index) { return m_storage[index]; }
     WData* data() { return &m_storage[0]; }
@@ -452,7 +460,7 @@ template <std::size_t T_Words> std::string VL_TO_STRING(const VlWide<T_Words>& o
 // There are no multithreaded locks on this; the base variable must
 // be protected by other means
 //
-template <class T_Key, class T_Value> class VlAssocArray {
+template <class T_Key, class T_Value> class VlAssocArray final {
 private:
     // TYPES
     typedef std::map<T_Key, T_Value> Map;
@@ -467,11 +475,13 @@ private:
 
 public:
     // CONSTRUCTORS
-    VlAssocArray() {
-        // m_defaultValue isn't defaulted. Caller's constructor must do it.
-    }
-    ~VlAssocArray() {}
-    // Standard copy constructor works. Verilog: assoca = assocb
+    // m_defaultValue isn't defaulted. Caller's constructor must do it.
+    VlAssocArray() = default;
+    ~VlAssocArray() = default;
+    VlAssocArray(const VlAssocArray&) = default;
+    VlAssocArray(VlAssocArray&&) = default;
+    VlAssocArray& operator=(const VlAssocArray&) = default;
+    VlAssocArray& operator=(VlAssocArray&&) = default;
 
     // METHODS
     T_Value& atDefault() { return m_defaultValue; }
@@ -773,6 +783,7 @@ inline std::string VL_CVT_PACK_STR_NQ(QData lhs) VL_PURE {
     return VL_CVT_PACK_STR_NW(VL_WQ_WORDS_E, lw);
 }
 inline std::string VL_CVT_PACK_STR_NN(const std::string& lhs) VL_PURE { return lhs; }
+inline std::string& VL_CVT_PACK_STR_NN(std::string& lhs) VL_PURE { return lhs; }
 inline std::string VL_CVT_PACK_STR_NI(IData lhs) VL_PURE {
     WData lw[VL_WQ_WORDS_E];
     VL_SET_WI(lw, lhs);
