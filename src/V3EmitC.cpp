@@ -904,7 +904,7 @@ public:
             nodep->v3warn(E_UNSUPPORTED,
                           "Unsupported: More than one variable in wait condition.");
         iterateAndNextNull(varrefps.begin()->second);
-        puts(".wait_for(\n[](auto& value) -> bool {\nreturn ");
+        puts(".wait_until(\n[](auto& value) -> bool {\nreturn ");
         {
             auto* nodeClonep = nodep->cloneTree(false);
             replaceVarRefps(nodeClonep->condp());
