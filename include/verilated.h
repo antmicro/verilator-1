@@ -380,7 +380,7 @@ class MonitoredValue : public MonitoredValueBase {
         }
 
         template<typename P>
-        void wait_for(P pred, VerilatedThread* owner) {
+        void wait_until(P pred, VerilatedThread* owner) {
             std::unique_lock<std::mutex> lck(mtx);
 
             verilated_value_ctrl.add(this);
