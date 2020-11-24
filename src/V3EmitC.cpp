@@ -414,8 +414,9 @@ public:
         if (funcp->proc()) {
             puts("static VerilatedThread ");
             puts(funcp->nameProtect() + "__thread(");;
-            puts("(void (*)(void*, VerilatedThread*))");
-            puts(funcp->nameProtect() + ", ");
+            puts("(void (*)(void*, VerilatedThread*))(");
+            puts(nodep->hiernameProtect());
+            puts(funcp->nameProtect() + "), ");
             visit_call_args(nodep);
             puts(", ");
             puts(nodep->funcp()->oneshot() ? "true" : "false");
