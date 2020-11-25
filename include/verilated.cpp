@@ -96,7 +96,6 @@ struct VerilatedInitializer {
 } s_VerilatedInitializer;
 
 std::vector<VerilatedThread*> verilated_threads;
-MonitoredValueControl verilated_value_ctrl;
 VerilatedNBACtrl verilated_nba_ctrl;
 
 //===========================================================================
@@ -2692,8 +2691,6 @@ VerilatedSyms::~VerilatedSyms() {
         t->should_exit(true);
     }
     __Vm_timedQp->m_cv.notify_all();
-
-    verilated_value_ctrl.release_all();
 
     for (auto t: verilated_threads) {
         t->exit();
