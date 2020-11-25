@@ -829,8 +829,9 @@ public:
         puts("std::mutex mtx;\n");
         puts("self->idle(true);\n");
 
+        puts("self->wait_for(");
         iterateAndNextNull(nodep->sensesp());
-        puts(".wait_for(1, self);\n");
+        puts(", 1);\n");
 
         // XXX zeroing the event variable - should we be doing this???
         iterateAndNextNull(nodep->sensesp());
@@ -878,15 +879,16 @@ public:
         if (varrefps.size() > 1)
             nodep->v3warn(E_UNSUPPORTED,
                           "Unsupported: More than one variable in wait condition.");
+        puts("self->wait_until(");
         iterateAndNextNull(varrefps.begin()->second);
-        puts(".wait_until(\n[](auto& value) -> bool {\nreturn ");
+        puts(",\n[](auto& value) -> bool {\nreturn ");
         {
             auto* nodeClonep = nodep->cloneTree(false);
             replaceVarRefps(nodeClonep->condp());
             iterateAndNextNull(nodeClonep->condp());
             VL_DO_DANGLING(nodeClonep->deleteTree(), nodeClonep);
         }
-        puts(";\n}, self);\n");
+        puts(";\n});\n");
 
         puts("self->idle(false);\n");
         puts("if (self->should_exit()) return;\n");

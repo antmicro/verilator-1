@@ -87,6 +87,7 @@ class VerilatedVcdSc;
 class VerilatedFst;
 class VerilatedFstC;
 class VerilatedThread;
+template<typename T> class MonitoredValue;
 
 extern std::vector<VerilatedThread*> verilated_threads;
 
@@ -103,6 +104,9 @@ private:
     std::thread m_thr;
 
     std::condition_variable m_delay_wait_cv;
+
+    std::mutex m_value_wait_mtx;
+    std::condition_variable m_value_wait_cv;
 
 public:
 
@@ -176,6 +180,7 @@ public:
     void exit() {
         should_exit(true);
         m_cv.notify_all();
+        m_value_wait_cv.notify_all();
         m_delay_wait_cv.notify_all();
         join();
     }
@@ -185,6 +190,16 @@ public:
         ready(true);
         m_cv.notify_all();
     }
+
+    void notify_value_change() {
+        std::unique_lock<std::mutex> lck(m_value_wait_mtx);
+        m_value_wait_cv.notify_all();
+    }
+
+    template<typename T, typename U>
+    void wait_for(MonitoredValue<T>& mon_val, U nvalue);
+    template<typename T, typename P>
+    void wait_until(MonitoredValue<T>& mon_val, P pred);
 
     // debug only
     std::string m_name;
@@ -198,6 +213,15 @@ public:
 
 };
 
+template<typename T>
+struct Promise {
+    VerilatedThread& thread;
+    T value;
+
+    void notify() {
+        thread.notify_value_change();
+    }
+};
 
 class MonitoredValueBase {
     public:
@@ -205,48 +229,15 @@ class MonitoredValueBase {
         virtual void assign(vluint64_t) {};
 };
 
-class MonitoredValueControl {
-    private:
-        std::vector<MonitoredValueBase*> values;
-        std::mutex mtx;
-
-    public:
-        void add(MonitoredValueBase* v) {
-            std::unique_lock<std::mutex> lck(mtx);
-
-            values.push_back(v);
-        }
-        void del(MonitoredValueBase* v) {
-            std::unique_lock<std::mutex> lck(mtx);
-
-            values.erase(std::remove(values.begin(), values.end(), v),
-                         values.end());
-        }
-
-        void release_all() {
-            std::unique_lock<std::mutex> lck(mtx);
-
-            for (auto v: values) {
-                v->release();
-            }
-        }
-};
-
-extern MonitoredValueControl verilated_value_ctrl;
-
 template<typename T>
 class MonitoredValue : public MonitoredValueBase {
     public:
 
-        MonitoredValue(): value(), mtx(), cv() {
-        }
-
-        ~MonitoredValue() {
-            cv.notify_all();
+        MonitoredValue(): value(), mtx() {
         }
 
         template <class U>
-        MonitoredValue(U v): mtx(), cv() {
+        MonitoredValue(U v): mtx() {
             std::unique_lock<std::mutex> lck(mtx);
             value = v;
         }
@@ -367,45 +358,55 @@ class MonitoredValue : public MonitoredValueBase {
             value = T(v);
         }
 
-        void wait_for(T nvalue, VerilatedThread* owner) {
+        void subscribe(Promise<T>& promise) {
             std::unique_lock<std::mutex> lck(mtx);
-
-            verilated_value_ctrl.add(this);
-
-            while (!owner->should_exit() && value != nvalue) {
-                cv.wait(lck);
-            }
-
-            verilated_value_ctrl.del(this);
+            promises.push_back(&promise);
         }
 
-        template<typename P>
-        void wait_until(P pred, VerilatedThread* owner) {
+        void unsubscribe(Promise<T>& promise) {
             std::unique_lock<std::mutex> lck(mtx);
-
-            verilated_value_ctrl.add(this);
-
-            while (!owner->should_exit() && !pred(value)) {
-                cv.wait(lck);
-            }
-
-            verilated_value_ctrl.del(this);
-        }
-
-        void release() {
-            cv.notify_all();
+            auto it = std::find(promises.begin(), promises.end(), &promise);
+            if (it != promises.end()) promises.erase(it);
         }
 
     private:
         T value;
 
         std::mutex mtx;
-        std::condition_variable cv;
+
+        std::vector<Promise<T>*> promises;
 
         void written() {
-            cv.notify_all();
+            for (auto& promise : promises) {
+                promise->value = value;
+                promise->notify();
+            }
+            promises.clear();
         }
 };
+
+template<typename T, typename U>
+void VerilatedThread::wait_for(MonitoredValue<T>& mon_val, U nvalue) {
+    Promise<T> promise {*this};
+    while (!should_exit()) {
+        std::unique_lock<std::mutex> lck(m_value_wait_mtx);
+        mon_val.subscribe(promise);
+        m_value_wait_cv.wait(lck);
+        if (promise.value == nvalue) break;
+    }
+    if (should_exit()) mon_val.unsubscribe(promise);
+}
+
+template<typename T, typename P>
+void VerilatedThread::wait_until(MonitoredValue<T>& mon_val, P pred) {
+    Promise<T> promise {*this, mon_val};
+    while (!should_exit() && !pred(promise.value)) {
+        std::unique_lock<std::mutex> lck(m_value_wait_mtx);
+        mon_val.subscribe(promise);
+        m_value_wait_cv.wait(lck);
+    }
+    if (should_exit()) mon_val.unsubscribe(promise);
+}
 
 // clang-format off
 //                   P          // Packed data of bit type (C/S/I/Q/W)
