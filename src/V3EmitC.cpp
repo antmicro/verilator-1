@@ -854,13 +854,15 @@ public:
         puts("std::mutex mtx;\n");
         puts("self->idle(true);\n");
 
-        puts("self->wait_for(");
+        puts("self->wait_for(std::forward_as_tuple(");
         iterateAndNextNull(nodep->sensesp());
-        puts(", 1);\n");
+        puts("), 1);\n");
 
         // XXX zeroing the event variable - should we be doing this???
-        iterateAndNextNull(nodep->sensesp());
-        puts(" = 0;\n");
+        for (auto* itemp = nodep->sensesp()->sensesp(); itemp; itemp = VN_CAST(itemp->nextp(), SenItem)) {
+            visit(itemp);
+            puts(" = 0;\n");
+        }
 
         puts("self->idle(false);\n");
         puts("if (self->should_exit()) return;\n");
@@ -928,7 +930,10 @@ public:
 
     }
     virtual void visit(AstSenTree *nodep) override {
-        iterateAndNextNull(nodep->sensesp());
+        for (auto* itemp = nodep->sensesp(); itemp; itemp = VN_CAST(itemp->nextp(), SenItem)) {
+            visit(itemp);
+            if (itemp->nextp()) puts(", ");
+        }
     }
     virtual void visit(AstSenItem *nodep) override {
         iterateAndNextNull(nodep->sensp());
