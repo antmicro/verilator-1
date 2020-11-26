@@ -379,6 +379,19 @@ class MonitoredValue : public MonitoredValueBase {
             verilated_value_ctrl.del(this);
         }
 
+        template<typename P>
+        void wait_until(P pred, VerilatedThread* owner) {
+            std::unique_lock<std::mutex> lck(mtx);
+
+            verilated_value_ctrl.add(this);
+
+            while (!owner->should_exit() && !pred(value)) {
+                cv.wait(lck);
+            }
+
+            verilated_value_ctrl.del(this);
+        }
+
         void release() {
             cv.notify_all();
         }
