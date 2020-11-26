@@ -199,8 +199,8 @@ public:
 
     template<typename T, typename... Ts>
     void wait_for(std::tuple<MonitoredValue<Ts>&...> mon_vals, T nvalue);
-    template<typename T, typename P>
-    void wait_until(MonitoredValue<T>& mon_val, P pred);
+    template<typename P, typename... Ts>
+    void wait_until(std::tuple<MonitoredValue<Ts>&...> mon_vals, P pred);
 
     // debug only
     std::string m_name;
@@ -436,15 +436,27 @@ void VerilatedThread::wait_for(std::tuple<MonitoredValue<Ts>&...> mon_vals, T nv
     unsubscribe_all(mon_vals, promises);
 }
 
-template<typename T, typename P>
-void VerilatedThread::wait_until(MonitoredValue<T>& mon_val, P pred) {
-    Promise<T> promise {*this, mon_val};
-    while (!should_exit() && !pred(promise.value)) {
+template<std::size_t I = 0, typename... Ts>
+inline typename std::enable_if<I == sizeof...(Ts), void>::type
+init_promises(std::tuple<MonitoredValue<Ts>&...>&, std::tuple<Promise<Ts>...>&) {}
+
+template<std::size_t I = 0, typename... Ts>
+inline typename std::enable_if<I < sizeof...(Ts), void>::type
+init_promises(std::tuple<MonitoredValue<Ts>&...>& mon_vals, std::tuple<Promise<Ts>...>& promises) {
+    std::get<I>(promises).value = std::get<I>(mon_vals);
+    init_promises<I + 1, Ts...>(mon_vals, promises);
+}
+
+template<typename P, typename... Ts>
+void VerilatedThread::wait_until(std::tuple<MonitoredValue<Ts>&...> mon_vals, P pred) {
+    std::tuple<Promise<Ts>...> promises(Promise<Ts>{*this}...);
+    init_promises(mon_vals, promises);
+    while (!should_exit() && !pred(promises)) {
         std::unique_lock<std::mutex> lck(m_value_wait_mtx);
-        mon_val.subscribe(promise);
+        subscribe_all(mon_vals, promises);
         m_value_wait_cv.wait(lck);
     }
-    if (should_exit()) mon_val.unsubscribe(promise);
+    unsubscribe_all(mon_vals, promises);
 }
 
 // clang-format off
