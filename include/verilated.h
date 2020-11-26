@@ -198,7 +198,7 @@ public:
     }
 
     template<typename T, typename... Ts>
-    void wait_for(std::tuple<MonitoredValue<Ts>&...> mon_vals, T nvalue);
+    void wait_for(std::tuple<MonitoredValue<Ts>&...> mon_vals, T&& nvalue);
     template<typename P, typename... Ts>
     void wait_until(std::tuple<MonitoredValue<Ts>&...> mon_vals, P pred);
 
@@ -393,14 +393,14 @@ class MonitoredValue : public MonitoredValueBase {
         }
 };
 
-template<std::size_t I = 0, typename FuncT, typename... Ts>
+template<std::size_t I = 0, typename T, typename... Ts>
 inline typename std::enable_if<I == sizeof...(Ts), bool>::type
-any(std::tuple<Ts...> &, FuncT) { return false; }
+any_equals(std::tuple<Promise<Ts>...>&, T&&) { return false; }
 
-template<std::size_t I = 0, typename FuncT, typename... Ts>
+template<std::size_t I = 0, typename T, typename... Ts>
 inline typename std::enable_if<I < sizeof...(Ts), bool>::type
-any(std::tuple<Ts...>& t, FuncT f) {
-    return f(std::get<I>(t)) || any<I + 1, FuncT, Ts...>(t, f);
+any_equals(std::tuple<Promise<Ts>...>& promises, T&& nvalue) {
+    return std::get<I>(promises).value == nvalue || any_equals<I + 1, T, Ts...>(promises, nvalue);
 }
 
 template<std::size_t I = 0, typename... Ts>
@@ -426,9 +426,9 @@ unsubscribe_all(std::tuple<MonitoredValue<Ts>&...>& mon_vals, std::tuple<Promise
 }
 
 template<typename T, typename... Ts>
-void VerilatedThread::wait_for(std::tuple<MonitoredValue<Ts>&...> mon_vals, T nvalue) {
+void VerilatedThread::wait_for(std::tuple<MonitoredValue<Ts>&...> mon_vals, T&& nvalue) {
     std::tuple<Promise<Ts>...> promises(Promise<Ts>{*this, 0}...);
-    while (!should_exit() && !any(promises, [&nvalue](auto& p) {return p.value == nvalue;})) {
+    while (!should_exit() && !any_equals(promises, nvalue)) {
         std::unique_lock<std::mutex> lck(m_value_wait_mtx);
         subscribe_all(mon_vals, promises);
         m_value_wait_cv.wait(lck);
