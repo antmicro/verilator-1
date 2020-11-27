@@ -381,6 +381,23 @@ QData VL_RAND_RESET_Q(int obits) VL_MT_SAFE {
     data &= VL_MASK_Q(obits);
     return data;
 }
+
+WDataV* VL_RAND_RESET_W(int obits, WDataV* outwp) VL_MT_SAFE {
+    for (int i = 0; i < VL_WORDS_I(obits); ++i) {
+        if (i < (VL_WORDS_I(obits) - 1)) {
+            outwp[i] = VL_RAND_RESET_I(32);
+        } else {
+            outwp[i] = VL_RAND_RESET_I(32) & VL_MASK_E(obits);
+        }
+    }
+    return outwp;
+}
+
+WDataV* VL_ZERO_RESET_W(int obits, WDataV* outwp) VL_MT_SAFE {
+    for (int i = 0; i < VL_WORDS_I(obits); ++i) outwp[i] = 0;
+    return outwp;
+}
+
 WDataOutP VL_RAND_RESET_W(int obits, WDataOutP outwp) VL_MT_SAFE {
     for (int i = 0; i < VL_WORDS_I(obits); ++i) {
         if (i < (VL_WORDS_I(obits) - 1)) {
