@@ -96,7 +96,7 @@ extern std::vector<VerilatedThread*> verilated_threads;
 class VerilatedThread {
 
 private:
-    std::function<void(void*,VerilatedThread*)> m_func;
+    std::function<void(VerilatedThread*)> m_func;
     std::atomic<bool> m_ready;
     std::atomic<bool> m_oneshot;
     std::atomic<bool> m_started;
@@ -161,7 +161,7 @@ public:
     std::mutex m_access_mtx;
     std::condition_variable m_cv;
 
-    VerilatedThread(void (*func)(void*, VerilatedThread*), void* args, bool oneshot, std::string name)
+    VerilatedThread(std::function<void(VerilatedThread*)> func, bool oneshot, std::string name)
         : m_ready(false)
         , m_oneshot(oneshot)
         , m_started(false)
@@ -172,7 +172,7 @@ public:
 
         m_func = func;
 
-        m_thr = std::thread(m_func, args, this);
+        m_thr = std::thread(m_func, this);
     }
 
     bool should_exit() {
