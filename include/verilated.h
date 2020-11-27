@@ -89,6 +89,7 @@ class VerilatedFst;
 class VerilatedFstC;
 class VerilatedThread;
 template<typename T> class MonitoredValue;
+template<typename T> struct Promise;
 
 extern std::vector<VerilatedThread*> verilated_threads;
 
@@ -108,6 +109,50 @@ private:
 
     std::mutex m_value_wait_mtx;
     std::condition_variable m_value_wait_cv;
+
+
+    template<std::size_t I = 0, typename T, typename... Ts>
+    static inline typename std::enable_if<I == sizeof...(Ts), bool>::type
+    any_equals(std::tuple<Promise<Ts>...>&, T&&) { return false; }
+
+    template<std::size_t I = 0, typename T, typename... Ts>
+    static inline typename std::enable_if<I < sizeof...(Ts), bool>::type
+    any_equals(std::tuple<Promise<Ts>...>& promises, T&& nvalue) {
+        return std::get<I>(promises).value == nvalue || any_equals<I + 1, T, Ts...>(promises, nvalue);
+    }
+
+    template<std::size_t I = 0, typename... Ts>
+    static inline typename std::enable_if<I == sizeof...(Ts), void>::type
+    subscribe_all(std::tuple<MonitoredValue<Ts>&...>&, std::tuple<Promise<Ts>...>&) {}
+
+    template<std::size_t I = 0, typename... Ts>
+    static inline typename std::enable_if<I < sizeof...(Ts), void>::type
+    subscribe_all(std::tuple<MonitoredValue<Ts>&...>& mon_vals, std::tuple<Promise<Ts>...>& promises) {
+        if (!std::get<I>(promises).waiting) std::get<I>(mon_vals).subscribe(std::get<I>(promises));
+        subscribe_all<I + 1, Ts...>(mon_vals, promises);
+    }
+
+    template<std::size_t I = 0, typename... Ts>
+    static inline typename std::enable_if<I == sizeof...(Ts), void>::type
+    unsubscribe_all(std::tuple<MonitoredValue<Ts>&...>&, std::tuple<Promise<Ts>...>&) {}
+
+    template<std::size_t I = 0, typename... Ts>
+    static inline typename std::enable_if<I < sizeof...(Ts), void>::type
+    unsubscribe_all(std::tuple<MonitoredValue<Ts>&...>& mon_vals, std::tuple<Promise<Ts>...>& promises) {
+        if (std::get<I>(promises).waiting) std::get<I>(mon_vals).unsubscribe(std::get<I>(promises));
+        unsubscribe_all<I + 1, Ts...>(mon_vals, promises);
+    }
+
+    template<std::size_t I = 0, typename... Ts>
+    static inline typename std::enable_if<I == sizeof...(Ts), void>::type
+    init_promises(std::tuple<MonitoredValue<Ts>&...>&, std::tuple<Promise<Ts>...>&) {}
+
+    template<std::size_t I = 0, typename... Ts>
+    static inline typename std::enable_if<I < sizeof...(Ts), void>::type
+    init_promises(std::tuple<MonitoredValue<Ts>&...>& mon_vals, std::tuple<Promise<Ts>...>& promises) {
+        std::get<I>(promises).value = std::get<I>(mon_vals);
+        init_promises<I + 1, Ts...>(mon_vals, promises);
+    }
 
 public:
 
@@ -198,9 +243,27 @@ public:
     }
 
     template<typename T, typename... Ts>
-    void wait_for(std::tuple<MonitoredValue<Ts>&...> mon_vals, T&& nvalue);
+    void wait_for(std::tuple<MonitoredValue<Ts>&...> mon_vals, T&& nvalue) {
+        std::tuple<Promise<Ts>...> promises(Promise<Ts>{*this, 0}...);
+        while (!should_exit() && !any_equals(promises, nvalue)) {
+            std::unique_lock<std::mutex> lck(m_value_wait_mtx);
+            subscribe_all(mon_vals, promises);
+            m_value_wait_cv.wait(lck);
+        }
+        unsubscribe_all(mon_vals, promises);
+    }
+
     template<typename P, typename... Ts>
-    void wait_until(std::tuple<MonitoredValue<Ts>&...> mon_vals, P pred);
+    void wait_until(std::tuple<MonitoredValue<Ts>&...> mon_vals, P pred) {
+        std::tuple<Promise<Ts>...> promises(Promise<Ts>{*this}...);
+        init_promises(mon_vals, promises);
+        while (!should_exit() && !pred(promises)) {
+            std::unique_lock<std::mutex> lck(m_value_wait_mtx);
+            subscribe_all(mon_vals, promises);
+            m_value_wait_cv.wait(lck);
+        }
+        unsubscribe_all(mon_vals, promises);
+    }
 
     // debug only
     std::string m_name;
@@ -393,71 +456,6 @@ class MonitoredValue : public MonitoredValueBase {
         }
 };
 
-template<std::size_t I = 0, typename T, typename... Ts>
-inline typename std::enable_if<I == sizeof...(Ts), bool>::type
-any_equals(std::tuple<Promise<Ts>...>&, T&&) { return false; }
-
-template<std::size_t I = 0, typename T, typename... Ts>
-inline typename std::enable_if<I < sizeof...(Ts), bool>::type
-any_equals(std::tuple<Promise<Ts>...>& promises, T&& nvalue) {
-    return std::get<I>(promises).value == nvalue || any_equals<I + 1, T, Ts...>(promises, nvalue);
-}
-
-template<std::size_t I = 0, typename... Ts>
-inline typename std::enable_if<I == sizeof...(Ts), void>::type
-subscribe_all(std::tuple<MonitoredValue<Ts>&...>&, std::tuple<Promise<Ts>...>&) {}
-
-template<std::size_t I = 0, typename... Ts>
-inline typename std::enable_if<I < sizeof...(Ts), void>::type
-subscribe_all(std::tuple<MonitoredValue<Ts>&...>& mon_vals, std::tuple<Promise<Ts>...>& promises) {
-    if (!std::get<I>(promises).waiting) std::get<I>(mon_vals).subscribe(std::get<I>(promises));
-    subscribe_all<I + 1, Ts...>(mon_vals, promises);
-}
-
-template<std::size_t I = 0, typename... Ts>
-inline typename std::enable_if<I == sizeof...(Ts), void>::type
-unsubscribe_all(std::tuple<MonitoredValue<Ts>&...>&, std::tuple<Promise<Ts>...>&) {}
-
-template<std::size_t I = 0, typename... Ts>
-inline typename std::enable_if<I < sizeof...(Ts), void>::type
-unsubscribe_all(std::tuple<MonitoredValue<Ts>&...>& mon_vals, std::tuple<Promise<Ts>...>& promises) {
-    if (std::get<I>(promises).waiting) std::get<I>(mon_vals).unsubscribe(std::get<I>(promises));
-    unsubscribe_all<I + 1, Ts...>(mon_vals, promises);
-}
-
-template<typename T, typename... Ts>
-void VerilatedThread::wait_for(std::tuple<MonitoredValue<Ts>&...> mon_vals, T&& nvalue) {
-    std::tuple<Promise<Ts>...> promises(Promise<Ts>{*this, 0}...);
-    while (!should_exit() && !any_equals(promises, nvalue)) {
-        std::unique_lock<std::mutex> lck(m_value_wait_mtx);
-        subscribe_all(mon_vals, promises);
-        m_value_wait_cv.wait(lck);
-    }
-    unsubscribe_all(mon_vals, promises);
-}
-
-template<std::size_t I = 0, typename... Ts>
-inline typename std::enable_if<I == sizeof...(Ts), void>::type
-init_promises(std::tuple<MonitoredValue<Ts>&...>&, std::tuple<Promise<Ts>...>&) {}
-
-template<std::size_t I = 0, typename... Ts>
-inline typename std::enable_if<I < sizeof...(Ts), void>::type
-init_promises(std::tuple<MonitoredValue<Ts>&...>& mon_vals, std::tuple<Promise<Ts>...>& promises) {
-    std::get<I>(promises).value = std::get<I>(mon_vals);
-    init_promises<I + 1, Ts...>(mon_vals, promises);
-}
-
-template<typename P, typename... Ts>
-void VerilatedThread::wait_until(std::tuple<MonitoredValue<Ts>&...> mon_vals, P pred) {
-    std::tuple<Promise<Ts>...> promises(Promise<Ts>{*this}...);
-    init_promises(mon_vals, promises);
-    while (!should_exit() && !pred(promises)) {
-        std::unique_lock<std::mutex> lck(m_value_wait_mtx);
-        subscribe_all(mon_vals, promises);
-        m_value_wait_cv.wait(lck);
-    }
-    unsubscribe_all(mon_vals, promises);
-}
 
 // clang-format off
 //                   P          // Packed data of bit type (C/S/I/Q/W)
