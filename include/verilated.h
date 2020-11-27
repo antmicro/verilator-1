@@ -1077,8 +1077,10 @@ extern WDataOutP VL_RANDOM_W(int obits, WDataOutP outwp);  ///< Randomize a sign
 /// Init time only, so slow is fine
 extern IData VL_RAND_RESET_I(int obits);  ///< Random reset a signal
 extern QData VL_RAND_RESET_Q(int obits);  ///< Random reset a signal
+extern WDataV* VL_RAND_RESET_W(int obits, WDataV* outwp);
 extern WDataOutP VL_RAND_RESET_W(int obits, WDataOutP outwp);  ///< Random reset a signal
 /// Zero reset a signal (slow - else use VL_ZERO_W)
+extern WDataV* VL_ZERO_RESET_W(int obits, WDataV* outwp);
 extern WDataOutP VL_ZERO_RESET_W(int obits, WDataOutP outwp);
 
 #if VL_THREADED
