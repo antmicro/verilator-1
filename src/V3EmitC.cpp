@@ -830,12 +830,15 @@ public:
         puts("std::mutex mtx;\n");
         puts("self->idle(true);\n");
 
+        puts("self->wait_for(std::forward_as_tuple(");
         iterateAndNextNull(nodep->sensesp());
-        puts(".wait_for(1, self);\n");
+        puts("), 1);\n");
 
         // XXX zeroing the event variable - should we be doing this???
-        iterateAndNextNull(nodep->sensesp());
-        puts(" = 0;\n");
+        for (auto* itemp = nodep->sensesp()->sensesp(); itemp; itemp = VN_CAST(itemp->nextp(), SenItem)) {
+            visit(itemp);
+            puts(" = 0;\n");
+        }
 
         puts("self->idle(false);\n");
         puts("if (self->should_exit()) return;\n");
@@ -855,17 +858,17 @@ public:
             if (nodep->op4p()) findVarRefps(nodep->op4p(), found);
         }
     }
-    void replaceVarRefps(AstNode* nodep) {
-        if (VN_IS(nodep, VarRef)) {
-            auto* newp = new AstCStmt(nodep->fileline(), "value");
+    void replaceVarRefps(AstNode* nodep, std::unordered_map<AstVar*, size_t>& indices) {
+        if (auto* varrefp = VN_CAST(nodep, VarRef)) {
+            auto* newp = new AstCStmt(nodep->fileline(), "std::get<" + cvtToStr(indices[varrefp->varp()]) + ">(promises).value");
             newp->dtypep(nodep->dtypep());
             nodep->replaceWith(newp);
             VL_DO_DANGLING(nodep->deleteTree(), nodep);
         } else {
-            if (nodep->op1p()) replaceVarRefps(nodep->op1p());
-            if (nodep->op2p()) replaceVarRefps(nodep->op2p());
-            if (nodep->op3p()) replaceVarRefps(nodep->op3p());
-            if (nodep->op4p()) replaceVarRefps(nodep->op4p());
+            if (nodep->op1p()) replaceVarRefps(nodep->op1p(), indices);
+            if (nodep->op2p()) replaceVarRefps(nodep->op2p(), indices);
+            if (nodep->op3p()) replaceVarRefps(nodep->op3p(), indices);
+            if (nodep->op4p()) replaceVarRefps(nodep->op4p(), indices);
         }
     }
     virtual void visit(AstWait* nodep) VL_OVERRIDE {
@@ -874,20 +877,30 @@ public:
         puts("self->idle(true);\n");
 
         std::unordered_map<AstVar*, AstVarRef*> varrefps;
-        findVarRefps(nodep->condp(), varrefps);
-        UASSERT_OBJ(!varrefps.empty(), nodep, "No variables in wait condition.");
-        if (varrefps.size() > 1)
-            nodep->v3warn(E_UNSUPPORTED,
-                          "Unsupported: More than one variable in wait condition.");
-        iterateAndNextNull(varrefps.begin()->second);
-        puts(".wait_until(\n[](auto& value) -> bool {\nreturn ");
+        {
+            findVarRefps(nodep->condp(), varrefps);
+            UASSERT_OBJ(!varrefps.empty(), nodep, "No variables in wait condition.");
+        }
+        puts("self->wait_until(std::forward_as_tuple(");
+
+        std::unordered_map<AstVar*, size_t> varIndices;
+        {
+            size_t index = 0;
+            for (auto p : varrefps) {
+                if (index > 0) puts(", ");
+                varIndices.insert(std::make_pair(p.first, index++));
+                iterateAndNextNull(p.second);
+            }
+        }
+
+        puts("),\n[](auto& promises) -> bool {\nreturn ");
         {
             auto* nodeClonep = nodep->cloneTree(false);
-            replaceVarRefps(nodeClonep->condp());
+            replaceVarRefps(nodeClonep->condp(), varIndices);
             iterateAndNextNull(nodeClonep->condp());
             VL_DO_DANGLING(nodeClonep->deleteTree(), nodeClonep);
         }
-        puts(";\n}, self);\n");
+        puts(";\n});\n");
 
         puts("self->idle(false);\n");
         puts("if (self->should_exit()) return;\n");
@@ -902,7 +915,10 @@ public:
 
     }
     virtual void visit(AstSenTree *nodep) VL_OVERRIDE {
-        iterateAndNextNull(nodep->sensesp());
+        for (auto* itemp = nodep->sensesp(); itemp; itemp = VN_CAST(itemp->nextp(), SenItem)) {
+            visit(itemp);
+            if (itemp->nextp()) puts(", ");
+        }
     }
     virtual void visit(AstSenItem *nodep) VL_OVERRIDE {
         iterateAndNextNull(nodep->sensp());

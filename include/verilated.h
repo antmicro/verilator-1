@@ -40,6 +40,7 @@
 #include <thread>
 #include <condition_variable>
 #include <functional>
+#include <utility>
 
 // <iostream> avoided to reduce compile time
 // <map> avoided and instead in verilated_heavy.h to reduce compile time
@@ -87,6 +88,8 @@ class VerilatedVcdSc;
 class VerilatedFst;
 class VerilatedFstC;
 class VerilatedThread;
+template<typename T> class MonitoredValue;
+template<typename T> struct Promise;
 
 extern std::vector<VerilatedThread*> verilated_threads;
 
@@ -103,6 +106,53 @@ private:
     std::thread m_thr;
 
     std::condition_variable m_delay_wait_cv;
+
+    std::mutex m_value_wait_mtx;
+    std::condition_variable m_value_wait_cv;
+
+
+    template<std::size_t I = 0, typename T, typename... Ts>
+    static inline typename std::enable_if<I == sizeof...(Ts), bool>::type
+    any_equals(std::tuple<Promise<Ts>...>&, T&&) { return false; }
+
+    template<std::size_t I = 0, typename T, typename... Ts>
+    static inline typename std::enable_if<I < sizeof...(Ts), bool>::type
+    any_equals(std::tuple<Promise<Ts>...>& promises, T&& nvalue) {
+        return std::get<I>(promises).value == nvalue || any_equals<I + 1, T, Ts...>(promises, nvalue);
+    }
+
+    template<std::size_t I = 0, typename... Ts>
+    static inline typename std::enable_if<I == sizeof...(Ts), void>::type
+    subscribe_all(std::tuple<MonitoredValue<Ts>&...>&, std::tuple<Promise<Ts>...>&) {}
+
+    template<std::size_t I = 0, typename... Ts>
+    static inline typename std::enable_if<I < sizeof...(Ts), void>::type
+    subscribe_all(std::tuple<MonitoredValue<Ts>&...>& mon_vals, std::tuple<Promise<Ts>...>& promises) {
+        if (!std::get<I>(promises).waiting) std::get<I>(mon_vals).subscribe(std::get<I>(promises));
+        subscribe_all<I + 1, Ts...>(mon_vals, promises);
+    }
+
+    template<std::size_t I = 0, typename... Ts>
+    static inline typename std::enable_if<I == sizeof...(Ts), void>::type
+    unsubscribe_all(std::tuple<MonitoredValue<Ts>&...>&, std::tuple<Promise<Ts>...>&) {}
+
+    template<std::size_t I = 0, typename... Ts>
+    static inline typename std::enable_if<I < sizeof...(Ts), void>::type
+    unsubscribe_all(std::tuple<MonitoredValue<Ts>&...>& mon_vals, std::tuple<Promise<Ts>...>& promises) {
+        if (std::get<I>(promises).waiting) std::get<I>(mon_vals).unsubscribe(std::get<I>(promises));
+        unsubscribe_all<I + 1, Ts...>(mon_vals, promises);
+    }
+
+    template<std::size_t I = 0, typename... Ts>
+    static inline typename std::enable_if<I == sizeof...(Ts), void>::type
+    init_promises(std::tuple<MonitoredValue<Ts>&...>&, std::tuple<Promise<Ts>...>&) {}
+
+    template<std::size_t I = 0, typename... Ts>
+    static inline typename std::enable_if<I < sizeof...(Ts), void>::type
+    init_promises(std::tuple<MonitoredValue<Ts>&...>& mon_vals, std::tuple<Promise<Ts>...>& promises) {
+        std::get<I>(promises).value = std::get<I>(mon_vals);
+        init_promises<I + 1, Ts...>(mon_vals, promises);
+    }
 
 public:
 
@@ -176,6 +226,7 @@ public:
     void exit() {
         should_exit(true);
         m_cv.notify_all();
+        m_value_wait_cv.notify_all();
         m_delay_wait_cv.notify_all();
         join();
     }
@@ -184,6 +235,34 @@ public:
         std::unique_lock<std::mutex> lck(m_mtx);
         ready(true);
         m_cv.notify_all();
+    }
+
+    void notify_value_change() {
+        std::unique_lock<std::mutex> lck(m_value_wait_mtx);
+        m_value_wait_cv.notify_all();
+    }
+
+    template<typename T, typename... Ts>
+    void wait_for(std::tuple<MonitoredValue<Ts>&...> mon_vals, T&& nvalue) {
+        std::tuple<Promise<Ts>...> promises(Promise<Ts>{*this, 0}...);
+        while (!should_exit() && !any_equals(promises, nvalue)) {
+            std::unique_lock<std::mutex> lck(m_value_wait_mtx);
+            subscribe_all(mon_vals, promises);
+            m_value_wait_cv.wait(lck);
+        }
+        unsubscribe_all(mon_vals, promises);
+    }
+
+    template<typename P, typename... Ts>
+    void wait_until(std::tuple<MonitoredValue<Ts>&...> mon_vals, P pred) {
+        std::tuple<Promise<Ts>...> promises(Promise<Ts>{*this}...);
+        init_promises(mon_vals, promises);
+        while (!should_exit() && !pred(promises)) {
+            std::unique_lock<std::mutex> lck(m_value_wait_mtx);
+            subscribe_all(mon_vals, promises);
+            m_value_wait_cv.wait(lck);
+        }
+        unsubscribe_all(mon_vals, promises);
     }
 
     // debug only
@@ -198,6 +277,17 @@ public:
 
 };
 
+template<typename T>
+struct Promise {
+    VerilatedThread& thread;
+    T value;
+    bool waiting = false;
+
+    void notify() {
+        waiting = false;
+        thread.notify_value_change();
+    }
+};
 
 class MonitoredValueBase {
     public:
@@ -205,48 +295,15 @@ class MonitoredValueBase {
         virtual void assign(vluint64_t) {};
 };
 
-class MonitoredValueControl {
-    private:
-        std::vector<MonitoredValueBase*> values;
-        std::mutex mtx;
-
-    public:
-        void add(MonitoredValueBase* v) {
-            std::unique_lock<std::mutex> lck(mtx);
-
-            values.push_back(v);
-        }
-        void del(MonitoredValueBase* v) {
-            std::unique_lock<std::mutex> lck(mtx);
-
-            values.erase(std::remove(values.begin(), values.end(), v),
-                         values.end());
-        }
-
-        void release_all() {
-            std::unique_lock<std::mutex> lck(mtx);
-
-            for (auto v: values) {
-                v->release();
-            }
-        }
-};
-
-extern MonitoredValueControl verilated_value_ctrl;
-
 template<typename T>
 class MonitoredValue : public MonitoredValueBase {
     public:
 
-        MonitoredValue(): value(), mtx(), cv() {
-        }
-
-        ~MonitoredValue() {
-            cv.notify_all();
+        MonitoredValue(): value(), mtx() {
         }
 
         template <class U>
-        MonitoredValue(U v): mtx(), cv() {
+        MonitoredValue(U v): mtx() {
             std::unique_lock<std::mutex> lck(mtx);
             value = v;
         }
@@ -367,45 +424,38 @@ class MonitoredValue : public MonitoredValueBase {
             value = T(v);
         }
 
-        void wait_for(T nvalue, VerilatedThread* owner) {
+        void subscribe(Promise<T>& promise) {
             std::unique_lock<std::mutex> lck(mtx);
-
-            verilated_value_ctrl.add(this);
-
-            while (!owner->should_exit() && value != nvalue) {
-                cv.wait(lck);
-            }
-
-            verilated_value_ctrl.del(this);
+            promises.push_back(&promise);
+            promise.value = value;
+            promise.waiting = true;
         }
 
-        template<typename P>
-        void wait_until(P pred, VerilatedThread* owner) {
+        void unsubscribe(Promise<T>& promise) {
             std::unique_lock<std::mutex> lck(mtx);
-
-            verilated_value_ctrl.add(this);
-
-            while (!owner->should_exit() && !pred(value)) {
-                cv.wait(lck);
+            auto it = std::find(promises.begin(), promises.end(), &promise);
+            if (it != promises.end()) {
+                promise.waiting = false;
+                promises.erase(it);
             }
-
-            verilated_value_ctrl.del(this);
-        }
-
-        void release() {
-            cv.notify_all();
         }
 
     private:
         T value;
 
         std::mutex mtx;
-        std::condition_variable cv;
+
+        std::vector<Promise<T>*> promises;
 
         void written() {
-            cv.notify_all();
+            for (auto& promise : promises) {
+                promise->value = value;
+                promise->notify();
+            }
+            promises.clear();
         }
 };
+
 
 // clang-format off
 //                   P          // Packed data of bit type (C/S/I/Q/W)
