@@ -413,11 +413,15 @@ public:
         AstCFunc* funcp = nodep->funcp();
         if (funcp->proc()) {
             puts("static VerilatedThread ");
-            puts(funcp->nameProtect() + "__thread(std::bind(");;
-            puts(nodep->hiernameProtect());
-            puts(funcp->nameProtect() + ", ");
-            visit_call_args(nodep);
-            puts(", std::placeholders::_1), ");
+            puts(funcp->nameProtect() + "__thread(");
+            puts("[vlTOPp,");
+                visit_call_args(nodep);
+            puts("] (VerilatedThread* self) {");
+                puts(nodep->hiernameProtect());
+                puts(funcp->nameProtect() + "(");
+                visit_call_args(nodep);
+                puts(", self); ");
+            puts("},");
             puts(nodep->funcp()->oneshot() ? "true" : "false");
             puts(", \"" + funcp->nameProtect() + "\");\n");;
             puts(funcp->nameProtect() + "__thread.kick();\n");;
