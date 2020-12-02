@@ -556,15 +556,7 @@ private:
             VL_DO_DANGLING(pushDeletep(nodep->unlinkFrBack()), nodep);
             return;
         }
-        if (v3Global.opt.bboxUnsup()) {
-            AstBegin* newp
-                = new AstBegin(nodep->fileline(), nodep->name(), nodep->stmtsp()->unlinkFrBack());
-            nodep->replaceWith(newp);
-            VL_DO_DANGLING(nodep->deleteTree(), nodep);
-        } else {
-            nodep->v3warn(E_UNSUPPORTED, "Unsupported: fork statements");
-            // TBD might support only normal join, if so complain about other join flavors
-        }
+        iterateChildren(nodep);
     }
     virtual void visit(AstDisableFork* nodep) VL_OVERRIDE {
         nodep->v3warn(E_UNSUPPORTED, "Unsupported: disable fork statements");

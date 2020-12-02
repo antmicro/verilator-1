@@ -71,13 +71,106 @@ Verilated::CommandArgValues Verilated::s_args;
 
 VerilatedImp VerilatedImp::s_s;
 
-std::vector<VerilatedThread*> verilated_threads;
 VerilatedNBACtrl verilated_nba_ctrl;
+VerilatedThreadPool thread_pool;
+VerilatedThreadRegistry thread_registry;
 
 //===========================================================================
 // User definable functions
 // Note a TODO is a future version of the API will pass a structure so that
 // the calling arguments allow for extension
+
+VerilatedThreadPool::~VerilatedThreadPool() {
+    for (auto* thread : m_threads) {
+        delete thread;
+    }
+}
+
+void VerilatedThreadPool::run_once(std::function<void(VerilatedThread*)> func) {
+    std::unique_lock<std::mutex> lck(m_mtx);
+    if (!m_free_threads.empty()) {
+        m_free_threads.pop_back();
+        m_free_threads.back()->func(func);
+        m_free_threads.back()->kick();
+    } else {
+        m_threads.push_back(new VerilatedThread(func, this));
+        m_threads.back()->kick();
+    }
+}
+
+void VerilatedThreadPool::free(VerilatedThread* thread) {
+    std::unique_lock<std::mutex> lck(m_mtx);
+    m_free_threads.push_back(thread);
+}
+
+void VerilatedThreadRegistry::put(VerilatedThread* thread) {
+    std::unique_lock<std::mutex> lck(m_mtx);
+    m_new = true;
+    m_threads.push_back(thread);
+}
+
+void VerilatedThreadRegistry::wait_for_idle() {
+    for (size_t i = 0;; i++) {
+        std::unique_lock<std::mutex> lck(m_mtx);
+        if (i < m_threads.size()) {
+            auto* thread = m_threads[i];
+            lck.unlock();
+            thread->wait_for_idle();
+        } else break;
+    }
+}
+
+void VerilatedThreadRegistry::should_exit(bool flag) {
+    for (size_t i = 0;; i++) {
+        std::unique_lock<std::mutex> lck(m_mtx);
+        if (i < m_threads.size()) {
+            auto* thread = m_threads[i];
+            lck.unlock();
+            thread->should_exit(flag);
+        } else break;
+    }
+}
+
+void VerilatedThreadRegistry::exit() {
+    for (size_t i = 0;; i++) {
+        std::unique_lock<std::mutex> lck(m_mtx);
+        if (i < m_threads.size()) {
+            auto* thread = m_threads[i];
+            lck.unlock();
+            thread->exit();
+        } else break;
+    }
+}
+
+VerilatedThread::VerilatedThread(std::function<void(VerilatedThread*)> func, VerilatedThreadPool* pool)
+    : m_ready(false)
+    , m_oneshot(false)
+    , m_started(false)
+    , m_should_exit(false)
+    , m_idle(true)
+    , m_name("forked_thread") {
+
+    thread_registry.put(this);
+    m_func = func;
+
+    m_thr = std::thread([this, pool]() {
+        while (true) {
+            {
+                std::unique_lock<std::mutex> lck(m_mtx);
+                while (!ready() && !should_exit()) {
+                    m_cv.wait(lck);
+                }
+                if (should_exit()) return;
+                idle(false);
+            }
+            m_func(this);
+            idle(true);
+            ready(false);
+            pool->free(this);
+        }
+    });
+}
+
 
 #ifndef VL_USER_FINISH  ///< Define this to override this function
 void vl_finish(const char* filename, int linenum, const char* hier) VL_MT_UNSAFE {
@@ -2490,9 +2583,7 @@ bool Verilated::timedQEmpty(VerilatedSyms* symsp) VL_MT_SAFE {
 vluint64_t Verilated::timedQEarliestTime(VerilatedSyms* symsp) VL_MT_SAFE {
     // wait for all threads to be in idle state first, otherwise
     // we might not have the real earliest time yet
-    for (auto t: verilated_threads) {
-        t->wait_for_idle();
-    }
+    thread_registry.wait_for_idle();
 
     return symsp->__Vm_timedQp->earliestTime();
 }
@@ -2620,14 +2711,11 @@ VerilatedSyms::VerilatedSyms() {
 #endif
 }
 VerilatedSyms::~VerilatedSyms() {
-    for (auto t: verilated_threads) {
-        t->should_exit(true);
-    }
+    thread_registry.should_exit(true);
+
     __Vm_timedQp->m_cv.notify_all();
 
-    for (auto t: verilated_threads) {
-        t->exit();
-    }
+    thread_registry.exit();
 
 #ifdef VL_THREADED
     delete __Vm_evalMsgQp;
