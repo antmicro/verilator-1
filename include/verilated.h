@@ -245,11 +245,13 @@ public:
     template<typename T, typename... Ts>
     void wait_for(std::tuple<MonitoredValue<Ts>&...> mon_vals, T&& nvalue) {
         std::tuple<Promise<Ts>...> promises(Promise<Ts>{*this, 0}...);
+        std::unique_lock<std::mutex> lck(m_value_wait_mtx);
+        idle(true);
         while (!should_exit() && !any_equals(promises, nvalue)) {
-            std::unique_lock<std::mutex> lck(m_value_wait_mtx);
             subscribe_all(mon_vals, promises);
             m_value_wait_cv.wait(lck);
         }
+        idle(false);
         unsubscribe_all(mon_vals, promises);
     }
 
@@ -257,11 +259,13 @@ public:
     void wait_until(std::tuple<MonitoredValue<Ts>&...> mon_vals, P pred) {
         std::tuple<Promise<Ts>...> promises(Promise<Ts>{*this}...);
         init_promises(mon_vals, promises);
+        std::unique_lock<std::mutex> lck(m_value_wait_mtx);
+        idle(true);
         while (!should_exit() && !pred(promises)) {
-            std::unique_lock<std::mutex> lck(m_value_wait_mtx);
             subscribe_all(mon_vals, promises);
             m_value_wait_cv.wait(lck);
         }
+        idle(false);
         unsubscribe_all(mon_vals, promises);
     }
 
