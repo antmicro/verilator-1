@@ -929,11 +929,53 @@ public:
         puts("if (self->should_exit()) return;\n");
         puts("}\n");
     }
+    virtual void visit(AstFork* nodep) VL_OVERRIDE {
+        if (!nodep->joinType().joinNone()) {
+            puts("{\n");
+            puts("std::condition_variable& join_cv = self->m_cv;\n");
+            puts("std::mutex& join_mtx = self->m_mtx;\n");
+            puts("std::atomic_uint join_count(0);\n");
+        }
+        size_t thread_count = 0;
+        for (auto* stmtp = nodep->stmtsp(); stmtp; stmtp = stmtp->nextp()) {
+            thread_count++;
 
+            puts("thread_pool.run_once([vlSymsp, vlTOPp");
+            if (!nodep->joinType().joinNone()) puts(", &join_cv, &join_mtx, &join_count");
+            puts("](VerilatedThread* self) {\n");
+
+            if (auto* beginp = VN_CAST(stmtp, Begin)) {
+                iterateAndNextNull(beginp->stmtsp());
+            } else {
+                visit(stmtp);
+            }
+
+            if (!nodep->joinType().joinNone()) {
+                puts("{\n");
+                puts("std::unique_lock<std::mutex> lck(join_mtx);\n");
+                puts("join_count++;\n");
+                puts("join_cv.notify_all();\n");
+                puts("}\n");
+            }
+
+            puts("});\n");
+        }
+        if (!nodep->joinType().joinNone()) {
+            puts("{\n");
+            puts("std::unique_lock<std::mutex> lck(join_mtx);\n");
+            puts("self->idle(true);\n");
+            puts("while (join_count < ");
+            puts(nodep->joinType().join() ? cvtToStr(thread_count) : "1");
+            puts(" && !self->should_exit()) {\n");
+            puts("join_cv.wait(lck);\n");
+            puts("}\n");
+            puts("self->idle(false);\n");
+            puts("if (self->should_exit()) return;\n");
+            puts("}\n}\n");
+        }
+    }
     virtual void visit(AstThreadSync* nodep) override {
-        puts("for (auto t: verilated_threads) {\n");
-        puts("t->wait_for_idle();\n");
-        puts("}\n");
+        puts("thread_registry.wait_for_idle();");
         puts("if (Verilated::gotFinish()) return;\n");
 
     }
@@ -1755,14 +1797,16 @@ class EmitCImp final : EmitCStmts {
         if (!nodep->proc()) {
             put_cfunc_body(nodep);
         } else {
-            puts("std::unique_lock<std::mutex> lck(self->m_mtx);\n");
             if (!nodep->oneshot())
                 puts("do {\n");
+            puts("{\n");
+            puts("std::unique_lock<std::mutex> lck(self->m_mtx);\n");
 
             puts("while (!self->ready() && !self->should_exit()) {\n");
             puts("self->m_cv.wait(lck);\n}\n");
 
             puts("if (self->should_exit()) return;\n");
+            puts("}\n");
 
             put_cfunc_body(nodep);
 

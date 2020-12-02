@@ -91,7 +91,37 @@ class VerilatedThread;
 template<typename T> class MonitoredValue;
 template<typename T> struct Promise;
 
-extern std::vector<VerilatedThread*> verilated_threads;
+
+class VerilatedThreadRegistry {
+private:
+    std::vector<VerilatedThread*> m_threads;
+    std::mutex m_mtx;
+    std::atomic_bool m_new;
+
+public:
+    void put(VerilatedThread* thread);
+    void wait_for_idle();
+    void should_exit(bool flag);
+    void exit();
+};
+
+extern VerilatedThreadRegistry thread_registry;
+
+
+class VerilatedThreadPool {
+private:
+    std::mutex m_mtx;
+    std::vector<VerilatedThread*> m_threads;
+    std::vector<VerilatedThread*> m_free_threads;
+
+public:
+    ~VerilatedThreadPool();
+    void run_once(std::function<void(VerilatedThread*)> func);
+    void free(VerilatedThread* thread);
+};
+
+extern VerilatedThreadPool thread_pool;
+
 
 class VerilatedThread {
 
@@ -168,12 +198,14 @@ public:
         , m_should_exit(false)
         , m_idle(false)
         , m_name(name) {
-        verilated_threads.push_back(this);
+        thread_registry.put(this);
 
         m_func = func;
 
         m_thr = std::thread(m_func, this);
     }
+
+    VerilatedThread(std::function<void(VerilatedThread*)> func, VerilatedThreadPool* pool);
 
     bool should_exit() {
         std::unique_lock<std::mutex> lck_d(m_access_mtx);
@@ -277,6 +309,11 @@ public:
 
     std::string name() {
         return m_name;
+    }
+
+    void func(std::function<void(VerilatedThread*)> func) {
+        std::unique_lock<std::mutex> lck(m_access_mtx);
+        m_func = func;
     }
 
 };

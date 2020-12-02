@@ -65,6 +65,7 @@ private:
     string m_namedScope;  // Name of begin blocks above us
     string m_unnamedScope;  // Name of begin blocks, including unnamed blocks
     int m_ifDepth = 0;  // Current if depth
+    bool m_inFork = false;  // True if statement is directly under a fork
 
     // METHODS
     VL_DEBUG_FUNC;  // Declare debug()
@@ -75,6 +76,12 @@ private:
     }
 
     // VISITORS
+    virtual void visit(AstFork* nodep) override {
+        bool prevInFork = m_inFork;
+        m_inFork = true;
+        iterateChildren(nodep);
+        m_inFork = prevInFork;
+    }
     virtual void visit(AstNodeModule* nodep) override {
         VL_RESTORER(m_modp);
         {
@@ -108,6 +115,8 @@ private:
     virtual void visit(AstBegin* nodep) override {
         // Begin blocks were only useful in variable creation, change names and delete
         UINFO(8, "  " << nodep << endl);
+        bool inFork = m_inFork;
+        m_inFork = false;
         VL_RESTORER(m_namedScope);
         VL_RESTORER(m_unnamedScope);
         {
@@ -135,6 +144,10 @@ private:
             UASSERT_OBJ(!nodep->genforp(), nodep, "GENFORs should have been expanded earlier");
 
             // Cleanup
+            if (inFork) {
+                m_inFork = inFork;
+                return;
+            }
             AstNode* addsp = nullptr;
             if (AstNode* stmtsp = nodep->stmtsp()) {
                 stmtsp->unlinkFrBackWithNext();
