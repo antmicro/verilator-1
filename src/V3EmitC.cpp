@@ -831,7 +831,6 @@ public:
         puts("/* [@ statement] */\n");
         puts("{\n");
         puts("std::mutex mtx;\n");
-        puts("self->idle(true);\n");
 
         puts("self->wait_for(std::forward_as_tuple(");
         iterateAndNextNull(nodep->sensesp());
@@ -843,7 +842,6 @@ public:
             puts(" = 0;\n");
         }
 
-        puts("self->idle(false);\n");
         puts("if (self->should_exit()) return;\n");
         puts("};\n");
 
@@ -877,7 +875,6 @@ public:
     virtual void visit(AstWait* nodep) VL_OVERRIDE {
         puts("/* [wait statement] */\n");
         puts("{\n");
-        puts("self->idle(true);\n");
 
         std::unordered_map<AstVar*, AstVarRef*> varrefps;
         {
@@ -905,7 +902,6 @@ public:
         }
         puts(";\n});\n");
 
-        puts("self->idle(false);\n");
         puts("if (self->should_exit()) return;\n");
         puts("}\n");
     }
