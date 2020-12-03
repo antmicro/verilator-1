@@ -171,7 +171,7 @@ VerilatedThread::VerilatedThread(std::function<void(VerilatedThread*)> func, Ver
     , m_oneshot(false)
     , m_started(false)
     , m_should_exit(false)
-    , m_idle(true)
+    , m_idle(false)
     , m_name("forked_thread") {
 
     thread_registry.put(this);

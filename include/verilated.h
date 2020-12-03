@@ -198,9 +198,7 @@ public:
         , m_name(name) {
         thread_registry.put(this);
 
-        m_func = func;
-
-        m_thr = std::thread(m_func, this);
+        m_thr = std::thread(func, this);
     }
 
     VerilatedThread(std::function<void(VerilatedThread*)> func, VerilatedThreadPool* pool);
