@@ -940,9 +940,10 @@ public:
         for (auto* stmtp = nodep->stmtsp(); stmtp; stmtp = stmtp->nextp()) {
             thread_count++;
 
-            puts("thread_pool.run_once([vlSymsp, vlTOPp");
-            if (!nodep->joinType().joinNone()) puts(", &join_cv, &join_mtx, &join_count");
-            puts("](VerilatedThread* self) {\n");
+            puts("thread_pool.run_once([");
+            if (nodep->joinType().joinNone()) puts("=");
+            else puts("vlSymsp, vlTOPp, &join_cv, &join_mtx, &join_count");
+            puts("](VerilatedThread* self) mutable {\n");
 
             if (auto* beginp = VN_CAST(stmtp, Begin)) {
                 iterateAndNextNull(beginp->stmtsp());
