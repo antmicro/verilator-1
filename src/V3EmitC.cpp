@@ -851,13 +851,7 @@ public:
 
         puts("self->wait_for(std::forward_as_tuple(");
         iterateAndNextNull(nodep->sensesp());
-        puts("), 1);\n");
-
-        // XXX zeroing the event variable - should we be doing this???
-        for (auto* itemp = nodep->sensesp()->sensesp(); itemp; itemp = VN_CAST(itemp->nextp(), SenItem)) {
-            visit(itemp);
-            puts(" = 0;\n");
-        }
+        puts("));\n");
 
         puts("if (self->should_exit()) return;\n");
         puts("};\n");
@@ -2064,7 +2058,7 @@ class EmitCImp : EmitCStmts {
     // High level
     void emitImpTop(AstNodeModule* modp);
     void emitImp(AstNodeModule* modp);
-    void emitSettleLoop(const std::string& eval_call, bool initial);
+    void emitSettleLoop(AstNodeModule* modp, const std::string& eval_call, bool initial);
     void emitWrapEval(AstNodeModule* modp);
     void emitMTaskState();
     void emitMTaskVertexCtors(bool* firstp);
@@ -2910,13 +2904,22 @@ void EmitCImp::emitSensitives() {
     }
 }
 
-void EmitCImp::emitSettleLoop(const std::string& eval_call, bool initial) {
+void EmitCImp::emitSettleLoop(AstNodeModule* modp, const std::string& eval_call, bool initial) {
     putsDecoration("// Evaluate till stable\n");
     puts("int __VclockLoop = 0;\n");
     puts("QData __Vchange = 1;\n");
     puts("do {\n");
     puts("do {\n");
     puts("vlSymsp->TOPp->__eval_change_counter = 0;\n");
+    for (auto* nodep = modp->stmtsp(); nodep; nodep = nodep->nextp()) {
+        if (auto* dtp = VN_CAST(nodep->dtypep(), BasicDType)) {
+            if (dtp->keyword().isEventValue()) {
+                puts("vlSymsp->TOPp->");
+                puts(nodep->name());
+                puts(".assign(0);\n");
+            }
+        }
+    }
     puts(eval_call + "\n");
     puts("verilated_nba_ctrl.assign();\n");
     puts("} while (!Verilated::gotFinish() && vlSymsp->TOPp->__eval_change_counter != 0);\n");
@@ -3002,7 +3005,7 @@ void EmitCImp::emitWrapEval(AstNodeModule* modp) {
         puts("}\n");
     }
 
-    emitSettleLoop((string("VL_DEBUG_IF(VL_DBG_MSGF(\"+ Clock loop\\n\"););\n")
+    emitSettleLoop(modp, (string("VL_DEBUG_IF(VL_DBG_MSGF(\"+ Clock loop\\n\"););\n")
                     + (v3Global.opt.trace() ? "vlSymsp->__Vm_activity = true;\n" : "")
                     + protect("_eval") + "(vlSymsp);"),
                    false);
@@ -3035,7 +3038,7 @@ void EmitCImp::emitWrapEval(AstNodeModule* modp) {
     puts("vlSymsp->__Vm_didInit = true;\n");
     puts(protect("_eval_initial") + "(vlSymsp);\n");
     if (v3Global.opt.trace()) puts("vlSymsp->__Vm_activity = true;\n");
-    emitSettleLoop((protect("_eval_settle") + "(vlSymsp);\n"  //
+    emitSettleLoop(modp, (protect("_eval_settle") + "(vlSymsp);\n"  //
                     + protect("_eval") + "(vlSymsp);"),
                    true);
     puts("}\n");

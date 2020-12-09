@@ -137,16 +137,6 @@ private:
 
     std::condition_variable m_delay_wait_cv;
 
-    template<std::size_t I = 0, typename T, typename... Ts>
-    static inline typename std::enable_if<I == sizeof...(Ts), bool>::type
-    any_equals(std::tuple<Promise<Ts>...>&, T&&) { return false; }
-
-    template<std::size_t I = 0, typename T, typename... Ts>
-    static inline typename std::enable_if<I < sizeof...(Ts), bool>::type
-    any_equals(std::tuple<Promise<Ts>...>& promises, T&& nvalue) {
-        return std::get<I>(promises).value == nvalue || any_equals<I + 1, T, Ts...>(promises, nvalue);
-    }
-
     template<std::size_t I = 0, typename... Ts>
     static inline typename std::enable_if<I == sizeof...(Ts), void>::type
     subscribe_all(std::tuple<MonitoredValue<Ts>&...>&, std::tuple<Promise<Ts>...>&) {}
@@ -167,17 +157,6 @@ private:
     unsubscribe_all(std::tuple<MonitoredValue<Ts>&...>& mon_vals, std::tuple<Promise<Ts>...>& promises) {
         std::get<I>(mon_vals).unsubscribe(std::get<I>(promises));
         unsubscribe_all<I + 1, Ts...>(mon_vals, promises);
-    }
-
-    template<std::size_t I = 0, typename... Ts>
-    static inline typename std::enable_if<I == sizeof...(Ts), void>::type
-    init_promises(std::tuple<MonitoredValue<Ts>&...>&, std::tuple<Promise<Ts>...>&) {}
-
-    template<std::size_t I = 0, typename... Ts>
-    static inline typename std::enable_if<I < sizeof...(Ts), void>::type
-    init_promises(std::tuple<MonitoredValue<Ts>&...>& mon_vals, std::tuple<Promise<Ts>...>& promises) {
-        std::get<I>(promises).value = std::get<I>(mon_vals);
-        init_promises<I + 1, Ts...>(mon_vals, promises);
     }
 
 public:
@@ -269,13 +248,13 @@ public:
 
     }
 
-    template<typename T, typename... Ts>
-    void wait_for(std::tuple<MonitoredValue<Ts>&...> mon_vals, T&& nvalue) {
-        std::tuple<Promise<Ts>...> promises(Promise<Ts>{*this, 0}...);
+    template<typename... Ts>
+    void wait_for(std::tuple<MonitoredValue<Ts>&...> mon_vals) {
+        std::tuple<Promise<Ts>...> promises(Promise<Ts>{*this}...);
         std::unique_lock<std::mutex> lck(m_value_wait_mtx);
         subscribe_all(mon_vals, promises);
         idle(true);
-        while (!should_exit() && !any_equals(promises, nvalue)) {
+        if (!should_exit()) {
             m_value_wait_cv.wait(lck);
         }
         idle(false);
@@ -287,7 +266,6 @@ public:
         std::tuple<Promise<Ts>...> promises(Promise<Ts>{*this}...);
         std::unique_lock<std::mutex> lck(m_value_wait_mtx);
         subscribe_all(mon_vals, promises);
-        init_promises(mon_vals, promises);
         idle(true);
         while (!should_exit() && !pred(promises)) {
             m_value_wait_cv.wait(lck);
