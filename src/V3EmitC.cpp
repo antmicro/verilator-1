@@ -288,7 +288,7 @@ public:
     }
 
     // VISITORS
-    virtual void visit(AstNodeAssign* nodep) override {
+    virtual void visit_generic_assign(AstNodeAssign* nodep) {
         bool paren = true;
         bool decind = false;
         if (AstSel* selp = VN_CAST(nodep->lhsp(), Sel)) {
@@ -369,18 +369,35 @@ public:
         if (decind) ofp()->blockDec();
         if (!m_suppressSemi) puts(";\n");
     }
-    virtual void visit(AstAssignDly* nodep) override {
+    virtual void visit(AstNodeAssign* nodep) override {
+        visit_generic_assign(nodep);
+    }
+    virtual void visit_assigndly(AstNodeAssign *nodep, bool continuous) {
         if (VN_IS(nodep->lhsp(), VarRef) ||
             VN_IS(nodep->lhsp(), ArraySel)) {
             puts("verilated_nba_ctrl.schedule(&");
             iterateAndNextNull(nodep->lhsp());
             puts(", ");
+            if (continuous)
+                puts("[vlTOPp,vlSymsp] { return (");
             iterateAndNextNull(nodep->rhsp());
+            if (continuous)
+                puts("); }");
             puts(");\n");
         } else {
             nodep->v3warn(E_UNSUPPORTED, "Unsupported: delayed assignment type");
             nodep->dumpTree(cout, "    ");
         }
+    }
+    virtual void visit(AstAssignDly* nodep) override {
+        visit_assigndly(nodep, false);
+    }
+    virtual void visit(AstAssignW* nodep) override {
+        // Immediatelly assign the current value
+        visit_generic_assign(nodep);
+        // And take advantage of the NBA mechanism to update continuous assignments
+        // after regular NBA has been done
+        visit_assigndly(nodep, true);
     }
     virtual void visit(AstAlwaysPublic*) override {}
     virtual void visit(AstAssocSel* nodep) override {
@@ -896,7 +913,7 @@ public:
             if (nodep->op4p()) replaceVarRefps(nodep->op4p(), indices);
         }
     }
-    virtual void visit(AstWait* nodep) VL_OVERRIDE {
+    virtual void visit(AstWait* nodep) override {
         puts("/* [wait statement] */\n");
         puts("{\n");
 
@@ -929,7 +946,7 @@ public:
         puts("if (self->should_exit()) return;\n");
         puts("}\n");
     }
-    virtual void visit(AstFork* nodep) VL_OVERRIDE {
+    virtual void visit(AstFork* nodep) override {
         if (!nodep->joinType().joinNone()) {
             puts("{\n");
             puts("std::condition_variable& join_cv = self->m_cv;\n");
