@@ -456,7 +456,8 @@ class MonitoredValue : public MonitoredValueBase {
             return value <= b;
         }
 
-        virtual void assign(vluint64_t v) {
+        void assign(vluint64_t v) {
+            std::unique_lock<std::mutex> lck(mtx);
             value = T(v);
         }
 
@@ -520,6 +521,8 @@ typedef WData* WDataOutPV;  ///< Array output from a function
 class VerilatedNBACtrl {
     private:
         std::map<MonitoredValueBase*, vluint64_t> data;
+        // For continuous assignments
+        std::map<MonitoredValueBase*, std::function<vluint64_t()>> edata;
         std::mutex mtx;
 
     public:
@@ -530,6 +533,10 @@ class VerilatedNBACtrl {
             data[var] = val;
         }
 
+        void schedule(MonitoredValueBase* var, std::function<vluint64_t()> expr) {
+            edata[var] = expr;
+        }
+
         void assign() {
             std::unique_lock<std::mutex> lck(mtx);
 
@@ -537,6 +544,11 @@ class VerilatedNBACtrl {
                 v.first->assign(v.second);
             }
             data.clear();
+
+            for (auto const& v : edata) {
+                v.first->assign(v.second());
+            }
+            edata.clear();
         }
 };
 

@@ -271,7 +271,7 @@ public:
     }
 
     // VISITORS
-    virtual void visit(AstNodeAssign* nodep) VL_OVERRIDE {
+    virtual void visit_generic_assign(AstNodeAssign* nodep) {
         bool paren = true;
         bool decind = false;
         if (AstSel* selp = VN_CAST(nodep->lhsp(), Sel)) {
@@ -352,18 +352,35 @@ public:
         if (decind) ofp()->blockDec();
         if (!m_suppressSemi) puts(";\n");
     }
-    virtual void visit(AstAssignDly* nodep) VL_OVERRIDE {
+    virtual void visit(AstNodeAssign* nodep) VL_OVERRIDE {
+        visit_generic_assign(nodep);
+    }
+    virtual void visit_assigndly(AstNodeAssign *nodep, bool continuous) {
         if (VN_IS(nodep->lhsp(), VarRef) ||
             VN_IS(nodep->lhsp(), ArraySel)) {
             puts("verilated_nba_ctrl.schedule(&");
             iterateAndNextNull(nodep->lhsp());
             puts(", ");
+            if (continuous)
+                puts("[vlTOPp,vlSymsp] { return (");
             iterateAndNextNull(nodep->rhsp());
+            if (continuous)
+                puts("); }");
             puts(");\n");
         } else {
             nodep->v3warn(E_UNSUPPORTED, "Unsupported: delayed assignment type");
             nodep->dumpTree(cout, "    ");
         }
+    }
+    virtual void visit(AstAssignDly* nodep) VL_OVERRIDE {
+        visit_assigndly(nodep, false);
+    }
+    virtual void visit(AstAssignW* nodep) VL_OVERRIDE {
+        // Immediatelly assign the current value
+        visit_generic_assign(nodep);
+        // And take advantage of the NBA mechanism to update continuous assignments
+        // after regular NBA has been done
+        visit_assigndly(nodep, true);
     }
     virtual void visit(AstAlwaysPublic*) VL_OVERRIDE {}
     virtual void visit(AstAssocSel* nodep) VL_OVERRIDE {
