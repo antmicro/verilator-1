@@ -105,19 +105,21 @@ void VerilatedThreadPool::free(VerilatedThread* thread) {
 
 void VerilatedThreadRegistry::put(VerilatedThread* thread) {
     std::unique_lock<std::mutex> lck(m_mtx);
-    m_new = true;
     m_threads.push_back(thread);
 }
 
 void VerilatedThreadRegistry::wait_for_idle() {
-    for (size_t i = 0;; i++) {
-        std::unique_lock<std::mutex> lck(m_mtx);
-        if (i < m_threads.size()) {
-            auto* thread = m_threads[i];
-            lck.unlock();
-            thread->wait_for_idle();
-        } else break;
-    }
+    do {
+        m_all_idle = true;
+        for (size_t i = 0;; i++) {
+            std::unique_lock<std::mutex> lck(m_mtx);
+            if (i < m_threads.size()) {
+                auto* thread = m_threads[i];
+                lck.unlock();
+                thread->wait_for_idle();
+            } else break;
+        }
+    } while (!m_all_idle);
 }
 
 void VerilatedThreadRegistry::should_exit(bool flag) {

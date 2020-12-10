@@ -847,7 +847,6 @@ public:
     virtual void visit(AstTimingControl* nodep) VL_OVERRIDE {
         puts("/* [@ statement] */\n");
         puts("{\n");
-        puts("std::mutex mtx;\n");
 
         puts("self->wait_for(std::forward_as_tuple(");
         iterateAndNextNull(nodep->sensesp());
