@@ -96,10 +96,12 @@ class VerilatedThreadRegistry {
 private:
     std::vector<VerilatedThread*> m_threads;
     std::mutex m_mtx;
-    std::atomic_bool m_new;
 
 public:
+    std::atomic_bool m_all_idle;
+
     void put(VerilatedThread* thread);
+    void all_idle(bool w) { m_all_idle = w; }
     void wait_for_idle();
     void should_exit(bool flag);
     void exit();
@@ -220,6 +222,7 @@ public:
     void idle(bool w) {
         std::unique_lock<std::mutex> lck(m_access_mtx);
         m_idle = w;
+        if (!w) thread_registry.all_idle(false);
 
         if (w) {
             m_delay_wait_cv.notify_all();
