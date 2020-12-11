@@ -108,18 +108,20 @@ void VerilatedThreadRegistry::put(VerilatedThread* thread) {
     m_threads.push_back(thread);
 }
 
+void VerilatedThreadRegistry::idle(bool flag) {
+    std::unique_lock<std::mutex> lck(m_idle_mtx);
+    if (flag) {
+        m_idle_counter++;
+        m_idle_cv.notify_all();
+    }
+    else m_idle_counter--;
+}
+
 void VerilatedThreadRegistry::wait_for_idle() {
-    do {
-        m_all_idle = true;
-        for (size_t i = 0;; i++) {
-            std::unique_lock<std::mutex> lck(m_mtx);
-            if (i < m_threads.size()) {
-                auto* thread = m_threads[i];
-                lck.unlock();
-                thread->wait_for_idle();
-            } else break;
-        }
-    } while (!m_all_idle);
+    std::unique_lock<std::mutex> lck(m_idle_mtx);
+    while (m_idle_counter != m_threads.size()) {
+        m_idle_cv.wait(lck);
+    }
 }
 
 void VerilatedThreadRegistry::should_exit(bool flag) {

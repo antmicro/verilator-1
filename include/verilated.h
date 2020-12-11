@@ -91,17 +91,18 @@ class VerilatedThread;
 template<typename T> class MonitoredValue;
 template<typename T> struct Promise;
 
-
 class VerilatedThreadRegistry {
 private:
     std::vector<VerilatedThread*> m_threads;
     std::mutex m_mtx;
 
-public:
-    std::atomic_bool m_all_idle;
+    std::atomic_uint m_idle_counter;
+    std::mutex m_idle_mtx;
+    std::condition_variable m_idle_cv;
 
+public:
     void put(VerilatedThread* thread);
-    void all_idle(bool w) { m_all_idle = w; }
+    void idle(bool w);
     void wait_for_idle();
     void should_exit(bool flag);
     void exit();
@@ -221,8 +222,10 @@ public:
 
     void idle(bool w) {
         std::unique_lock<std::mutex> lck(m_access_mtx);
-        m_idle = w;
-        if (!w) thread_registry.all_idle(false);
+        if (m_idle != w) {
+            m_idle = w;
+            thread_registry.idle(w);
+        }
 
         if (w) {
             m_delay_wait_cv.notify_all();
@@ -243,6 +246,7 @@ public:
 
     void kick() {
         std::unique_lock<std::mutex> lck(m_mtx);
+        idle(false);
         ready(true);
         m_cv.notify_all();
     }
