@@ -1813,10 +1813,12 @@ class EmitCImp final : EmitCStmts {
             puts("{\n");
             puts("std::unique_lock<std::mutex> lck(self->m_mtx);\n");
 
+                puts("self->idle(true);\n");
             puts("while (!self->ready() && !self->should_exit()) {\n");
             puts("self->m_cv.wait(lck);\n}\n");
 
             puts("if (self->should_exit()) return;\n");
+                puts("self->idle(false);\n");
             puts("}\n");
 
             put_cfunc_body(nodep);
@@ -1824,6 +1826,7 @@ class EmitCImp final : EmitCStmts {
             puts("self->ready(false);\n");
             if (!nodep->oneshot())
                 puts("} while (!Verilated::gotFinish() && !self->should_exit());\n");
+            puts("self->idle(true);\n");
         }
 
         // puts("__Vm_activity = true;\n");
