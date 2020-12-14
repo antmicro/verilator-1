@@ -186,7 +186,6 @@ public:
     VerilatedThread(std::function<void(VerilatedThread*)> func, VerilatedThreadPool* pool);
 
     bool should_exit() {
-        std::unique_lock<std::mutex> lck_d(m_access_mtx);
         return m_should_exit;
     }
 
@@ -216,7 +215,6 @@ public:
     }
 
     bool idle() {
-        std::unique_lock<std::mutex> lck(m_access_mtx);
         return m_idle;
     }
 
@@ -1027,7 +1025,7 @@ public:
     static vluint64_t timedQEarliestTime(VerilatedSyms* symsp) VL_MT_SAFE;
     static void timedQPush(VerilatedSyms* symsp, vluint64_t time, VerilatedThread* thread) VL_MT_SAFE;
     static void timedQActivate(VerilatedSyms* symsp, vluint64_t time) VL_MT_SAFE;
-    static void timedQWait(VerilatedSyms* symsp, std::mutex& mtx) VL_MT_SAFE;
+    static void timedQWait(VerilatedSyms* symsp, std::unique_lock<std::mutex>& lck) VL_MT_SAFE;
 #ifdef VL_THREADED
     /// Set the mtaskId, called when an mtask starts
     static void mtaskId(vluint32_t id) VL_MT_SAFE { t_s.t_mtaskId = id; }

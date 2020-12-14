@@ -837,8 +837,9 @@ public:
         puts("Verilated::timedQPush(vlSymsp, VL_TIME_Q() + ");
         iterateAndNextNull(nodep->lhsp());
         puts(", self);\n");
+        puts("std::unique_lock<std::mutex> lck(self->m_access_mtx);\n");
         puts("while (self->idle() && !self->should_exit()) {\n");
-        puts("Verilated::timedQWait(vlSymsp, self->m_access_mtx);\n");
+        puts("Verilated::timedQWait(vlSymsp, lck);\n");
         puts("}\n");
         puts("if (self->should_exit()) return;\n");
 
