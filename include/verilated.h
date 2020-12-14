@@ -196,7 +196,6 @@ public:
     }
 
     bool ready() {
-        std::unique_lock<std::mutex> lck_d(m_access_mtx);
         return m_ready;
     }
 
@@ -247,10 +246,6 @@ public:
         idle(false);
         ready(true);
         m_cv.notify_all();
-    }
-
-    void notify_value_change() {
-
     }
 
     template<typename... Ts>
