@@ -113,9 +113,9 @@ VerilatedThreadPool::~VerilatedThreadPool() {
 void VerilatedThreadPool::run_once(std::function<void(VerilatedThread*)> func) {
     std::unique_lock<std::mutex> lck(m_mtx);
     if (!m_free_threads.empty()) {
-        m_free_threads.pop_back();
         m_free_threads.back()->func(func);
         m_free_threads.back()->kick();
+        m_free_threads.pop_back();
     } else {
         m_threads.push_back(new VerilatedThread(func, this));
         m_threads.back()->kick();
