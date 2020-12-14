@@ -328,6 +328,7 @@ class MonitoredValue : public MonitoredValueBase {
         }
 
         operator T() const {
+            std::unique_lock<std::mutex> lck(mtx);
             return (T)value;
         }
 
@@ -456,7 +457,7 @@ class MonitoredValue : public MonitoredValueBase {
     private:
         T value;
 
-        std::mutex mtx;
+        mutable std::mutex mtx;
 
         std::vector<Promise<T>*> promises;
 
