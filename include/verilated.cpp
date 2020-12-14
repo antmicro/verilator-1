@@ -2665,9 +2665,7 @@ void Verilated::timedQActivate(VerilatedSyms* symsp, vluint64_t time) VL_MT_SAFE
     symsp->__Vm_timedQp->activate(time);
 }
 
-void Verilated::timedQWait(VerilatedSyms* symsp, std::mutex& mtx) VL_MT_SAFE {
-    std::unique_lock<std::mutex> lck(mtx);
-
+void Verilated::timedQWait(VerilatedSyms* symsp, std::unique_lock<std::mutex>& lck) VL_MT_SAFE {
     symsp->__Vm_timedQp->m_cv.wait(lck);
 }
 
