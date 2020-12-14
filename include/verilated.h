@@ -911,7 +911,8 @@ public:
     static int errorLimit() VL_MT_SAFE { return s_s.s_errorLimit; }
     /// Did the simulation $finish?
     static void gotFinish(bool flag) VL_MT_SAFE;
-    static bool gotFinish() VL_MT_SAFE { return s_s.s_gotFinish; }  ///< Return if got a $finish
+    ///< Return if got a $finish
+    static bool gotFinish() VL_MT_SAFE;
     /// Allow traces to at some point be enabled (disables some optimizations)
     static void traceEverOn(bool flag) VL_MT_SAFE {
         if (flag) { calcUnusedSigs(flag); }
