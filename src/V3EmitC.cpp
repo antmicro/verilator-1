@@ -861,7 +861,7 @@ public:
         puts("Verilated::timedQPush(vlSymsp, VL_TIME_Q() + ");
         iterateAndNextNull(nodep->lhsp());
         puts(", self);\n");
-        puts("std::unique_lock<std::mutex> lck(self->m_access_mtx);\n");
+        puts("std::unique_lock<std::mutex> lck(self->m_mtx);\n");
         puts("while (self->idle() && !self->should_exit()) {\n");
         puts("Verilated::timedQWait(vlSymsp, lck);\n");
         puts("}\n");
@@ -973,17 +973,11 @@ public:
             puts("});\n");
         }
         if (!nodep->joinType().joinNone()) {
-            puts("{\n");
-            puts("std::unique_lock<std::mutex> lck(join_mtx);\n");
-            puts("self->idle(true);\n");
-            puts("while (join_count < ");
+            puts("self->wait_until([&join_count]() { return join_count == ");
             puts(nodep->joinType().join() ? cvtToStr(thread_count) : "1");
-            puts(" && !self->should_exit()) {\n");
-            puts("join_cv.wait(lck);\n");
-            puts("}\n");
-            puts("self->idle(false);\n");
+            puts("; });\n");
             puts("if (self->should_exit()) return;\n");
-            puts("}\n}\n");
+            puts("}\n");
         }
     }
     virtual void visit(AstThreadSync* nodep) override {
@@ -1811,15 +1805,8 @@ class EmitCImp final : EmitCStmts {
         } else {
             if (!nodep->oneshot())
                 puts("do {\n");
-            puts("{\n");
-            puts("std::unique_lock<std::mutex> lck(self->m_mtx);\n");
-
-            puts("while (!self->ready() && !self->should_exit()) {\n");
-            puts("self->m_cv.wait(lck);\n}\n");
-
+            puts("self->wait_for_ready();\n");
             puts("if (self->should_exit()) return;\n");
-            puts("}\n");
-            puts("self->idle(false);\n");
 
             put_cfunc_body(nodep);
 

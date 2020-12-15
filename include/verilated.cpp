@@ -183,14 +183,8 @@ VerilatedThread::VerilatedThread(std::function<void(VerilatedThread*)> func, Ver
 
     m_thr = std::thread([this, pool]() {
         while (true) {
-            {
-                std::unique_lock<std::mutex> lck(m_mtx);
-                while (!ready() && !should_exit()) {
-                    m_cv.wait(lck);
-                }
-                if (should_exit()) return;
-                idle(false);
-            }
+            wait_for_ready();
+            if (should_exit()) return;
             m_func(this);
             idle(true);
             ready(false);
