@@ -2362,6 +2362,10 @@ void Verilated::gotFinish(bool flag) VL_MT_SAFE {
     const VerilatedLockGuard lock(m_mutex);
     s_s.s_gotFinish = flag;
 }
+bool Verilated::gotFinish() VL_MT_SAFE {
+    const VerilatedLockGuard lock(m_mutex);
+    return s_s.s_gotFinish;
+}
 void Verilated::assertOn(bool flag) VL_MT_SAFE {
     const VerilatedLockGuard lock(m_mutex);
     s_s.s_assertOn = flag;
