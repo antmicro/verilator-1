@@ -138,7 +138,6 @@ private:
     std::atomic<bool> m_idle;
     std::thread m_thr;
 
-    std::condition_variable m_delay_wait_cv;
 
     template<std::size_t I = 0, typename... Ts>
     static inline typename std::enable_if<I == sizeof...(Ts), void>::type
@@ -166,10 +165,7 @@ public:
 
     // These are used externally (TODO: convert to functions)
     std::mutex m_mtx;
-    std::mutex m_access_mtx;
     std::condition_variable m_cv;
-    std::mutex m_value_wait_mtx;
-    std::condition_variable m_value_wait_cv;
 
     VerilatedThread(std::function<void(VerilatedThread*)> func, bool oneshot, std::string name)
         : m_ready(false)
@@ -190,9 +186,9 @@ public:
     }
 
     void should_exit(bool e) {
-        std::unique_lock<std::mutex> lck_d(m_access_mtx);
+        std::unique_lock<std::mutex> lck_d(m_mtx);
         m_should_exit = e;
-        m_delay_wait_cv.notify_all();
+        m_cv.notify_all();
     }
 
     bool ready() {
@@ -200,16 +196,24 @@ public:
     }
 
     void ready(bool r) {
-        std::unique_lock<std::mutex> lck(m_access_mtx);
+        std::unique_lock<std::mutex> lck(m_mtx);
         m_ready = r;
-        m_delay_wait_cv.notify_all();
+        m_cv.notify_all();
+    }
+
+    void wait_for_ready() {
+        std::unique_lock<std::mutex> lck(m_mtx);
+
+        while(!m_ready && !m_should_exit) {
+            m_cv.wait(lck);
+        }
     }
 
     void wait_for_idle() {
-        std::unique_lock<std::mutex> lck(m_access_mtx);
+        std::unique_lock<std::mutex> lck(m_mtx);
 
         while(m_ready && !m_should_exit && !m_idle) {
-            m_delay_wait_cv.wait(lck);
+            m_cv.wait(lck);
         }
     }
 
@@ -218,14 +222,14 @@ public:
     }
 
     void idle(bool w) {
-        std::unique_lock<std::mutex> lck(m_access_mtx);
+        std::unique_lock<std::mutex> lck(m_mtx);
         if (m_idle != w) {
             m_idle = w;
             thread_registry.idle(w);
         }
 
         if (w) {
-            m_delay_wait_cv.notify_all();
+            m_cv.notify_all();
         }
     }
 
@@ -236,13 +240,10 @@ public:
     void exit() {
         should_exit(true);
         m_cv.notify_all();
-        m_value_wait_cv.notify_all();
-        m_delay_wait_cv.notify_all();
         join();
     }
 
     void kick() {
-        std::unique_lock<std::mutex> lck(m_mtx);
         idle(false);
         ready(true);
         m_cv.notify_all();
@@ -251,26 +252,42 @@ public:
     template<typename... Ts>
     void wait_for(std::tuple<MonitoredValue<Ts>&...> mon_vals) {
         std::tuple<Promise<Ts>...> promises(Promise<Ts>{*this}...);
-        std::unique_lock<std::mutex> lck(m_value_wait_mtx);
+        std::unique_lock<std::mutex> lck(m_mtx);
         subscribe_all(mon_vals, promises);
-        idle(true);
+        m_idle = true;
+        thread_registry.idle(true);
         if (!should_exit()) {
-            m_value_wait_cv.wait(lck);
+            m_cv.wait(lck);
         }
-        idle(false);
+        m_idle = false;
+        thread_registry.idle(false);
         unsubscribe_all(mon_vals, promises);
+    }
+
+    template<typename P>
+    void wait_until(P pred) {
+        std::unique_lock<std::mutex> lck(m_mtx);
+        m_idle = true;
+        thread_registry.idle(true);
+        while (!should_exit() && !pred()) {
+            m_cv.wait(lck);
+        }
+        m_idle = false;
+        thread_registry.idle(false);
     }
 
     template<typename P, typename... Ts>
     void wait_until(std::tuple<MonitoredValue<Ts>&...> mon_vals, P pred) {
         std::tuple<Promise<Ts>...> promises(Promise<Ts>{*this}...);
-        std::unique_lock<std::mutex> lck(m_value_wait_mtx);
+        std::unique_lock<std::mutex> lck(m_mtx);
         subscribe_all(mon_vals, promises);
-        idle(true);
+        m_idle = true;
+        thread_registry.idle(true);
         while (!should_exit() && !pred(promises)) {
-            m_value_wait_cv.wait(lck);
+            m_cv.wait(lck);
         }
-        idle(false);
+        m_idle = false;
+        thread_registry.idle(false);
         unsubscribe_all(mon_vals, promises);
     }
 
@@ -285,7 +302,7 @@ public:
     }
 
     void func(std::function<void(VerilatedThread*)> func) {
-        std::unique_lock<std::mutex> lck(m_access_mtx);
+        std::unique_lock<std::mutex> lck(m_mtx);
         m_func = func;
     }
 
@@ -297,9 +314,9 @@ struct Promise {
     T value;
 
     void set(const T& v) {
-        std::unique_lock<std::mutex> lck(thread.m_value_wait_mtx);
+        std::unique_lock<std::mutex> lck(thread.m_mtx);
         value = v;
-        thread.m_value_wait_cv.notify_all();
+        thread.m_cv.notify_all();
     }
 };
 
