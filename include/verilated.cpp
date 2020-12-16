@@ -161,6 +161,7 @@ VerilatedThread::VerilatedThread(std::function<void(VerilatedThread*)> func, Ver
         while (true) {
             wait_for_ready();
             if (should_exit()) return;
+            idle(false);
             m_func(this);
             idle(true);
             ready(false);

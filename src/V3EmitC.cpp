@@ -451,7 +451,7 @@ public:
                 puts("}\n");
             }
             if (!funcp->oneshot()) {
-                puts(funcp->nameProtect() + "__thread.wait_for_idle();\n");;
+                puts(funcp->nameProtect() + "__thread.wait_for_idle(false);\n");;
             }
         } else {
             visit_call(nodep);
@@ -1802,6 +1802,7 @@ class EmitCImp : EmitCStmts {
                 puts("do {\n");
             puts("self->wait_for_ready();\n");
             puts("if (self->should_exit()) return;\n");
+            puts("self->idle(false);\n");
 
             put_cfunc_body(nodep);
 

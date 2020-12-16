@@ -209,10 +209,10 @@ public:
         }
     }
 
-    void wait_for_idle() {
+    void wait_for_idle(bool flag) {
         std::unique_lock<std::mutex> lck(m_mtx);
 
-        while(m_ready && !m_should_exit && !m_idle) {
+        while(m_ready && !m_should_exit && m_idle != flag) {
             m_cv.wait(lck);
         }
     }
@@ -244,7 +244,6 @@ public:
     }
 
     void kick() {
-        idle(false);
         ready(true);
         m_cv.notify_all();
     }
