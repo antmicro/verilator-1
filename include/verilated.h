@@ -88,8 +88,8 @@ class VerilatedVcdSc;
 class VerilatedFst;
 class VerilatedFstC;
 class VerilatedThread;
+class VerilatedSyms;
 template<typename T> class MonitoredValue;
-template<typename T> struct Promise;
 
 class VerilatedThreadRegistry {
 private:
@@ -125,8 +125,50 @@ public:
 
 extern VerilatedThreadPool thread_pool;
 
-
 class VerilatedThread {
+public:
+    template<typename T>
+    struct Promise {
+        VerilatedThread& thread;
+        T value;
+
+        void set(const T& v) {
+            std::unique_lock<std::mutex> lck(thread.m_mtx);
+            value = v;
+            thread.m_cv.notify_all();
+        }
+    };
+
+    class Join {
+    private:
+        VerilatedThread& m_thread;
+        unsigned m_expected;
+        unsigned m_counter;
+    public:
+        Join(VerilatedThread& thread, size_t expected)
+            : m_thread(thread)
+            , m_expected(expected)
+            , m_counter(0) {}
+
+        void joined() {
+            std::unique_lock<std::mutex> lck(m_thread.m_mtx);
+            m_counter++;
+            if (m_counter == m_expected) {
+                m_thread.m_cv.notify_all();
+            }
+        }
+
+        void await() {
+            std::unique_lock<std::mutex> lck(m_thread.m_mtx);
+            m_thread.m_idle = true;
+            thread_registry.idle(true);
+            while (!m_thread.should_exit() && m_counter < m_expected) {
+                m_thread.m_cv.wait(lck);
+            }
+            m_thread.m_idle = false;
+            thread_registry.idle(false);
+        }
+    };
 
 private:
     std::function<void(VerilatedThread*)> m_func;
@@ -138,6 +180,8 @@ private:
     std::atomic<bool> m_idle;
     std::thread m_thr;
 
+    std::mutex m_mtx;
+    std::condition_variable m_cv;
 
     template<std::size_t I = 0, typename... Ts>
     static inline typename std::enable_if<I == sizeof...(Ts), void>::type
@@ -161,24 +205,18 @@ private:
         unsubscribe_all<I + 1, Ts...>(mon_vals, promises);
     }
 
-public:
+    void wrapped_func();
 
-    // These are used externally (TODO: convert to functions)
-    std::mutex m_mtx;
-    std::condition_variable m_cv;
-
-    VerilatedThread(std::function<void(VerilatedThread*)> func, bool oneshot, std::string name)
-        : m_ready(false)
-        , m_oneshot(oneshot)
-        , m_started(false)
-        , m_should_exit(false)
-        , m_idle(false)
-        , m_name(name) {
-        thread_registry.put(this);
-
-        m_thr = std::thread(func, this);
+    void set_idle(bool idle) {
+        if (m_idle != idle) {
+            m_idle = idle;
+            thread_registry.idle(idle);
+        }
     }
 
+public:
+    VerilatedThread(std::function<void(VerilatedThread*)> func, bool oneshot, std::string name);
+   
     VerilatedThread(std::function<void(VerilatedThread*)> func, VerilatedThreadPool* pool);
 
     bool should_exit() {
@@ -223,14 +261,16 @@ public:
 
     void idle(bool w) {
         std::unique_lock<std::mutex> lck(m_mtx);
-        if (m_idle != w) {
-            m_idle = w;
-            thread_registry.idle(w);
-        }
+        set_idle(w);
 
         if (w) {
             m_cv.notify_all();
         }
+    }
+
+    void func(std::function<void(VerilatedThread*)> func) {
+        std::unique_lock<std::mutex> lck(m_mtx);
+        m_func = func;
     }
 
     void join() {
@@ -253,26 +293,22 @@ public:
         std::tuple<Promise<Ts>...> promises(Promise<Ts>{*this}...);
         std::unique_lock<std::mutex> lck(m_mtx);
         subscribe_all(mon_vals, promises);
-        m_idle = true;
-        thread_registry.idle(true);
+        set_idle(true);
         if (!should_exit()) {
             m_cv.wait(lck);
         }
-        m_idle = false;
-        thread_registry.idle(false);
+        set_idle(false);
         unsubscribe_all(mon_vals, promises);
     }
 
     template<typename P>
     void wait_until(P pred) {
         std::unique_lock<std::mutex> lck(m_mtx);
-        m_idle = true;
-        thread_registry.idle(true);
+        set_idle(true);
         while (!should_exit() && !pred()) {
             m_cv.wait(lck);
         }
-        m_idle = false;
-        thread_registry.idle(false);
+        set_idle(false);
     }
 
     template<typename P, typename... Ts>
@@ -280,15 +316,15 @@ public:
         std::tuple<Promise<Ts>...> promises(Promise<Ts>{*this}...);
         std::unique_lock<std::mutex> lck(m_mtx);
         subscribe_all(mon_vals, promises);
-        m_idle = true;
-        thread_registry.idle(true);
+        set_idle(true);
         while (!should_exit() && !pred(promises)) {
             m_cv.wait(lck);
         }
-        m_idle = false;
-        thread_registry.idle(false);
+        set_idle(false);
         unsubscribe_all(mon_vals, promises);
     }
+
+    void wait_for_time(VerilatedSyms* symsp, vluint64_t time);
 
     // debug only
     std::string m_name;
@@ -300,23 +336,6 @@ public:
         return m_name;
     }
 
-    void func(std::function<void(VerilatedThread*)> func) {
-        std::unique_lock<std::mutex> lck(m_mtx);
-        m_func = func;
-    }
-
-};
-
-template<typename T>
-struct Promise {
-    VerilatedThread& thread;
-    T value;
-
-    void set(const T& v) {
-        std::unique_lock<std::mutex> lck(thread.m_mtx);
-        value = v;
-        thread.m_cv.notify_all();
-    }
 };
 
 class MonitoredValueBase {
@@ -456,13 +475,13 @@ class MonitoredValue : public MonitoredValueBase {
             value = T(v);
         }
 
-        void subscribe(Promise<T>& promise) {
+        void subscribe(VerilatedThread::Promise<T>& promise) {
             std::unique_lock<std::mutex> lck(mtx);
             promises.push_back(&promise);
             promise.value = value;
         }
 
-        void unsubscribe(Promise<T>& promise) {
+        void unsubscribe(VerilatedThread::Promise<T>& promise) {
             std::unique_lock<std::mutex> lck(mtx);
             auto it = std::find(promises.begin(), promises.end(), &promise);
             if (it != promises.end()) {
@@ -475,7 +494,7 @@ class MonitoredValue : public MonitoredValueBase {
 
         mutable std::mutex mtx;
 
-        std::vector<Promise<T>*> promises;
+        std::vector<VerilatedThread::Promise<T>*> promises;
 
         void written(std::unique_lock<std::mutex>& lck) {
             auto v = value;
