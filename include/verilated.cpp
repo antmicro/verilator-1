@@ -218,8 +218,8 @@ VerilatedThread::VerilatedThread(std::function<void(VerilatedThread*)> func, Ver
 }
 
 void VerilatedThread::wait_for_time(VerilatedSyms* symsp, vluint64_t time) {
-    Verilated::timedQPush(symsp, time, this);
     std::unique_lock<std::mutex> lck(m_mtx);
+    Verilated::timedQPush(symsp, time, this);
     set_idle(true);
     while (m_idle && !should_exit()) {
         Verilated::timedQWait(symsp, lck);

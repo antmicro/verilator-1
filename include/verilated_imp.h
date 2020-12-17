@@ -232,7 +232,6 @@ public:
         VL_DEBUG_IF(if (VL_UNLIKELY(time < VL_TIME_Q())) Verilated::timeBackwardsError(););
         VerilatedLockGuard lock{m_mutex};
         m_timeq.push(std::make_pair(time, thread));
-        thread->idle(true);
     }
     /// Activate and pop all events earlier than given time
     void activate(vluint64_t time) VL_EXCLUDES(m_mutex) VL_MT_SAFE {
