@@ -448,18 +448,18 @@ public:
                 puts(", self); ");
             puts("},");
             puts(nodep->funcp()->oneshot() ? "true" : "false");
-            puts(", \"" + funcp->nameProtect() + "\");\n");;
+            puts(", \"" + funcp->nameProtect() + "\");\n");
             if (nodep->funcp()->oneshot()) {
                 puts("static bool triggered_" + funcp->nameProtect() + ";\n");
                 puts("if (!triggered_" + funcp->nameProtect() + ") {\n");
             }
-            puts(funcp->nameProtect() + "__thread.kick();\n");;
+            puts(funcp->nameProtect() + "__thread.kick();\n");
             if (nodep->funcp()->oneshot()) {
                 puts("triggered_" + funcp->nameProtect() + " = true;\n");
                 puts("}\n");
             }
             if (!funcp->oneshot()) {
-                puts(funcp->nameProtect() + "__thread.wait_for_idle(false);\n");;
+                puts(funcp->nameProtect() + "__thread.wait_for_idle();\n");;
             }
         } else {
             visit_call(nodep);
