@@ -371,76 +371,76 @@ class MonitoredValue : public MonitoredValueBase {
             std::unique_lock<std::mutex> lck(mtx);
             // Assign just the value
             value = v;
-            written(lck);
+            written();
             return *this;
         }
 
         MonitoredValue& operator&=(const MonitoredValue& v) {
             std::unique_lock<std::mutex> lck(mtx);
             value &= v;
-            written(lck);
+            written();
             return *this;
         }
         MonitoredValue& operator|=(const MonitoredValue& v) {
             std::unique_lock<std::mutex> lck(mtx);
             value |= v;
-            written(lck);
+            written();
             return *this;
         }
         MonitoredValue& operator^=(const MonitoredValue& v) {
             std::unique_lock<std::mutex> lck(mtx);
             value ^= v;
-            written(lck);
+            written();
             return *this;
         }
         MonitoredValue& operator+=(const MonitoredValue& v) {
             std::unique_lock<std::mutex> lck(mtx);
             value += v;
-            written(lck);
+            written();
             return *this;
         }
         MonitoredValue& operator-=(const MonitoredValue& v) {
             std::unique_lock<std::mutex> lck(mtx);
             value -= v;
-            written(lck);
+            written();
             return *this;
         }
         MonitoredValue& operator*=(const MonitoredValue& v) {
             std::unique_lock<std::mutex> lck(mtx);
             value *= v;
-            written(lck);
+            written();
             return *this;
         }
 
         MonitoredValue& operator>>=(int s) {
             std::unique_lock<std::mutex> lck(mtx);
             value >>= s;
-            written(lck);
+            written();
             return *this;
         }
 
         MonitoredValue& operator--() {
             std::unique_lock<std::mutex> lck(mtx);
             --value;
-            written(lck);
+            written();
             return *this;
         }
         MonitoredValue operator--(int) {
             std::unique_lock<std::mutex> lck(mtx);
             MonitoredValue v(value--);
-            written(lck);
+            written();
             return v;
         }
         MonitoredValue& operator++() {
             std::unique_lock<std::mutex> lck(mtx);
             ++value;
-            written(lck);
+            written();
             return *this;
         }
         MonitoredValue operator++(int) {
             std::unique_lock<std::mutex> lck(mtx);
             MonitoredValue v(value++);
-            written(lck);
+            written();
             return v;
         }
 
@@ -496,11 +496,9 @@ class MonitoredValue : public MonitoredValueBase {
 
         std::vector<VerilatedThread::Promise<T>*> promises;
 
-        void written(std::unique_lock<std::mutex>& lck) {
-            auto v = value;
-            lck.unlock();
+        void written() {
             for (auto& promise : promises) {
-                promise->set(v);
+                promise->set(value);
             }
         }
 };
