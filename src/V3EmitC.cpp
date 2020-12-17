@@ -840,30 +840,17 @@ public:
     }
     virtual void visit(AstDelay *nodep) VL_OVERRIDE {
         // Make the waiting for the event local to reuse variable nates
-        puts("{\n");
-
-        puts("Verilated::timedQPush(vlSymsp, VL_TIME_Q() + ");
+        puts("self->wait_for_time(vlSymsp, VL_TIME_Q() + ");
         iterateAndNextNull(nodep->lhsp());
-        puts(", self);\n");
-        puts("std::unique_lock<std::mutex> lck(self->m_mtx);\n");
-        puts("while (self->idle() && !self->should_exit()) {\n");
-        puts("Verilated::timedQWait(vlSymsp, lck);\n");
-        puts("}\n");
+        puts(");\n");
         puts("if (self->should_exit()) return;\n");
-
-        puts("}\n");
     }
     virtual void visit(AstTimingControl* nodep) VL_OVERRIDE {
         puts("/* [@ statement] */\n");
-        puts("{\n");
-
         puts("self->wait_for(std::forward_as_tuple(");
         iterateAndNextNull(nodep->sensesp());
         puts("));\n");
-
         puts("if (self->should_exit()) return;\n");
-        puts("};\n");
-
         // XXX should we handle this too??
         // iterateAndNextNull(nodep->stmtsp());
     }
@@ -926,48 +913,40 @@ public:
     }
 
     virtual void visit(AstFork* nodep) VL_OVERRIDE {
-        if (!nodep->joinType().joinNone()) {
-            puts("{\n");
-            puts("std::condition_variable& join_cv = self->m_cv;\n");
-            puts("std::mutex& join_mtx = self->m_mtx;\n");
-            puts("std::atomic_uint join_count(0);\n");
+        if (nodep->joinType().join()) {
+            size_t thread_count = 0;
+            for (auto* stmtp = nodep->stmtsp(); stmtp; stmtp = stmtp->nextp()) thread_count++;
+            puts("{\nVerilatedThread::Join join(*self, ");
+            puts(cvtToStr(thread_count));
+            puts(");\n");
+        } else if (nodep->joinType().joinAny()) {
+            puts("{\nauto join = std::make_shared<VerilatedThread::Join>(*self, 1);\n");
         }
-        size_t thread_count = 0;
+
         for (auto* stmtp = nodep->stmtsp(); stmtp; stmtp = stmtp->nextp()) {
-            thread_count++;
-
             puts("thread_pool.run_once([");
-            if (nodep->joinType().joinNone()) puts("=");
-            else puts("vlSymsp, vlTOPp, &join_cv, &join_mtx, &join_count");
+
+            if (nodep->joinType().join()) puts("vlSymsp, vlTOPp, &join");
+            else if (nodep->joinType().joinAny()) puts("vlSymsp, vlTOPp, join");
+            else if (nodep->joinType().joinNone()) puts("=");
+
             puts("](VerilatedThread* self) mutable {\n");
+            if (auto* beginp = VN_CAST(stmtp, Begin)) iterateAndNextNull(beginp->stmtsp());
+            else visit(stmtp);
 
-            if (auto* beginp = VN_CAST(stmtp, Begin)) {
-                iterateAndNextNull(beginp->stmtsp());
-            } else {
-                visit(stmtp);
-            }
-
-            if (!nodep->joinType().joinNone()) {
-                puts("{\n");
-                puts("std::unique_lock<std::mutex> lck(join_mtx);\n");
-                puts("join_count++;\n");
-                puts("join_cv.notify_all();\n");
-                puts("}\n");
-            }
+            if (nodep->joinType().join()) puts("join.joined();\n");
+            else if (nodep->joinType().joinAny()) puts("join->joined();\n");
 
             puts("});\n");
         }
-        if (!nodep->joinType().joinNone()) {
-            puts("self->wait_until([&join_count]() { return join_count == ");
-            puts(nodep->joinType().join() ? cvtToStr(thread_count) : "1");
-            puts("; });\n");
-            puts("if (self->should_exit()) return;\n");
-            puts("}\n");
-        }
+
+        if (nodep->joinType().join()) puts("join.await();\n");
+        else if (nodep->joinType().joinAny()) puts("join->await();\n");
+        if (!nodep->joinType().joinNone()) puts("if (self->should_exit()) return;\n}\n");
     }
 
     virtual void visit(AstThreadSync* nodep) VL_OVERRIDE {
-        puts("thread_registry.wait_for_idle();");
+        puts("thread_registry.wait_for_idle();\n");
         puts("if (Verilated::gotFinish()) return;\n");
 
     }
@@ -1795,22 +1774,7 @@ class EmitCImp : EmitCStmts {
         if (nodep->isConst().trueKnown()) puts(" const");
         puts(" {\n");
 
-        if (!nodep->proc()) {
-            put_cfunc_body(nodep);
-        } else {
-            if (!nodep->oneshot())
-                puts("do {\n");
-            puts("self->wait_for_ready();\n");
-            puts("if (self->should_exit()) return;\n");
-            puts("self->idle(false);\n");
-
-            put_cfunc_body(nodep);
-
-            puts("self->idle(true);\n");
-            puts("self->ready(false);\n");
-            if (!nodep->oneshot())
-                puts("} while (!Verilated::gotFinish() && !self->should_exit());\n");
-        }
+        put_cfunc_body(nodep);
 
         // puts("__Vm_activity = true;\n");
         puts("}\n");

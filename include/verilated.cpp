@@ -146,30 +146,62 @@ void VerilatedThreadRegistry::exit() {
     }
 }
 
-VerilatedThread::VerilatedThread(std::function<void(VerilatedThread*)> func, VerilatedThreadPool* pool)
-    : m_ready(false)
-    , m_oneshot(false)
+void VerilatedThread::wrapped_func() {
+    wait_for_ready();
+    if (should_exit()) return;
+    idle(false);
+    m_func(this);
+    idle(true);
+    ready(false);
+}
+
+VerilatedThread::VerilatedThread(std::function<void(VerilatedThread*)> func, bool oneshot, std::string name)
+    : m_func(func)
+    , m_ready(false)
+    , m_oneshot(oneshot)
     , m_started(false)
     , m_should_exit(false)
     , m_idle(false)
-    , m_name("forked_thread") {
-
+    , m_name(name) {
     thread_registry.put(this);
-    m_func = func;
+
+    if (m_oneshot) {
+        m_thr = std::thread([this]() { wrapped_func(); });
+    } else {
+        m_thr = std::thread([this]() {
+            do {
+                wrapped_func();
+            } while (!Verilated::gotFinish() && !should_exit());
+        });
+    }
+}
+
+VerilatedThread::VerilatedThread(std::function<void(VerilatedThread*)> func, VerilatedThreadPool* pool)
+    : m_func(func)
+    , m_ready(false)
+    , m_oneshot(false)
+    , m_started(false)
+    , m_should_exit(false)
+    , m_name("forked_thread") {
+    thread_registry.put(this);
 
     m_thr = std::thread([this, pool]() {
-        while (true) {
-            wait_for_ready();
-            if (should_exit()) return;
-            idle(false);
-            m_func(this);
-            idle(true);
-            ready(false);
+        do {
+            wrapped_func();
             pool->free(this);
-        }
+        } while (!Verilated::gotFinish() && !should_exit());
     });
 }
 
+void VerilatedThread::wait_for_time(VerilatedSyms* symsp, vluint64_t time) {
+    Verilated::timedQPush(symsp, time, this);
+    std::unique_lock<std::mutex> lck(m_mtx);
+    set_idle(true);
+    while (m_idle && !should_exit()) {
+        Verilated::timedQWait(symsp, lck);
+    }
+    set_idle(false);
+}
 
 #ifndef VL_USER_FINISH  ///< Define this to override this function
 void vl_finish(const char* filename, int linenum, const char* hier) VL_MT_UNSAFE {
