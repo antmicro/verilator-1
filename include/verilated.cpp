@@ -170,15 +170,6 @@ void VerilatedThreadRegistry::exit() {
     }
 }
 
-void VerilatedThread::wrapped_func() {
-    wait_for_ready();
-    if (should_exit()) return;
-    idle(false);
-    m_func(this);
-    idle(true);
-    ready(false);
-}
-
 VerilatedThread::VerilatedThread(std::function<void(VerilatedThread*)> func, bool oneshot, std::string name)
     : m_func(func)
     , m_ready(false)
@@ -190,12 +181,20 @@ VerilatedThread::VerilatedThread(std::function<void(VerilatedThread*)> func, boo
     thread_registry.put(this);
 
     if (m_oneshot) {
-        m_thr = std::thread([this]() { wrapped_func(); });
+        m_thr = std::thread([this]() {
+            wait_for_ready();
+            if (!should_exit()) m_func(this);
+            ready(false);
+            idle(true);
+        });
     } else {
         m_thr = std::thread([this]() {
             do {
-                wrapped_func();
+                wait_for_ready();
+                if (!should_exit()) m_func(this);
+                ready(false);
             } while (!Verilated::gotFinish() && !should_exit());
+            idle(true);
         });
     }
 }
@@ -206,14 +205,17 @@ VerilatedThread::VerilatedThread(std::function<void(VerilatedThread*)> func, Ver
     , m_oneshot(false)
     , m_started(false)
     , m_should_exit(false)
+    , m_idle(false)
     , m_name("forked_thread") {
     thread_registry.put(this);
 
     m_thr = std::thread([this, pool]() {
         do {
-            wrapped_func();
-            pool->free(this);
+            wait_for_ready();
+            if (!should_exit()) m_func(this);
+            ready(false);
         } while (!Verilated::gotFinish() && !should_exit());
+        idle(true);
     });
 }
 

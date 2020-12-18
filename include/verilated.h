@@ -215,12 +215,11 @@ private:
         unsubscribe_all<I + 1, Ts...>(mon_vals, promises);
     }
 
-    void wrapped_func();
-
     void set_idle(bool idle) {
         if (m_idle != idle) {
             m_idle = idle;
             thread_registry.idle(idle);
+            m_cv.notify_all();
         }
     }
 
@@ -252,9 +251,11 @@ public:
     void wait_for_ready() {
         std::unique_lock<std::mutex> lck(m_mtx);
 
+        set_idle(true);
         while(!m_ready && !m_should_exit) {
             m_cv.wait(lck);
         }
+        set_idle(false);
     }
 
     void wait_for_idle() {
@@ -272,7 +273,6 @@ public:
     void idle(bool w) {
         std::unique_lock<std::mutex> lck(m_mtx);
         set_idle(w);
-        m_cv.notify_all();
     }
 
     void func(std::function<void(VerilatedThread*)> func) {
@@ -294,9 +294,7 @@ public:
         std::unique_lock<std::mutex> lck(m_mtx);
         m_ready = true;
         m_cv.notify_all();
-        while (m_ready && !m_should_exit && m_idle) {
-            m_cv.wait(lck);
-        }
+        m_cv.wait(lck);
     }
 
     template<typename... Ts>
