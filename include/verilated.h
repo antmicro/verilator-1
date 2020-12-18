@@ -365,12 +365,12 @@ class MonitoredValue : public MonitoredValueBase {
         template <class U>
         MonitoredValue(U v): mtx() {
             std::unique_lock<std::mutex> lck(mtx);
-            value = v;
+            value = (T)v;
         }
 
         MonitoredValue(const MonitoredValue& o) {
             std::unique_lock<std::mutex> lck(mtx);
-            value = o;
+            value = (T)o;
         }
 
         operator T() const {
@@ -381,44 +381,44 @@ class MonitoredValue : public MonitoredValueBase {
         MonitoredValue& operator=(const MonitoredValue& v) {
             std::unique_lock<std::mutex> lck(mtx);
             // Assign just the value
-            value = v;
+            value = (T)v;
             written();
             return *this;
         }
 
         MonitoredValue& operator&=(const MonitoredValue& v) {
             std::unique_lock<std::mutex> lck(mtx);
-            value &= v;
+            value &= (T)v;
             written();
             return *this;
         }
         MonitoredValue& operator|=(const MonitoredValue& v) {
             std::unique_lock<std::mutex> lck(mtx);
-            value |= v;
+            value |= (T)v;
             written();
             return *this;
         }
         MonitoredValue& operator^=(const MonitoredValue& v) {
             std::unique_lock<std::mutex> lck(mtx);
-            value ^= v;
+            value ^= (T)v;
             written();
             return *this;
         }
         MonitoredValue& operator+=(const MonitoredValue& v) {
             std::unique_lock<std::mutex> lck(mtx);
-            value += v;
+            value += (T)v;
             written();
             return *this;
         }
         MonitoredValue& operator-=(const MonitoredValue& v) {
             std::unique_lock<std::mutex> lck(mtx);
-            value -= v;
+            value -= (T)v;
             written();
             return *this;
         }
         MonitoredValue& operator*=(const MonitoredValue& v) {
             std::unique_lock<std::mutex> lck(mtx);
-            value *= v;
+            value *= (T)v;
             written();
             return *this;
         }
@@ -483,7 +483,7 @@ class MonitoredValue : public MonitoredValueBase {
 
         void assign(vluint64_t v) {
             std::unique_lock<std::mutex> lck(mtx);
-            value = T(v);
+            value = (T)v;
         }
 
         void subscribe(VerilatedThread::Promise<T>& promise, bool init) {
