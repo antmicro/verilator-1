@@ -1678,21 +1678,21 @@ IData VL_FREAD_I(int width, int array_lsb, int array_size, void* memp, IData fpi
         // Shift value in
         IData entry = read_elements + start - array_lsb;
         if (width <= 8) {
-            CData* datap = &(reinterpret_cast<CData*>(memp))[entry];
+            CDataV* datap = &(reinterpret_cast<CDataV*>(memp))[entry];
             if (shift == start_shift) { *datap = 0; }
             *datap |= (c << shift) & VL_MASK_I(width);
         } else if (width <= 16) {
-            SData* datap = &(reinterpret_cast<SData*>(memp))[entry];
+            SDataV* datap = &(reinterpret_cast<SDataV*>(memp))[entry];
             if (shift == start_shift) { *datap = 0; }
             *datap |= (c << shift) & VL_MASK_I(width);
         } else if (width <= VL_IDATASIZE) {
-            IData* datap = &(reinterpret_cast<IData*>(memp))[entry];
+            IDataV* datap = &(reinterpret_cast<IDataV*>(memp))[entry];
             if (shift == start_shift) { *datap = 0; }
             *datap |= (c << shift) & VL_MASK_I(width);
         } else if (width <= VL_QUADSIZE) {
-            QData* datap = &(reinterpret_cast<QData*>(memp))[entry];
+            QDataV* datap = &(reinterpret_cast<QDataV*>(memp))[entry];
             if (shift == start_shift) { *datap = 0; }
-            *datap |= ((static_cast<QData>(c) << static_cast<QData>(shift)) & VL_MASK_Q(width));
+            *datap |= ((static_cast<QDataV>(c) << static_cast<QDataV>(shift)) & VL_MASK_Q(width));
         } else {
             WDataOutP datap = &(reinterpret_cast<WDataOutP>(memp))[entry * VL_WORDS_I(width)];
             if (shift == start_shift) VL_ZERO_RESET_W(width, datap);
