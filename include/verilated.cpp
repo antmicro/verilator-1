@@ -2036,21 +2036,21 @@ void VlReadMem::setData(void* valuep, const std::string& rhs) {
             value = (c - '0');
         }
         if (m_bits <= 8) {
-            CData* datap = reinterpret_cast<CData*>(valuep);
+            CDataV* datap = reinterpret_cast<CDataV*>(valuep);
             if (!innum) { *datap = 0; }
             *datap = ((*datap << shift) + value) & VL_MASK_I(m_bits);
         } else if (m_bits <= 16) {
-            SData* datap = reinterpret_cast<SData*>(valuep);
+            SDataV* datap = reinterpret_cast<SDataV*>(valuep);
             if (!innum) { *datap = 0; }
             *datap = ((*datap << shift) + value) & VL_MASK_I(m_bits);
         } else if (m_bits <= VL_IDATASIZE) {
-            IData* datap = reinterpret_cast<IData*>(valuep);
+            IDataV* datap = reinterpret_cast<IDataV*>(valuep);
             if (!innum) { *datap = 0; }
             *datap = ((*datap << shift) + value) & VL_MASK_I(m_bits);
         } else if (m_bits <= VL_QUADSIZE) {
-            QData* datap = reinterpret_cast<QData*>(valuep);
+            QDataV* datap = reinterpret_cast<QDataV*>(valuep);
             if (!innum) { *datap = 0; }
-            *datap = ((*datap << static_cast<QData>(shift)) + static_cast<QData>(value))
+            *datap = ((*datap << static_cast<QDataV>(shift)) + static_cast<QDataV>(value))
                      & VL_MASK_Q(m_bits);
         } else {
             WDataOutP datap = reinterpret_cast<WDataOutP>(valuep);
@@ -2182,16 +2182,16 @@ void VL_READMEM_N(bool hex,  // Hex format, else binary
             } else {
                 QData entry = addr - array_lsb;
                 if (bits <= 8) {
-                    CData* datap = &(reinterpret_cast<CData*>(memp))[entry];
+                    CDataV* datap = &(reinterpret_cast<CDataV*>(memp))[entry];
                     rmem.setData(datap, value);
                 } else if (bits <= 16) {
-                    SData* datap = &(reinterpret_cast<SData*>(memp))[entry];
+                    SDataV* datap = &(reinterpret_cast<SDataV*>(memp))[entry];
                     rmem.setData(datap, value);
                 } else if (bits <= VL_IDATASIZE) {
-                    IData* datap = &(reinterpret_cast<IData*>(memp))[entry];
+                    IDataV* datap = &(reinterpret_cast<IDataV*>(memp))[entry];
                     rmem.setData(datap, value);
                 } else if (bits <= VL_QUADSIZE) {
-                    QData* datap = &(reinterpret_cast<QData*>(memp))[entry];
+                    QDataV* datap = &(reinterpret_cast<QDataV*>(memp))[entry];
                     rmem.setData(datap, value);
                 } else {
                     WDataOutP datap
@@ -2225,16 +2225,16 @@ void VL_WRITEMEM_N(bool hex,  // Hex format, else binary
     for (QData addr = start; addr <= end; ++addr) {
         QData row_offset = addr - array_lsb;
         if (bits <= 8) {
-            const CData* datap = &(reinterpret_cast<const CData*>(memp))[row_offset];
+            const CDataV* datap = &(reinterpret_cast<const CDataV*>(memp))[row_offset];
             wmem.print(addr, false, datap);
         } else if (bits <= 16) {
-            const SData* datap = &(reinterpret_cast<const SData*>(memp))[row_offset];
+            const SDataV* datap = &(reinterpret_cast<const SDataV*>(memp))[row_offset];
             wmem.print(addr, false, datap);
         } else if (bits <= 32) {
-            const IData* datap = &(reinterpret_cast<const IData*>(memp))[row_offset];
+            const IDataV* datap = &(reinterpret_cast<const IDataV*>(memp))[row_offset];
             wmem.print(addr, false, datap);
         } else if (bits <= 64) {
-            const QData* datap = &(reinterpret_cast<const QData*>(memp))[row_offset];
+            const QDataV* datap = &(reinterpret_cast<const QDataV*>(memp))[row_offset];
             wmem.print(addr, false, datap);
         } else {
             WDataInP memDatap = reinterpret_cast<WDataInP>(memp);
