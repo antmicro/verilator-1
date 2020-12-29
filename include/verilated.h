@@ -350,34 +350,33 @@ public:
 class MonitoredValueBase {
     public:
         virtual void release() {};
-        virtual void assign(vluint64_t) {};
+        virtual void assign_no_notify(vluint64_t) {};
 };
 
 template<typename T>
 class MonitoredValue : public MonitoredValueBase {
     public:
 
-        MonitoredValue(): value(), mtx() {
+        MonitoredValue(): value(), m_mtx() {
         }
 
         template <class U>
-        MonitoredValue(U v): mtx() {
-            std::unique_lock<std::mutex> lck(mtx);
+        MonitoredValue(U v): m_mtx() {
+            std::unique_lock<std::mutex> lck(m_mtx);
             value = (T)v;
         }
 
         MonitoredValue(const MonitoredValue& o) {
-            std::unique_lock<std::mutex> lck(mtx);
+            std::unique_lock<std::mutex> lck(m_mtx);
             value = (T)o;
         }
 
         operator T() const {
-            std::unique_lock<std::mutex> lck(mtx);
-            return (T)value;
+            return value;
         }
 
         MonitoredValue& operator=(const MonitoredValue& v) {
-            std::unique_lock<std::mutex> lck(mtx);
+            std::unique_lock<std::mutex> lck(m_mtx);
             // Assign just the value
             value = (T)v;
             written();
@@ -385,69 +384,69 @@ class MonitoredValue : public MonitoredValueBase {
         }
 
         MonitoredValue& operator&=(const MonitoredValue& v) {
-            std::unique_lock<std::mutex> lck(mtx);
+            std::unique_lock<std::mutex> lck(m_mtx);
             value &= (T)v;
             written();
             return *this;
         }
         MonitoredValue& operator|=(const MonitoredValue& v) {
-            std::unique_lock<std::mutex> lck(mtx);
+            std::unique_lock<std::mutex> lck(m_mtx);
             value |= (T)v;
             written();
             return *this;
         }
         MonitoredValue& operator^=(const MonitoredValue& v) {
-            std::unique_lock<std::mutex> lck(mtx);
+            std::unique_lock<std::mutex> lck(m_mtx);
             value ^= (T)v;
             written();
             return *this;
         }
         MonitoredValue& operator+=(const MonitoredValue& v) {
-            std::unique_lock<std::mutex> lck(mtx);
+            std::unique_lock<std::mutex> lck(m_mtx);
             value += (T)v;
             written();
             return *this;
         }
         MonitoredValue& operator-=(const MonitoredValue& v) {
-            std::unique_lock<std::mutex> lck(mtx);
+            std::unique_lock<std::mutex> lck(m_mtx);
             value -= (T)v;
             written();
             return *this;
         }
         MonitoredValue& operator*=(const MonitoredValue& v) {
-            std::unique_lock<std::mutex> lck(mtx);
+            std::unique_lock<std::mutex> lck(m_mtx);
             value *= (T)v;
             written();
             return *this;
         }
 
         MonitoredValue& operator>>=(int s) {
-            std::unique_lock<std::mutex> lck(mtx);
+            std::unique_lock<std::mutex> lck(m_mtx);
             value >>= s;
             written();
             return *this;
         }
 
         MonitoredValue& operator--() {
-            std::unique_lock<std::mutex> lck(mtx);
+            std::unique_lock<std::mutex> lck(m_mtx);
             --value;
             written();
             return *this;
         }
         MonitoredValue operator--(int) {
-            std::unique_lock<std::mutex> lck(mtx);
+            std::unique_lock<std::mutex> lck(m_mtx);
             MonitoredValue v(value--);
             written();
             return v;
         }
         MonitoredValue& operator++() {
-            std::unique_lock<std::mutex> lck(mtx);
+            std::unique_lock<std::mutex> lck(m_mtx);
             ++value;
             written();
             return *this;
         }
         MonitoredValue operator++(int) {
-            std::unique_lock<std::mutex> lck(mtx);
+            std::unique_lock<std::mutex> lck(m_mtx);
             MonitoredValue v(value++);
             written();
             return v;
@@ -455,53 +454,61 @@ class MonitoredValue : public MonitoredValueBase {
 
         template <class U>
         bool operator==(const U &b) {
-            std::unique_lock<std::mutex> lck(mtx);
+            std::unique_lock<std::mutex> lck(m_mtx);
             return value == b;
         }
         template <class U>
         bool operator>(const U &b) {
-            std::unique_lock<std::mutex> lck(mtx);
+            std::unique_lock<std::mutex> lck(m_mtx);
             return value > b;
         }
         template <class U>
         bool operator>=(const U &b) {
-            std::unique_lock<std::mutex> lck(mtx);
+            std::unique_lock<std::mutex> lck(m_mtx);
             return value >= b;
         }
         template <class U>
         bool operator<(const U &b) {
-            std::unique_lock<std::mutex> lck(mtx);
+            std::unique_lock<std::mutex> lck(m_mtx);
             return value < b;
         }
         template <class U>
         bool operator<=(const U &b) {
-            std::unique_lock<std::mutex> lck(mtx);
+            std::unique_lock<std::mutex> lck(m_mtx);
             return value <= b;
         }
 
-        void assign(vluint64_t v) {
-            std::unique_lock<std::mutex> lck(mtx);
+        void assign_no_notify(vluint64_t v) {
             value = (T)v;
         }
 
+        void assign_no_lock(T v) {
+            value = v;
+            written();
+        }
+
         void subscribe(VerilatedThread::Promise<T>& promise, bool init) {
-            std::unique_lock<std::mutex> lck(mtx);
+            std::unique_lock<std::mutex> lck(m_mtx);
             promises.push_back(&promise);
             if (init) promise.value = value;
         }
 
         void unsubscribe(VerilatedThread::Promise<T>& promise) {
-            std::unique_lock<std::mutex> lck(mtx);
+            std::unique_lock<std::mutex> lck(m_mtx);
             auto it = std::find(promises.begin(), promises.end(), &promise);
             if (it != promises.end()) {
                 promises.erase(it);
             }
         }
 
-    private:
-        T value;
+        std::mutex& mtx() {
+            return m_mtx;
+        }
 
-        mutable std::mutex mtx;
+    private:
+        std::atomic<T> value;
+
+        mutable std::mutex m_mtx;
 
         std::vector<VerilatedThread::Promise<T>*> promises;
 
@@ -562,12 +569,12 @@ class VerilatedNBACtrl {
             std::unique_lock<std::mutex> lck(mtx);
 
             for (auto const& v : data) {
-                v.first->assign(v.second);
+                v.first->assign_no_notify(v.second);
             }
             data.clear();
 
             for (auto const& v : edata) {
-                v.first->assign(v.second());
+                v.first->assign_no_notify(v.second());
             }
             edata.clear();
         }

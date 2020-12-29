@@ -274,6 +274,7 @@ public:
     virtual void visit_generic_assign(AstNodeAssign* nodep) {
         bool paren = true;
         bool decind = false;
+        bool brace = false;
         if (AstSel* selp = VN_CAST(nodep->lhsp(), Sel)) {
             if (selp->widthMin() == 1) {
                 putbs("VL_ASSIGNBIT_");
@@ -338,7 +339,8 @@ public:
             puts(cvtToStr(nodep->widthMin()) + ",");
             iterateAndNextNull(nodep->lhsp());
             puts(", ");
-        } else {
+        } else if (VN_IS(nodep->lhsp(), NodeSel) || !nodep->lhsp()->dtypep()->basicp()
+                   || !nodep->lhsp()->dtypep()->basicp()->keyword().isIntNumeric()) {
             paren = false;
             iterateAndNextNull(nodep->lhsp());
             puts(" ");
@@ -346,11 +348,23 @@ public:
             decind = true;
             if (!VN_IS(nodep->rhsp(), Const)) ofp()->putBreak();
             puts("= ");
+        } else {
+            brace = true;
+            puts("{\n");
+            puts("std::unique_lock<std::mutex> lck(");
+            iterateAndNextNull(nodep->lhsp());
+            puts(".mtx());\n");
+            iterateAndNextNull(nodep->lhsp());
+            ofp()->blockInc();
+            decind = true;
+            if (!VN_IS(nodep->rhsp(), Const)) ofp()->putBreak();
+            puts(".assign_no_lock(");
         }
         iterateAndNextNull(nodep->rhsp());
         if (paren) puts(")");
         if (decind) ofp()->blockDec();
         if (!m_suppressSemi) puts(";\n");
+        if (brace) puts("}\n");
     }
     virtual void visit(AstNodeAssign* nodep) VL_OVERRIDE {
         visit_generic_assign(nodep);
@@ -2878,7 +2892,7 @@ void EmitCImp::emitSettleLoop(AstNodeModule* modp, const std::string& eval_call,
             if (dtp->keyword().isEventValue()) {
                 puts("vlSymsp->TOPp->");
                 puts(nodep->name());
-                puts(".assign(0);\n");
+                puts(".assign_no_notify(0);\n");
             }
         }
     }
