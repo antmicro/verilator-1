@@ -894,7 +894,6 @@ public:
     }
     virtual void visit(AstWait* nodep) VL_OVERRIDE {
         puts("/* [wait statement] */\n");
-        puts("{\n");
 
         std::unordered_map<AstVar*, AstVarRef*> varrefps;
         {
@@ -923,7 +922,6 @@ public:
         puts(";\n});\n");
 
         puts("if (self->should_exit()) return;\n");
-        puts("}\n");
     }
 
     virtual void visit(AstFork* nodep) VL_OVERRIDE {
