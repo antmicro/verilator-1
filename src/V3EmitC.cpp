@@ -918,7 +918,6 @@ public:
     }
     virtual void visit(AstWait* nodep) override {
         puts("/* [wait statement] */\n");
-        puts("{\n");
 
         std::unordered_map<AstVar*, AstVarRef*> varrefps;
         {
@@ -947,7 +946,6 @@ public:
         puts(";\n});\n");
 
         puts("if (self->should_exit()) return;\n");
-        puts("}\n");
     }
     virtual void visit(AstFork* nodep) override {
         if (nodep->joinType().join()) {
