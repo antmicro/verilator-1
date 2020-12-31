@@ -1757,6 +1757,7 @@ sub _make_main {
         $set = "";
     } else {
         print $fh "    topp->eval();\n";
+        print $fh "    main_time = topp->timeSlotsEarliestTime();\n";
         $set = "topp->";
     }
 
@@ -1796,15 +1797,13 @@ sub _make_main {
 
     print $fh "    while ((1)\n";
     print $fh "           && !Verilated::gotFinish()) {\n";
+    my $action = 1;
     for (my $i=0; $i<5; $i++) {
-        my $action = 0;
         if ($self->{inputs}{fastclk}) {
             print $fh "        ${set}fastclk = !${set}fastclk;\n";
-            $action = 1;
         }
         if ($i==0 && $self->{inputs}{clk}) {
             print $fh "        ${set}clk = !${set}clk;\n";
-            $action = 1;
         }
         if ($self->{savable}) {
             $fh->print("        if (sc_time_stamp() == save_time && save_time) {\n");
@@ -1814,6 +1813,7 @@ sub _make_main {
             $fh->print("        }\n");
         }
         _print_advance_time($self, $fh, 1, $action);
+        $action = 0;
     }
     print $fh "    }\n";
     print $fh "    if (!Verilated::gotFinish()) {\n";
@@ -1858,6 +1858,7 @@ sub _print_advance_time {
     } else {
         if ($action) {
             print $fh "        ${set}eval();\n";
+            print $fh "        main_time = topp->timeSlotsEarliestTime();\n";
             if ($self->{trace} && !$self->sc) {
                 $fh->print("#if VM_TRACE\n");
                 $fh->print("        if (tfp) tfp->dump(main_time);\n");
