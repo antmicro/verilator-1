@@ -922,7 +922,10 @@ public:
         std::unordered_map<AstVar*, AstVarRef*> varrefps;
         {
             findVarRefps(nodep->condp(), varrefps);
-            UASSERT_OBJ(!varrefps.empty(), nodep, "No variables in wait condition.");
+            if (varrefps.empty()) {
+                puts("/* No variables in wait condition. Skipping */");
+                return;
+            }
         }
         puts("self->wait_until(std::forward_as_tuple(");
 
