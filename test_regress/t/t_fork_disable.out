@@ -1,7 +1,3 @@
-%Error-UNSUPPORTED: t/t_fork_disable.v:12:7: Unsupported: fork statements
-                                           : ... In instance t
-   12 |       fork
-      |       ^~~~
 %Error-UNSUPPORTED: t/t_fork_disable.v:16:7: Unsupported: disable fork statements
                                            : ... In instance t
    16 |       disable fork;
