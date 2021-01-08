@@ -854,7 +854,10 @@ class LinkDotFindVisitor : public AstNVisitor {
     virtual void visit(AstScope* nodep) VL_OVERRIDE {
         UASSERT_OBJ(m_statep->forScopeCreation(), nodep,
                     "Scopes should only exist right after V3Scope");
-        // Ignored.  Processed in next step
+        iterateChildren(nodep);
+    }
+    virtual void visit(AstTopScope* nodep) VL_OVERRIDE {
+        iterateChildren(nodep);
     }
     virtual void visit(AstCell* nodep) VL_OVERRIDE {
         UINFO(5, "   CELL under " << m_scope << " is " << nodep << endl);
