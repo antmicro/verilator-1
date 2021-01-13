@@ -52,6 +52,9 @@ private:
     int m_splitFilenum;  // File number being created, 0 = primary
     bool m_primitiveCast;
 
+protected:
+    AstCFunc* m_funcp;  // Function we're in now
+
 public:
     // METHODS
     VL_DEBUG_FUNC;  // Declare debug()
@@ -392,8 +395,12 @@ public:
             puts("verilated_nba_ctrl.schedule(&");
             iterateAndNextNull(nodep->lhsp());
             puts(", ");
-            if (continuous)
-                puts("[vlTOPp,vlSymsp] { return (");
+            if (continuous) {
+                if (m_funcp && m_funcp->isStatic().falseKnown())
+                    puts("[vlTOPp,vlSymsp,this] { return (");
+                else
+                    puts("[vlTOPp,vlSymsp] { return (");
+            }
             iterateAndNextNull(nodep->rhsp());
             if (continuous)
                 puts("); }");
@@ -1500,6 +1507,7 @@ public:
         m_labelNum = 0;
         m_splitSize = 0;
         m_splitFilenum = 0;
+        m_funcp = nullptr;
     }
     EmitCStmts(AstNode* nodep, V3OutCFile* ofp, bool trackText = false)
         : EmitCStmts{} {
@@ -1766,6 +1774,7 @@ class EmitCImp final : EmitCStmts {
     }
     using EmitCStmts::visit;  // Suppress hidden overloaded virtual function warning
     virtual void visit(AstCFunc* nodep) override {
+        m_funcp = nodep;
         // TRACE_* and DPI handled elsewhere
         if (nodep->funcType().isTrace()) return;
         if (nodep->dpiImport()) return;
@@ -1807,6 +1816,7 @@ class EmitCImp final : EmitCStmts {
         // puts("__Vm_activity = true;\n");
         puts("}\n");
         if (nodep->ifdef() != "") puts("#endif  // " + nodep->ifdef() + "\n");
+        m_funcp = nullptr;
     }
 
     void emitChangeDet() {
