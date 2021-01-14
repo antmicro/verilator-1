@@ -2897,19 +2897,23 @@ void EmitCImp::emitSettleLoop(AstNodeModule* modp, const std::string& eval_call,
     puts("QData __Vchange = 1;\n");
     puts("do {\n");
     puts("do {\n");
-    puts("vlSymsp->TOPp->__eval_change_counter = 0;\n");
+    puts("vlSymsp->TOPp->");
+    puts(protect("__eval_change_counter"));
+    puts(" = 0;\n");
     for (auto* nodep = modp->stmtsp(); nodep; nodep = nodep->nextp()) {
         if (auto* dtp = VN_CAST(nodep->dtypep(), BasicDType)) {
             if (dtp->keyword().isEventValue()) {
                 puts("vlSymsp->TOPp->");
-                puts(nodep->name());
+                puts(protect(nodep->name()));
                 puts(".assign_no_notify(0);\n");
             }
         }
     }
     puts(eval_call + "\n");
     puts("verilated_nba_ctrl.assign();\n");
-    puts("} while (!Verilated::gotFinish() && vlSymsp->TOPp->__eval_change_counter != 0);\n");
+    puts("} while (!Verilated::gotFinish() && vlSymsp->TOPp->");
+    puts(protect("__eval_change_counter"));
+    puts(" != 0);\n");
     puts("if (VL_UNLIKELY(++__VclockLoop > " + cvtToStr(v3Global.opt.convergeLimit()) + ")) {\n");
     puts("// About to fail, so enable debug to see what's not settling.\n");
     puts("// Note you must run make with OPT=-DVL_DEBUG for debug prints.\n");
