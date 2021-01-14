@@ -381,9 +381,9 @@ AstVar::VlArgTypeRecursed AstVar::vlArgTypeRecurse(bool forFunc, const AstNodeDT
         } else if (bdtypep->keyword() == AstBasicDTypeKwd::SCOPEPTR) {
             info.m_type = "const VerilatedScope*";
         } else if (bdtypep->keyword() == AstBasicDTypeKwd::DOUBLE) {
-            info.m_type = "double";
+            info.m_type = "DoubleV";
         } else if (bdtypep->keyword() == AstBasicDTypeKwd::FLOAT) {
-            info.m_type = "float";
+            info.m_type = "FloatV";
         } else if (bdtypep->keyword() == AstBasicDTypeKwd::STRING) {
             info.m_type = "std::string";
         } else if (dtypep->widthMin() <= 8) {  // Handle unpacked arrays; not bdtypep->width
