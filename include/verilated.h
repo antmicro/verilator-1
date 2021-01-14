@@ -539,6 +539,8 @@ typedef MonitoredValue<vluint32_t> IDataV;
 typedef MonitoredValue<vluint64_t> QDataV;
 typedef MonitoredValue<vluint32_t> EDataV;
 typedef MonitoredValue<vluint32_t> WDataV;
+typedef MonitoredValue<float> FloatV;
+typedef MonitoredValue<double> DoubleV;
 
 typedef const WData* WDataInPV;  ///< Array input to a function
 typedef WData* WDataOutPV;  ///< Array output from a function
