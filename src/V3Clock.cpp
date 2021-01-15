@@ -102,6 +102,7 @@ private:
         // BOTHEDGE:  var ^ var_last
         // HIGHEDGE:  var
         // LOWEDGE:  ~var
+        // ANYEDGE:   var ^ var_last
         AstNode* newp = nullptr;
         if (nodep->edgeType() == VEdgeType::ET_ILLEGAL) {
             nodep->v3warn(E_UNSUPPORTED,
@@ -133,8 +134,13 @@ private:
         } else if (nodep->edgeType() == VEdgeType::ET_HIGHEDGE) {
             newp = new AstVarRef(nodep->fileline(), clkvscp, VAccess::READ);
         } else if (nodep->edgeType() == VEdgeType::ET_LOWEDGE) {
-            newp = new AstNot(nodep->fileline(),
-                              new AstVarRef(nodep->fileline(), clkvscp, VAccess::READ));
+            newp = new AstNot(nodep->fileline(), new AstVarRef(nodep->fileline(), clkvscp, VAccess::READ));
+        } else if (nodep->edgeType() == VEdgeType::ET_ANYEDGE) {
+            AstVarScope* lastVscp = getCreateLastClk(clkvscp);
+            newp = new AstXor(
+                nodep->fileline(),
+                new AstVarRef(nodep->fileline(), nodep->varrefp()->varScopep(), VAccess::READ),
+                new AstVarRef(nodep->fileline(), lastVscp, VAccess::READ));
         } else {
             nodep->v3fatalSrc("Bad edge type");
         }
