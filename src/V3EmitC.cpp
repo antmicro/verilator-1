@@ -1313,17 +1313,21 @@ public:
     virtual void visit(AstVarRef* nodep) VL_OVERRIDE {
         AstNodeDType* dtypep = nodep->varp()->dtypep();
 
-        if (!dtypep->isDouble() && !dtypep->isString() && m_primitiveCast) {
-            int width = dtypep->width();
-            puts("(");
-            switch (width) {
-                case 8: puts("vluint8_t"); break;
-                case 16: puts("vluint16_t"); break;
-                case 32: puts("vluint32_t"); break;
-                case 64:
-                default: puts("vluint64_t"); break;
+        if (m_primitiveCast) {
+            if (dtypep->isDouble()) {
+                puts("(double)");
+            } else if (!dtypep->isString()) {
+                int width = dtypep->width();
+                puts("(");
+                switch (width) {
+                    case 8: puts("vluint8_t"); break;
+                    case 16: puts("vluint16_t"); break;
+                    case 32: puts("vluint32_t"); break;
+                    case 64:
+                    default: puts("vluint64_t"); break;
+                }
+                puts(")");
             }
-            puts(")");
         }
         puts(nodep->hiernameProtect());
         puts(nodep->varp()->nameProtect());
