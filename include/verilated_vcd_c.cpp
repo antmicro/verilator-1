@@ -648,6 +648,23 @@ void VerilatedVcd::emitWData(vluint32_t code, const WData* newvalp, int bits) {
 }
 
 VL_ATTR_ALWINLINE
+void VerilatedVcd::emitWData(vluint32_t code, const WDataV* newvalp, int bits) {
+    int words = VL_WORDS_I(bits);
+    char* wp = m_writep;
+    *wp++ = 'b';
+    // Handle the most significant word
+    const int bitsInMSW = VL_BITBIT_E(bits) ? VL_BITBIT_E(bits) : VL_EDATASIZE;
+    cvtEDataToStr(wp, newvalp[--words] << (VL_EDATASIZE - bitsInMSW));
+    wp += bitsInMSW;
+    // Handle the remaining words
+    while (words > 0) {
+        cvtEDataToStr(wp, newvalp[--words]);
+        wp += VL_EDATASIZE;
+    }
+    finishLine(code, wp);
+}
+
+VL_ATTR_ALWINLINE
 void VerilatedVcd::emitDouble(vluint32_t code, double newval) {
     char* wp = m_writep;
     // Buffer can't overflow before sprintf; we sized during declaration
@@ -682,6 +699,17 @@ void VerilatedVcd::fullQuad(vluint32_t code, const vluint64_t newval, int bits) 
     *m_writep++ = 'b';
     for (int bit = bits - 1; bit >= 0; --bit) {
         *m_writep++ = ((newval & (1ULL << bit)) ? '1' : '0');
+    }
+    *m_writep++ = ' ';
+    m_writep = writeCode(m_writep, code);
+    *m_writep++ = '\n';
+    bufferCheck();
+}
+void VerilatedVcd::fullArray(vluint32_t code, const WDataV* newval, int bits) {
+    for (int word = 0; word < (((bits - 1) / 32) + 1); ++word) { oldp(code)[word] = newval[word]; }
+    *m_writep++ = 'b';
+    for (int bit = bits - 1; bit >= 0; --bit) {
+        *m_writep++ = ((newval[(bit / 32)] & (1L << (bit & 0x1f))) ? '1' : '0');
     }
     *m_writep++ = ' ';
     m_writep = writeCode(m_writep, code);

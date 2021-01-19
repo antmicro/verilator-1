@@ -544,6 +544,12 @@ void VerilatedTrace<VL_DERIVED_T>::fullWData(vluint32_t* oldp, const WData* newv
     self()->emitWData(oldp - m_sigs_oldvalp, newvalp, bits);
 }
 
+template <>
+void VerilatedTrace<VL_DERIVED_T>::fullWData(vluint32_t* oldp, const WDataV* newvalp, int bits) {
+    for (int i = 0; i < VL_WORDS_I(bits); ++i) oldp[i] = newvalp[i];
+    self()->emitWData(oldp - m_sigs_oldvalp, newvalp, bits);
+}
+
 template <> void VerilatedTrace<VL_DERIVED_T>::fullDouble(vluint32_t* oldp, double newval) {
     // cppcheck-suppress invalidPointerCast
     *reinterpret_cast<double*>(oldp) = newval;

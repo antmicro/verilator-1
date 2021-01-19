@@ -83,7 +83,7 @@ public:
 // simply use a C style array (which is just a pointer).
 
 template <std::size_t T_Words> class VlWide {
-    WData m_storage[T_Words];
+    WDataV m_storage[T_Words];
 
 public:
     // cppcheck-suppress uninitVar
@@ -91,8 +91,8 @@ public:
     ~VlWide() {}
     const WData& at(size_t index) const { return m_storage[index]; }
     WData& at(size_t index) { return m_storage[index]; }
-    WData* data() { return &m_storage[0]; }
-    const WData* data() const { return &m_storage[0]; }
+    WDataV* data() { return &m_storage[0]; }
+    const WDataV* data() const { return &m_storage[0]; }
     bool operator<(const VlWide<T_Words>& rhs) const {
         return VL_LT_W(T_Words, data(), rhs.data());
     }
@@ -399,13 +399,13 @@ inline T VL_NULL_CHECK(T t, const char* filename, int linenum) {
 
 extern std::string VL_CVT_PACK_STR_NW(int lwords, WDataInP lwp) VL_MT_SAFE;
 inline std::string VL_CVT_PACK_STR_NQ(QData lhs) VL_PURE {
-    WData lw[VL_WQ_WORDS_E];
+    WDataV lw[VL_WQ_WORDS_E];
     VL_SET_WQ(lw, lhs);
     return VL_CVT_PACK_STR_NW(VL_WQ_WORDS_E, lw);
 }
 inline std::string VL_CVT_PACK_STR_NN(const std::string& lhs) VL_PURE { return lhs; }
 inline std::string VL_CVT_PACK_STR_NI(IData lhs) VL_PURE {
-    WData lw[VL_WQ_WORDS_E];
+    WDataV lw[VL_WQ_WORDS_E];
     VL_SET_WI(lw, lhs);
     return VL_CVT_PACK_STR_NW(1, lw);
 }
@@ -444,31 +444,31 @@ extern void VL_TIMEFORMAT_IINI(int units, int precision, const std::string& suff
                                int width) VL_MT_SAFE;
 extern IData VL_VALUEPLUSARGS_INW(int rbits, const std::string& ld, WDataOutP rwp) VL_MT_SAFE;
 inline IData VL_VALUEPLUSARGS_INI(int rbits, const std::string& ld, CData& rdr) VL_MT_SAFE {
-    WData rwp[2];  // WData must always be at least 2
+    WDataV rwp[2];  // WData must always be at least 2
     IData got = VL_VALUEPLUSARGS_INW(rbits, ld, rwp);
     if (got) rdr = rwp[0];
     return got;
 }
 inline IData VL_VALUEPLUSARGS_INI(int rbits, const std::string& ld, SData& rdr) VL_MT_SAFE {
-    WData rwp[2];  // WData must always be at least 2
+    WDataV rwp[2];  // WData must always be at least 2
     IData got = VL_VALUEPLUSARGS_INW(rbits, ld, rwp);
     if (got) rdr = rwp[0];
     return got;
 }
 inline IData VL_VALUEPLUSARGS_INI(int rbits, const std::string& ld, IData& rdr) VL_MT_SAFE {
-    WData rwp[2];
+    WDataV rwp[2];
     IData got = VL_VALUEPLUSARGS_INW(rbits, ld, rwp);
     if (got) rdr = rwp[0];
     return got;
 }
 inline IData VL_VALUEPLUSARGS_INQ(int rbits, const std::string& ld, QData& rdr) VL_MT_SAFE {
-    WData rwp[2];
+    WDataV rwp[2];
     IData got = VL_VALUEPLUSARGS_INW(rbits, ld, rwp);
     if (got) rdr = VL_SET_QW(rwp);
     return got;
 }
 inline IData VL_VALUEPLUSARGS_INQ(int rbits, const std::string& ld, double& rdr) VL_MT_SAFE {
-    WData rwp[2];
+    WDataV rwp[2];
     IData got = VL_VALUEPLUSARGS_INW(rbits, ld, rwp);
     if (got) rdr = VL_CVT_D_Q(VL_SET_QW(rwp));
     return got;

@@ -127,6 +127,7 @@ protected:
     inline void emitIData(vluint32_t code, IData newval, int bits);
     inline void emitQData(vluint32_t code, QData newval, int bits);
     inline void emitWData(vluint32_t code, const WData* newvalp, int bits);
+    inline void emitWData(vluint32_t code, const WDataV* newvalp, int bits);
     inline void emitDouble(vluint32_t code, double newval);
 
 public:
@@ -187,7 +188,7 @@ public:
     void fullQData(vluint32_t* oldp, QData newval, int bits) {
         fullQuad(oldp - this->oldp(0), newval, bits);
     }
-    void fullWData(vluint32_t* oldp, const WData* newvalp, int bits) {
+    void fullWData(vluint32_t* oldp, const WDataV* newvalp, int bits) {
         fullArray(oldp - this->oldp(0), newvalp, bits);
     }
     void fullDouble(vluint32_t* oldp, double newval) { fullDouble(oldp - this->oldp(0), newval); }
@@ -208,6 +209,9 @@ public:
     inline void chgWData(vluint32_t* oldp, const WData* newvalp, int bits) {
         chgArray(oldp - this->oldp(0), newvalp, bits);
     }
+    inline void chgWData(vluint32_t* oldp, const WDataV* newvalp, int bits) {
+        chgArray(oldp - this->oldp(0), newvalp, bits);
+    }
     inline void chgDouble(vluint32_t* oldp, double newval) {
         chgDouble(oldp - this->oldp(0), newval);
     }
@@ -218,6 +222,7 @@ public:
     void fullBus(vluint32_t code, const vluint32_t newval, int bits);
     void fullQuad(vluint32_t code, const vluint64_t newval, int bits);
     void fullArray(vluint32_t code, const vluint32_t* newvalp, int bits);
+    void fullArray(vluint32_t code, const WDataV* newvalp, int bits);
     void fullArray(vluint32_t code, const vluint64_t* newvalp, int bits);
     void fullTriBit(vluint32_t code, const vluint32_t newval, const vluint32_t newtri);
     void fullTriBus(vluint32_t code, const vluint32_t newval, const vluint32_t newtri, int bits);
@@ -245,6 +250,14 @@ public:
         if (VL_UNLIKELY(diff)) {
             if (VL_UNLIKELY(bits == 64 || (diff & ((1ULL << bits) - 1)))) {
                 fullQuad(code, newval, bits);
+            }
+        }
+    }
+    inline void chgArray(vluint32_t code, const WDataV* newvalp, int bits) {
+        for (int word = 0; word < (((bits - 1) / 32) + 1); ++word) {
+            if (VL_UNLIKELY(oldp(code)[word] ^ newvalp[word])) {
+                fullArray(code, newvalp, bits);
+                return;
             }
         }
     }

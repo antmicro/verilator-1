@@ -374,7 +374,8 @@ public:
     }
     virtual void visit_assigndly(AstNodeAssign *nodep, bool continuous) {
         if (VN_IS(nodep->lhsp(), VarRef) ||
-            VN_IS(nodep->lhsp(), ArraySel)) {
+            VN_IS(nodep->lhsp(), ArraySel) ||
+            VN_IS(nodep->lhsp(), WordSel)) {
             puts("verilated_nba_ctrl.schedule(&");
             iterateAndNextNull(nodep->lhsp());
             puts(", ");
