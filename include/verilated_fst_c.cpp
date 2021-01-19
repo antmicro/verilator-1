@@ -252,6 +252,22 @@ void VerilatedFst::emitWData(vluint32_t code, const WData* newvalp, int bits) {
 }
 
 VL_ATTR_ALWINLINE
+void VerilatedFst::emitWData(vluint32_t code, const WDataV* newvalp, int bits) {
+    int words = VL_WORDS_I(bits);
+    char* wp = m_strbuf;
+    // Convert the most significant word
+    const int bitsInMSW = VL_BITBIT_E(bits) ? VL_BITBIT_E(bits) : VL_EDATASIZE;
+    cvtEDataToStr(wp, newvalp[--words] << (VL_EDATASIZE - bitsInMSW));
+    wp += bitsInMSW;
+    // Convert the remaining words
+    while (words > 0) {
+        cvtEDataToStr(wp, newvalp[--words]);
+        wp += VL_EDATASIZE;
+    }
+    fstWriterEmitValueChange(m_fst, m_symbolp[code], m_strbuf);
+}
+
+VL_ATTR_ALWINLINE
 void VerilatedFst::emitDouble(vluint32_t code, double newval) {
     fstWriterEmitValueChange(m_fst, m_symbolp[code], &newval);
 }

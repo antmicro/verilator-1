@@ -90,11 +90,13 @@ private:
         VL_DO_DANGLING(nodep->deleteTree(), nodep);
     }
     AstNode* newWordAssign(AstNodeAssign* placep, int word, AstNode* lhsp, AstNode* rhsp) {
-        AstAssign* newp = new AstAssign(placep->fileline(),
-                                        new AstWordSel(placep->fileline(), lhsp->cloneTree(true),
-                                                       new AstConst(placep->fileline(), word)),
-                                        rhsp);
-        return newp;
+        lhsp = new AstWordSel(placep->fileline(), lhsp->cloneTree(true),
+                              new AstConst(placep->fileline(), word));
+        if (VN_IS(placep, AssignDly)) {
+            return new AstAssignDly(placep->fileline(), lhsp, rhsp);
+        } else {
+            return new AstAssign(placep->fileline(), lhsp, rhsp);
+        }
     }
     void addWordAssign(AstNodeAssign* placep, int word, AstNode* lhsp, AstNode* rhsp) {
         insertBefore(placep, newWordAssign(placep, word, lhsp, rhsp));

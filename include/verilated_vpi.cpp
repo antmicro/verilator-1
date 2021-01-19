@@ -1577,7 +1577,7 @@ void vl_get_value(const VerilatedVar* varp, void* varDatap, p_vpi_value valuep,
                     __FILE__, __LINE__, "",
                     "vpi_get_value with more than VL_MULS_MAX_WORDS; increase and recompile");
             }
-            WDataInP datap = (reinterpret_cast<EData*>(varDatap));
+            WDataInP datap = (reinterpret_cast<EDataV*>(varDatap));
             for (int i = 0; i < words; ++i) {
                 t_out[i].aval = datap[i];
                 t_out[i].bval = 0;
@@ -1806,7 +1806,7 @@ vpiHandle vpi_put_value(vpiHandle object, p_vpi_value valuep, p_vpi_time /*time_
                 return object;
             } else if (vop->varp()->vltype() == VLVT_WDATA) {
                 int words = VL_WORDS_I(vop->varp()->packed().elements());
-                WDataOutP datap = (reinterpret_cast<EData*>(vop->varDatap()));
+                WDataOutP datap = (reinterpret_cast<EDataV*>(vop->varDatap()));
                 for (int i = 0; i < words; ++i) {
                     datap[i] = valuep->value.vector[i].aval;
                     if (i == (words - 1)) datap[i] &= vop->mask();

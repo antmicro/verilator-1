@@ -537,12 +537,16 @@ typedef MonitoredValue<vluint16_t> SDataV;
 typedef MonitoredValue<vluint32_t> IDataV;
 typedef MonitoredValue<vluint64_t> QDataV;
 typedef MonitoredValue<vluint32_t> EDataV;
-typedef MonitoredValue<vluint32_t> WDataV;
+typedef MonitoredValue<vluint32_t> EDataV;
+typedef EDataV WDataV;
 typedef MonitoredValue<float> FloatV;
 typedef MonitoredValue<double> DoubleV;
 
-typedef const WData* WDataInPV;  ///< Array input to a function
-typedef WData* WDataOutPV;  ///< Array output from a function
+typedef const WDataV* WDataInP;  ///< Array input to a function
+typedef WDataV* WDataOutP;  ///< Array output from a function
+
+typedef const WDataV* WDataInPV;  ///< Array input to a function
+typedef WDataV* WDataOutPV;  ///< Array output from a function
 
 class VerilatedEvalMsgQueue;
 class VerilatedScopeNameMap;
@@ -1294,10 +1298,10 @@ inline IData VL_URANDOM_RANGE_I(IData hi, IData lo) {
 /// Init time only, so slow is fine
 extern IData VL_RAND_RESET_I(int obits);  ///< Random reset a signal
 extern QData VL_RAND_RESET_Q(int obits);  ///< Random reset a signal
-extern WDataV* VL_RAND_RESET_W(int obits, WDataV* outwp);
+extern WData* VL_RAND_RESET_W(int obits, WData* outwp);  ///< Random reset a signal
 extern WDataOutP VL_RAND_RESET_W(int obits, WDataOutP outwp);  ///< Random reset a signal
 /// Zero reset a signal (slow - else use VL_ZERO_W)
-extern WDataV* VL_ZERO_RESET_W(int obits, WDataV* outwp);
+extern WData* VL_ZERO_RESET_W(int obits, WData* outwp);
 extern WDataOutP VL_ZERO_RESET_W(int obits, WDataOutP outwp);
 
 #if VL_THREADED
@@ -1585,6 +1589,11 @@ static inline void VL_ASSIGNBIT_II(int, int bit, IDataV& lhsr, IData rhs) VL_PUR
 }
 static inline void VL_ASSIGNBIT_QI(int, int bit, QDataV& lhsr, QData rhs) VL_PURE {
     lhsr = ((lhsr & ~(1ULL << VL_BITBIT_Q(bit))) | (static_cast<QData>(rhs) << VL_BITBIT_Q(bit)));
+}
+static inline void VL_ASSIGNBIT_WI(int, int bit, WData* owp, IData rhs) VL_MT_SAFE {
+    EData orig = owp[VL_BITWORD_E(bit)];
+    owp[VL_BITWORD_E(bit)] = ((orig & ~(VL_EUL(1) << VL_BITBIT_E(bit)))
+                              | (static_cast<EData>(rhs) << VL_BITBIT_E(bit)));
 }
 static inline void VL_ASSIGNBIT_WI(int, int bit, WDataOutP owp, IData rhs) VL_MT_SAFE {
     EData orig = owp[VL_BITWORD_E(bit)];
@@ -2188,9 +2197,9 @@ static inline WDataOutP VL_MULS_WWW(int, int lbits, int, WDataOutP owp, WDataInP
                                     WDataInP rwp) VL_MT_SAFE {
     int words = VL_WORDS_I(lbits);
     // cppcheck-suppress variableScope
-    WData lwstore[VL_MULS_MAX_WORDS];  // Fixed size, as MSVC++ doesn't allow [words] here
+    WDataV lwstore[VL_MULS_MAX_WORDS];  // Fixed size, as MSVC++ doesn't allow [words] here
     // cppcheck-suppress variableScope
-    WData rwstore[VL_MULS_MAX_WORDS];
+    WDataV rwstore[VL_MULS_MAX_WORDS];
     WDataInP lwusp = lwp;
     WDataInP rwusp = rwp;
     EData lneg = VL_SIGN_E(lbits, lwp[words - 1]);
@@ -2259,15 +2268,15 @@ static inline WDataOutP VL_DIVS_WWW(int lbits, WDataOutP owp, WDataInP lwp,
     EData lsign = VL_SIGN_E(lbits, lwp[words - 1]);
     EData rsign = VL_SIGN_E(lbits, rwp[words - 1]);
     // cppcheck-suppress variableScope
-    WData lwstore[VL_MULS_MAX_WORDS];  // Fixed size, as MSVC++ doesn't allow [words] here
+    WDataV lwstore[VL_MULS_MAX_WORDS];  // Fixed size, as MSVC++ doesn't allow [words] here
     // cppcheck-suppress variableScope
-    WData rwstore[VL_MULS_MAX_WORDS];
+    WDataV rwstore[VL_MULS_MAX_WORDS];
     WDataInP ltup = lwp;
     WDataInP rtup = rwp;
     if (lsign) { ltup = _VL_CLEAN_INPLACE_W(lbits, VL_NEGATE_W(VL_WORDS_I(lbits), lwstore, lwp)); }
     if (rsign) { rtup = _VL_CLEAN_INPLACE_W(lbits, VL_NEGATE_W(VL_WORDS_I(lbits), rwstore, rwp)); }
     if ((lsign && !rsign) || (!lsign && rsign)) {
-        WData qNoSign[VL_MULS_MAX_WORDS];
+        WDataV qNoSign[VL_MULS_MAX_WORDS];
         VL_DIV_WWW(lbits, qNoSign, ltup, rtup);
         _VL_CLEAN_INPLACE_W(lbits, VL_NEGATE_W(VL_WORDS_I(lbits), owp, qNoSign));
         return owp;
@@ -2281,15 +2290,15 @@ static inline WDataOutP VL_MODDIVS_WWW(int lbits, WDataOutP owp, WDataInP lwp,
     EData lsign = VL_SIGN_E(lbits, lwp[words - 1]);
     EData rsign = VL_SIGN_E(lbits, rwp[words - 1]);
     // cppcheck-suppress variableScope
-    WData lwstore[VL_MULS_MAX_WORDS];  // Fixed size, as MSVC++ doesn't allow [words] here
+    WDataV lwstore[VL_MULS_MAX_WORDS];  // Fixed size, as MSVC++ doesn't allow [words] here
     // cppcheck-suppress variableScope
-    WData rwstore[VL_MULS_MAX_WORDS];
+    WDataV rwstore[VL_MULS_MAX_WORDS];
     WDataInP ltup = lwp;
     WDataInP rtup = rwp;
     if (lsign) { ltup = _VL_CLEAN_INPLACE_W(lbits, VL_NEGATE_W(VL_WORDS_I(lbits), lwstore, lwp)); }
     if (rsign) { rtup = _VL_CLEAN_INPLACE_W(lbits, VL_NEGATE_W(VL_WORDS_I(lbits), rwstore, rwp)); }
     if (lsign) {  // Only dividend sign matters for modulus
-        WData qNoSign[VL_MULS_MAX_WORDS];
+        WDataV qNoSign[VL_MULS_MAX_WORDS];
         VL_MODDIV_WWW(lbits, qNoSign, ltup, rtup);
         _VL_CLEAN_INPLACE_W(lbits, VL_NEGATE_W(VL_WORDS_I(lbits), owp, qNoSign));
         return owp;
@@ -2481,7 +2490,7 @@ static inline void _VL_INSERT_WW(int, WDataOutP owp, WDataInP lwp, int hbit, int
 
 static inline void _VL_INSERT_WQ(int obits, WDataOutP owp, QData ld, int hbit,
                                  int lbit) VL_MT_SAFE {
-    WData lwp[VL_WQ_WORDS_E];
+    WDataV lwp[VL_WQ_WORDS_E];
     VL_SET_WQ(lwp, ld);
     _VL_INSERT_WW(obits, owp, lwp, hbit, lbit);
 }
@@ -2827,7 +2836,7 @@ static inline WDataOutP VL_SHIFTR_WWW(int obits, int lbits, int rbits, WDataOutP
 }
 static inline WDataOutP VL_SHIFTR_WWQ(int obits, int lbits, int rbits, WDataOutP owp, WDataInP lwp,
                                       QData rd) VL_MT_SAFE {
-    WData rwp[VL_WQ_WORDS_E];
+    WDataV rwp[VL_WQ_WORDS_E];
     VL_SET_WQ(rwp, rd);
     return VL_SHIFTR_WWW(obits, lbits, rbits, owp, lwp, rwp);
 }
@@ -2914,7 +2923,7 @@ static inline WDataOutP VL_SHIFTRS_WWW(int obits, int lbits, int rbits, WDataOut
 }
 static inline WDataOutP VL_SHIFTRS_WWQ(int obits, int lbits, int rbits, WDataOutP owp,
                                        WDataInP lwp, QData rd) VL_MT_SAFE {
-    WData rwp[VL_WQ_WORDS_E];
+    WDataV rwp[VL_WQ_WORDS_E];
     VL_SET_WQ(rwp, rd);
     return VL_SHIFTRS_WWW(obits, lbits, rbits, owp, lwp, rwp);
 }
@@ -2939,12 +2948,12 @@ static inline QData VL_SHIFTRS_QQW(int obits, int lbits, int rbits, QData lhs,
     return VL_SHIFTRS_QQI(obits, lbits, 32, lhs, rwp[0]);
 }
 static inline IData VL_SHIFTRS_IIQ(int obits, int lbits, int rbits, IData lhs, QData rhs) VL_PURE {
-    WData rwp[VL_WQ_WORDS_E];
+    WDataV rwp[VL_WQ_WORDS_E];
     VL_SET_WQ(rwp, rhs);
     return VL_SHIFTRS_IIW(obits, lbits, rbits, lhs, rwp);
 }
 static inline QData VL_SHIFTRS_QQQ(int obits, int lbits, int rbits, QData lhs, QData rhs) VL_PURE {
-    WData rwp[VL_WQ_WORDS_E];
+    WDataV rwp[VL_WQ_WORDS_E];
     VL_SET_WQ(rwp, rhs);
     return VL_SHIFTRS_QQW(obits, lbits, rbits, lhs, rwp);
 }
