@@ -351,103 +351,104 @@ class MonitoredValueBase {
     public:
         virtual void release() {};
         virtual void assign_no_notify(vluint64_t) {};
+        virtual vluint64_t value() const = 0;
 };
 
 template<typename T>
 class MonitoredValue : public MonitoredValueBase {
     public:
 
-        MonitoredValue(): value(), m_mtx() {
+        MonitoredValue(): m_value(), m_mtx() {
         }
 
         template <class U>
         MonitoredValue(U v): m_mtx() {
             std::unique_lock<std::mutex> lck(m_mtx);
-            value = (T)v;
+            m_value = (T)v;
         }
 
         MonitoredValue(const MonitoredValue& o) {
             std::unique_lock<std::mutex> lck(m_mtx);
-            value = (T)o;
+            m_value = (T)o;
         }
 
         operator T() const {
-            return value;
+            return m_value;
         }
 
         MonitoredValue& operator=(const MonitoredValue& v) {
             std::unique_lock<std::mutex> lck(m_mtx);
-            // Assign just the value
-            value = (T)v;
+            // Assign just the m_value
+            m_value = (T)v;
             written();
             return *this;
         }
 
         MonitoredValue& operator&=(const MonitoredValue& v) {
             std::unique_lock<std::mutex> lck(m_mtx);
-            value &= (T)v;
+            m_value &= (T)v;
             written();
             return *this;
         }
         MonitoredValue& operator|=(const MonitoredValue& v) {
             std::unique_lock<std::mutex> lck(m_mtx);
-            value |= (T)v;
+            m_value |= (T)v;
             written();
             return *this;
         }
         MonitoredValue& operator^=(const MonitoredValue& v) {
             std::unique_lock<std::mutex> lck(m_mtx);
-            value ^= (T)v;
+            m_value ^= (T)v;
             written();
             return *this;
         }
         MonitoredValue& operator+=(const MonitoredValue& v) {
             std::unique_lock<std::mutex> lck(m_mtx);
-            value += (T)v;
+            m_value += (T)v;
             written();
             return *this;
         }
         MonitoredValue& operator-=(const MonitoredValue& v) {
             std::unique_lock<std::mutex> lck(m_mtx);
-            value -= (T)v;
+            m_value -= (T)v;
             written();
             return *this;
         }
         MonitoredValue& operator*=(const MonitoredValue& v) {
             std::unique_lock<std::mutex> lck(m_mtx);
-            value *= (T)v;
+            m_value *= (T)v;
             written();
             return *this;
         }
 
         MonitoredValue& operator>>=(int s) {
             std::unique_lock<std::mutex> lck(m_mtx);
-            value >>= s;
+            m_value >>= s;
             written();
             return *this;
         }
 
         MonitoredValue& operator--() {
             std::unique_lock<std::mutex> lck(m_mtx);
-            --value;
+            --m_value;
             written();
             return *this;
         }
         MonitoredValue operator--(int) {
             std::unique_lock<std::mutex> lck(m_mtx);
-            MonitoredValue v(value--);
+            MonitoredValue v(m_value--);
             written();
             return v;
         }
         MonitoredValue& operator++() {
             std::unique_lock<std::mutex> lck(m_mtx);
-            ++value;
+            ++m_value;
             written();
             return *this;
         }
         MonitoredValue operator++(int) {
             std::unique_lock<std::mutex> lck(m_mtx);
-            MonitoredValue v(value++);
+            MonitoredValue v(m_value++);
             written();
             return v;
         }
@@ -455,42 +456,42 @@ class MonitoredValue : public MonitoredValueBase {
         template <class U>
         bool operator==(const U &b) {
             std::unique_lock<std::mutex> lck(m_mtx);
-            return value == b;
+            return m_value == b;
         }
         template <class U>
         bool operator>(const U &b) {
             std::unique_lock<std::mutex> lck(m_mtx);
-            return value > b;
+            return m_value > b;
         }
         template <class U>
         bool operator>=(const U &b) {
             std::unique_lock<std::mutex> lck(m_mtx);
-            return value >= b;
+            return m_value >= b;
         }
         template <class U>
         bool operator<(const U &b) {
             std::unique_lock<std::mutex> lck(m_mtx);
-            return value < b;
+            return m_value < b;
         }
         template <class U>
         bool operator<=(const U &b) {
             std::unique_lock<std::mutex> lck(m_mtx);
-            return value <= b;
+            return m_value <= b;
         }
 
         void assign_no_notify(vluint64_t v) {
-            value = (T)v;
+            m_value = (T)v;
         }
 
         void assign_no_lock(T v) {
-            value = v;
+            m_value = v;
             written();
         }
 
         void subscribe(VerilatedThread::Promise<T>& promise, bool init) {
             std::unique_lock<std::mutex> lck(m_mtx);
             promises.push_back(&promise);
-            if (init) promise.value = value;
+            if (init) promise.value = m_value;
         }
 
         void unsubscribe(VerilatedThread::Promise<T>& promise) {
@@ -505,8 +506,12 @@ class MonitoredValue : public MonitoredValueBase {
             return m_mtx;
         }
 
+        virtual vluint64_t value() const {
+            return m_value;
+        }
+
     private:
-        std::atomic<T> value;
+        std::atomic<T> m_value;
 
         mutable std::mutex m_mtx;
 
@@ -514,7 +519,7 @@ class MonitoredValue : public MonitoredValueBase {
 
         void written() {
             for (auto& promise : promises) {
-                promise->set(value);
+                promise->set(m_value);
             }
         }
 };
@@ -557,6 +562,14 @@ class VerilatedNBACtrl {
         std::mutex mtx;
 
     public:
+
+        vluint64_t get_scheduled(MonitoredValueBase* var) {
+            auto it = data.find(var);
+            if (it != data.end()) {
+                return it->second;
+            }
+            return var->value();
+        }
 
         void schedule(MonitoredValueBase* var, vluint64_t val) {
             std::unique_lock<std::mutex> lck(mtx);
