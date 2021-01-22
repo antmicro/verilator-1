@@ -37,6 +37,18 @@
 //######################################################################
 // Expand state, as a visitor of each AstNode
 
+AstVarRef* getVarRefp(AstNode* nodep) {
+    if (auto* refp = VN_CAST(nodep, VarRef)) {
+        return refp;
+    } else if (auto* selp = VN_CAST(nodep, NodeSel)) {
+        return getVarRefp(selp->lhsp());
+    } else if (auto* methp = VN_CAST(nodep, CMethodHard)) {
+        return getVarRefp(methp->fromp());
+    } else {
+        return nullptr;
+    }
+}
+
 class ExpandVisitor final : public AstNVisitor {
 private:
     // NODE STATE
@@ -481,6 +493,7 @@ private:
                         // else we would just be setting it to the same exact value
                         AstNode* oldvalp = newAstWordSelClone(destp, w);
                         fixCloneLvalue(oldvalp);
+                        getVarRefp(oldvalp)->useScheduledValue(VN_IS(nodep, AssignDly));
                         if (!ones) {
                             oldvalp
                                 = new AstAnd(lhsp->fileline(),
@@ -502,6 +515,7 @@ private:
                 }
                 AstNode* oldvalp = destp->cloneTree(true);
                 fixCloneLvalue(oldvalp);
+                getVarRefp(oldvalp)->useScheduledValue(VN_IS(nodep, AssignDly));
                 if (!ones) {
                     oldvalp = new AstAnd(lhsp->fileline(), new AstConst(lhsp->fileline(), maskold),
                                          oldvalp);
@@ -522,6 +536,7 @@ private:
                 AstNode* oldvalp
                     = newWordSel(lhsp->fileline(), destp->cloneTree(true), lhsp->lsbp(), 0);
                 fixCloneLvalue(oldvalp);
+                getVarRefp(oldvalp)->useScheduledValue(VN_IS(nodep, AssignDly));
                 if (!ones) {
                     oldvalp = new AstAnd(
                         lhsp->fileline(),
@@ -563,6 +578,7 @@ private:
                 AstNode* destp = lhsp->fromp()->unlinkFrBack();
                 AstNode* oldvalp = destp->cloneTree(true);
                 fixCloneLvalue(oldvalp);
+                getVarRefp(oldvalp)->useScheduledValue(VN_IS(nodep, AssignDly));
 
                 V3Number maskwidth(nodep, destp->widthMin());
                 for (int bit = 0; bit < lhsp->widthConst(); bit++) maskwidth.setBit(bit, 1);

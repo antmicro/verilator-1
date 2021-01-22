@@ -39,6 +39,8 @@ constexpr int EMITC_NUM_CONSTW
 //######################################################################
 // Emit statements and math operators
 
+extern AstVarRef* getVarRefp(AstNode* nodep);
+
 class EmitCStmts VL_NOT_FINAL : public EmitCBaseVisitor {
 private:
     typedef std::vector<const AstVar*> VarVec;
@@ -1336,8 +1338,12 @@ public:
                 puts(")");
             }
         }
+        if (nodep->useScheduledValue())
+            puts("verilated_nba_ctrl.get_scheduled(&");
         puts(nodep->hiernameProtect());
         puts(nodep->varp()->nameProtect());
+        if (nodep->useScheduledValue())
+            puts(")");
     }
     void emitCvtPackStr(AstNode* nodep) {
         if (const AstConst* constp = VN_CAST(nodep, Const)) {
@@ -2241,6 +2247,15 @@ bool EmitCStmts::emitSimpleOk(AstNodeMath* nodep) {
 
 void EmitCStmts::emitOpName(AstNode* nodep, const string& format, AstNode* lhsp, AstNode* rhsp,
                             AstNode* thsp) {
+    auto primitiveCastTmp = m_primitiveCast;
+    bool useScheduledValue = false;
+    auto* varrefp = getVarRefp(lhsp);
+    if (varrefp && varrefp->useScheduledValue()) {
+        m_primitiveCast = false;
+        useScheduledValue = true;
+        varrefp->useScheduledValue(false);
+        puts("verilated_nba_ctrl.get_scheduled(&");
+    }
     // Look at emitOperator() format for term/uni/dual/triops,
     // and write out appropriate text.
     //  %n*     node
@@ -2355,6 +2370,11 @@ void EmitCStmts::emitOpName(AstNode* nodep, const string& format, AstNode* lhsp,
             s += pos[0];
             puts(s);
         }
+    }
+    if (useScheduledValue) {
+        puts(")");
+        m_primitiveCast = primitiveCastTmp;
+        varrefp->useScheduledValue(true);
     }
 }
 

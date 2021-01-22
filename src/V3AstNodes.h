@@ -2392,6 +2392,8 @@ public:
 };
 
 class AstVarRef final : public AstNodeVarRef {
+private:
+    bool m_useScheduledValue = false;
     // A reference to a variable (lvalue or rvalue)
 public:
     AstVarRef(FileLine* fl, const string& name, const VAccess& access)
@@ -2438,6 +2440,8 @@ public:
     virtual string emitVerilog() override { V3ERROR_NA_RETURN(""); }
     virtual string emitC() override { V3ERROR_NA_RETURN(""); }
     virtual bool cleanOut() const override { return true; }
+    void useScheduledValue(bool u) { m_useScheduledValue = u; }
+    bool useScheduledValue() { return m_useScheduledValue; }
 };
 
 class AstVarXRef final : public AstNodeVarRef {
