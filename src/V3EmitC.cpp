@@ -1327,25 +1327,26 @@ public:
         puts(")");
     }
     // Terminals
+    void emitPrimitiveCast(AstNodeDType* dtypep) {
+        if (dtypep->isDouble()) {
+            puts("(double)");
+        } else if (!dtypep->isString()) {
+            int width = dtypep->width();
+            puts("(");
+            switch (width) {
+                case 8: puts("vluint8_t"); break;
+                case 16: puts("vluint16_t"); break;
+                case 32: puts("vluint32_t"); break;
+                case 64:
+                default: puts("vluint64_t"); break;
+            }
+            puts(")");
+        }
+    }
     virtual void visit(AstVarRef* nodep) override {
         AstNodeDType* dtypep = nodep->varp()->dtypep();
-
-        if (m_primitiveCast) {
-            if (dtypep->isDouble()) {
-                puts("(double)");
-            } else if (!dtypep->isString()) {
-                int width = dtypep->width();
-                puts("(");
-                switch (width) {
-                    case 8: puts("vluint8_t"); break;
-                    case 16: puts("vluint16_t"); break;
-                    case 32: puts("vluint32_t"); break;
-                    case 64:
-                    default: puts("vluint64_t"); break;
-                }
-                puts(")");
-            }
-        }
+        if (!dtypep->isWide() && m_primitiveCast)
+            emitPrimitiveCast(dtypep);
         if (nodep->useScheduledValue())
             puts("verilated_nba_ctrl.get_scheduled(&");
         puts(nodep->hiernameProtect());
@@ -2255,14 +2256,19 @@ bool EmitCStmts::emitSimpleOk(AstNodeMath* nodep) {
 
 void EmitCStmts::emitOpName(AstNode* nodep, const string& format, AstNode* lhsp, AstNode* rhsp,
                             AstNode* thsp) {
-    auto primitiveCastTmp = m_primitiveCast;
     bool useScheduledValue = false;
     auto* varrefp = getVarRefp(lhsp);
     if (varrefp && varrefp->useScheduledValue()) {
-        m_primitiveCast = false;
         useScheduledValue = true;
         varrefp->useScheduledValue(false);
         puts("verilated_nba_ctrl.get_scheduled(&");
+    }
+    bool primitiveCastPre = m_primitiveCast;
+    if (VN_IS(nodep, NodeSel)) {
+        if (m_primitiveCast) {
+            emitPrimitiveCast(getVarRefp(nodep)->varp()->dtypep());
+            m_primitiveCast = false;
+        }
     }
     // Look at emitOperator() format for term/uni/dual/triops,
     // and write out appropriate text.
@@ -2381,9 +2387,9 @@ void EmitCStmts::emitOpName(AstNode* nodep, const string& format, AstNode* lhsp,
     }
     if (useScheduledValue) {
         puts(")");
-        m_primitiveCast = primitiveCastTmp;
         varrefp->useScheduledValue(true);
     }
+    m_primitiveCast = primitiveCastPre;
 }
 
 //----------------------------------------------------------------------
