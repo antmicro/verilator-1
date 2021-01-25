@@ -398,10 +398,18 @@ public:
             iterateAndNextNull(nodep->lhsp());
             puts(", ");
             if (continuous) {
-                if (m_funcp && m_funcp->isStatic().falseKnown())
-                    puts("[vlTOPp,vlSymsp,this] { return (");
-                else
-                    puts("[vlTOPp,vlSymsp] { return (");
+                puts("[vlTOPp,vlSymsp");
+                if (m_funcp) {
+                    if (m_funcp->isStatic().falseKnown())
+                        puts(",this");
+                    for (auto* nodep = m_funcp->initsp(); nodep; nodep = nodep->nextp()) {
+                        if (auto* varp = VN_CAST(nodep, Var)) {
+                            puts(",");
+                            puts(varp->name());
+                        }
+                    }
+                }
+                puts("] { return (");
             }
             iterateAndNextNull(nodep->rhsp());
             if (continuous)
