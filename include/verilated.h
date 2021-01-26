@@ -37,6 +37,9 @@
 #include <cstring>
 #include <vector>
 #include <map>
+#include <algorithm>
+#include <atomic>
+#include <mutex>
 #include <thread>
 #include <condition_variable>
 #include <functional>
@@ -45,12 +48,6 @@
 // <iostream> avoided to reduce compile time
 // <map> avoided and instead in verilated_heavy.h to reduce compile time
 // <string> avoided and instead in verilated_heavy.h to reduce compile time
-#ifdef VL_THREADED
-# include <atomic>
-# include <mutex>
-# include <algorithm>
-# include <thread>
-#endif
 
 // Allow user to specify their own include file
 #ifdef VL_VERILATED_INCLUDE
