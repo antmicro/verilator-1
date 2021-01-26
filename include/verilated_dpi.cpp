@@ -269,12 +269,12 @@ static void _vl_svGetBitArrElemVecVal(svBitVecVal* d, const svOpenArrayHandle s,
     void* datap = _vl_sv_adjusted_datap(varp, nargs, indx1, indx2, indx3);
     if (VL_UNLIKELY(!datap)) return;
     switch (varp->vltype()) {  // LCOV_EXCL_BR_LINE
-    case VLVT_UINT8: d[0] = *(reinterpret_cast<CData*>(datap)); return;
-    case VLVT_UINT16: d[0] = *(reinterpret_cast<SData*>(datap)); return;
-    case VLVT_UINT32: d[0] = *(reinterpret_cast<IData*>(datap)); return;
+    case VLVT_UINT8: d[0] = *(reinterpret_cast<CDataV*>(datap)); return;
+    case VLVT_UINT16: d[0] = *(reinterpret_cast<SDataV*>(datap)); return;
+    case VLVT_UINT32: d[0] = *(reinterpret_cast<IDataV*>(datap)); return;
     case VLVT_UINT64: {
         WData lwp[2];
-        VL_SET_WQ(lwp, *(reinterpret_cast<QData*>(datap)));
+        VL_SET_WQ(lwp, *(reinterpret_cast<QDataV*>(datap)));
         d[0] = lwp[0];
         d[1] = lwp[1];
         break;
@@ -298,20 +298,20 @@ static void _vl_svGetLogicArrElemVecVal(svLogicVecVal* d, const svOpenArrayHandl
     if (VL_UNLIKELY(!datap)) return;
     switch (varp->vltype()) {  // LCOV_EXCL_BR_LINE
     case VLVT_UINT8:
-        d[0].aval = *(reinterpret_cast<CData*>(datap));
+        d[0].aval = *(reinterpret_cast<CDataV*>(datap));
         d[0].bval = 0;
         return;
     case VLVT_UINT16:
-        d[0].aval = *(reinterpret_cast<SData*>(datap));
+        d[0].aval = *(reinterpret_cast<SDataV*>(datap));
         d[0].bval = 0;
         return;
     case VLVT_UINT32:
-        d[0].aval = *(reinterpret_cast<IData*>(datap));
+        d[0].aval = *(reinterpret_cast<IDataV*>(datap));
         d[0].bval = 0;
         return;
     case VLVT_UINT64: {
         WData lwp[2];
-        VL_SET_WQ(lwp, *(reinterpret_cast<QData*>(datap)));
+        VL_SET_WQ(lwp, *(reinterpret_cast<QDataV*>(datap)));
         d[0].aval = lwp[0];
         d[0].bval = 0;
         d[1].aval = lwp[1];
@@ -339,11 +339,19 @@ static void _vl_svPutBitArrElemVecVal(const svOpenArrayHandle d, const svBitVecV
     const VerilatedDpiOpenVar* varp = _vl_openhandle_varp(d);
     void* datap = _vl_sv_adjusted_datap(varp, nargs, indx1, indx2, indx3);
     if (VL_UNLIKELY(!datap)) return;
+<<<<<<< HEAD
     switch (varp->vltype()) {  // LCOV_EXCL_BR_LINE
     case VLVT_UINT8: *(reinterpret_cast<CData*>(datap)) = s[0]; return;
     case VLVT_UINT16: *(reinterpret_cast<SData*>(datap)) = s[0]; return;
     case VLVT_UINT32: *(reinterpret_cast<IData*>(datap)) = s[0]; return;
     case VLVT_UINT64: *(reinterpret_cast<QData*>(datap)) = _VL_SET_QII(s[1], s[0]); break;
+=======
+    switch (varp->vltype()) {
+    case VLVT_UINT8: *(reinterpret_cast<CDataV*>(datap)) = s[0]; return;
+    case VLVT_UINT16: *(reinterpret_cast<SDataV*>(datap)) = s[0]; return;
+    case VLVT_UINT32: *(reinterpret_cast<IDataV*>(datap)) = s[0]; return;
+    case VLVT_UINT64: *(reinterpret_cast<QDataV*>(datap)) = _VL_SET_QII(s[1], s[0]); break;
+>>>>>>> 4399815b (Change reference types to MonitoredValue references)
     case VLVT_WDATA: {
         WDataOutP wdatap = (reinterpret_cast<WDataOutP>(datap));
         for (int i = 0; i < VL_WORDS_I(varp->packed().elements()); ++i) wdatap[i] = s[i];
@@ -361,12 +369,19 @@ static void _vl_svPutLogicArrElemVecVal(const svOpenArrayHandle d, const svLogic
     const VerilatedDpiOpenVar* varp = _vl_openhandle_varp(d);
     void* datap = _vl_sv_adjusted_datap(varp, nargs, indx1, indx2, indx3);
     if (VL_UNLIKELY(!datap)) return;
+<<<<<<< HEAD
     switch (varp->vltype()) {  // LCOV_EXCL_BR_LINE
     case VLVT_UINT8: *(reinterpret_cast<CData*>(datap)) = s[0].aval; return;
     case VLVT_UINT16: *(reinterpret_cast<SData*>(datap)) = s[0].aval; return;
     case VLVT_UINT32: *(reinterpret_cast<IData*>(datap)) = s[0].aval; return;
+=======
+    switch (varp->vltype()) {
+    case VLVT_UINT8: *(reinterpret_cast<CDataV*>(datap)) = s[0].aval; return;
+    case VLVT_UINT16: *(reinterpret_cast<SDataV*>(datap)) = s[0].aval; return;
+    case VLVT_UINT32: *(reinterpret_cast<IDataV*>(datap)) = s[0].aval; return;
+>>>>>>> 4399815b (Change reference types to MonitoredValue references)
     case VLVT_UINT64:
-        *(reinterpret_cast<QData*>(datap)) = _VL_SET_QII(s[1].aval, s[0].aval);
+        *(reinterpret_cast<QDataV*>(datap)) = _VL_SET_QII(s[1].aval, s[0].aval);
         break;
     case VLVT_WDATA: {
         WDataOutP wdatap = (reinterpret_cast<WDataOutP>(datap));
@@ -387,9 +402,23 @@ static svBit _vl_svGetBitArrElem(const svOpenArrayHandle s, int nargs, int indx1
     const VerilatedDpiOpenVar* varp = _vl_openhandle_varp(s);
     void* datap = _vl_sv_adjusted_datap(varp, nargs, indx1, indx2, indx3);
     if (VL_UNLIKELY(!datap)) return 0;
+<<<<<<< HEAD
     switch (varp->vltype()) {  // LCOV_EXCL_BR_LINE
     case VLVT_UINT8: return (*(reinterpret_cast<CData*>(datap))) & 1;
     default:  // LCOV_EXCL_START  // Errored earlier
+=======
+    switch (varp->vltype()) {
+    case VLVT_UINT8: return (*(reinterpret_cast<CDataV*>(datap)) >> lsb) & 1;
+    case VLVT_UINT16: return (*(reinterpret_cast<SDataV*>(datap)) >> lsb) & 1;
+    case VLVT_UINT32: return (*(reinterpret_cast<IDataV*>(datap)) >> lsb) & 1;
+    case VLVT_UINT64:
+        return (*(reinterpret_cast<QDataV*>(datap)) >> static_cast<QData>(lsb)) & 1ULL;
+    case VLVT_WDATA: {
+        WDataOutP wdatap = (reinterpret_cast<WDataOutP>(datap));
+        return VL_BITRSHIFT_W(wdatap, lsb) & 1;
+    }
+    default:
+>>>>>>> 4399815b (Change reference types to MonitoredValue references)
         _VL_SVDPI_WARN("%%Warning: DPI svOpenArrayHandle function unsupported datatype (%d).\n",
                        varp->vltype());
         return 0;  // LCOV_EXCL_STOP
@@ -403,9 +432,19 @@ static void _vl_svPutBitArrElem(const svOpenArrayHandle d, svBit value, int narg
     const VerilatedDpiOpenVar* varp = _vl_openhandle_varp(d);
     void* datap = _vl_sv_adjusted_datap(varp, nargs, indx1, indx2, indx3);
     if (VL_UNLIKELY(!datap)) return;
+<<<<<<< HEAD
     switch (varp->vltype()) {  // LCOV_EXCL_BR_LINE
     case VLVT_UINT8: *(reinterpret_cast<CData*>(datap)) = value; return;
     default:  // LCOV_EXCL_START  // Errored earlier
+=======
+    switch (varp->vltype()) {
+    case VLVT_UINT8: VL_ASSIGNBIT_II(-1, lsb, *(reinterpret_cast<CDataV*>(datap)), value); return;
+    case VLVT_UINT16: VL_ASSIGNBIT_II(-1, lsb, *(reinterpret_cast<SDataV*>(datap)), value); return;
+    case VLVT_UINT32: VL_ASSIGNBIT_II(-1, lsb, *(reinterpret_cast<IDataV*>(datap)), value); return;
+    case VLVT_UINT64: VL_ASSIGNBIT_QI(-1, lsb, *(reinterpret_cast<QDataV*>(datap)), value); return;
+    case VLVT_WDATA: VL_ASSIGNBIT_WI(-1, lsb, (reinterpret_cast<WDataOutP>(datap)), value); return;
+    default:
+>>>>>>> 4399815b (Change reference types to MonitoredValue references)
         _VL_SVDPI_WARN("%%Warning: DPI svOpenArrayHandle function unsupported datatype (%d).\n",
                        varp->vltype());
         return;  // LCOV_EXCL_STOP

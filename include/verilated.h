@@ -222,7 +222,7 @@ private:
 
 public:
     VerilatedThread(std::function<void(VerilatedThread*)> func, bool oneshot, std::string name);
-   
+
     VerilatedThread(std::function<void(VerilatedThread*)> func, VerilatedThreadPool* pool);
 
     bool should_exit() {
@@ -1337,10 +1337,10 @@ extern IData VL_SSCANF_IIX(int lbits, IData ld, const char* formatp, ...);
 extern IData VL_SSCANF_IQX(int lbits, QData ld, const char* formatp, ...);
 extern IData VL_SSCANF_IWX(int lbits, WDataInP lwp, const char* formatp, ...);
 
-extern void VL_SFORMAT_X(int obits, CData& destr, const char* formatp, ...);
-extern void VL_SFORMAT_X(int obits, SData& destr, const char* formatp, ...);
-extern void VL_SFORMAT_X(int obits, IData& destr, const char* formatp, ...);
-extern void VL_SFORMAT_X(int obits, QData& destr, const char* formatp, ...);
+extern void VL_SFORMAT_X(int obits, CDataV& destr, const char* formatp, ...);
+extern void VL_SFORMAT_X(int obits, SDataV& destr, const char* formatp, ...);
+extern void VL_SFORMAT_X(int obits, IDataV& destr, const char* formatp, ...);
+extern void VL_SFORMAT_X(int obits, QDataV& destr, const char* formatp, ...);
 extern void VL_SFORMAT_X(int obits, void* destp, const char* formatp, ...);
 
 extern IData VL_SYSTEM_IW(int lhswords, WDataInP lhsp);
@@ -1577,16 +1577,16 @@ static inline WDataOutP VL_ASSIGN_W(int obits, WDataOutP owp, WDataInP lwp) VL_M
 }
 
 // EMIT_RULE: VL_ASSIGNBIT:  rclean=clean;
-static inline void VL_ASSIGNBIT_II(int, int bit, CData& lhsr, IData rhs) VL_PURE {
+static inline void VL_ASSIGNBIT_II(int, int bit, CDataV& lhsr, IData rhs) VL_PURE {
     lhsr = ((lhsr & ~(VL_UL(1) << VL_BITBIT_I(bit))) | (rhs << VL_BITBIT_I(bit)));
 }
-static inline void VL_ASSIGNBIT_II(int, int bit, SData& lhsr, IData rhs) VL_PURE {
+static inline void VL_ASSIGNBIT_II(int, int bit, SDataV& lhsr, IData rhs) VL_PURE {
     lhsr = ((lhsr & ~(VL_UL(1) << VL_BITBIT_I(bit))) | (rhs << VL_BITBIT_I(bit)));
 }
-static inline void VL_ASSIGNBIT_II(int, int bit, IData& lhsr, IData rhs) VL_PURE {
+static inline void VL_ASSIGNBIT_II(int, int bit, IDataV& lhsr, IData rhs) VL_PURE {
     lhsr = ((lhsr & ~(VL_UL(1) << VL_BITBIT_I(bit))) | (rhs << VL_BITBIT_I(bit)));
 }
-static inline void VL_ASSIGNBIT_QI(int, int bit, QData& lhsr, QData rhs) VL_PURE {
+static inline void VL_ASSIGNBIT_QI(int, int bit, QDataV& lhsr, QData rhs) VL_PURE {
     lhsr = ((lhsr & ~(1ULL << VL_BITBIT_Q(bit))) | (static_cast<QData>(rhs) << VL_BITBIT_Q(bit)));
 }
 static inline void VL_ASSIGNBIT_WI(int, int bit, WDataOutP owp, IData rhs) VL_MT_SAFE {
@@ -1595,16 +1595,16 @@ static inline void VL_ASSIGNBIT_WI(int, int bit, WDataOutP owp, IData rhs) VL_MT
                               | (static_cast<EData>(rhs) << VL_BITBIT_E(bit)));
 }
 // Alternative form that is an instruction faster when rhs is constant one.
-static inline void VL_ASSIGNBIT_IO(int, int bit, CData& lhsr, IData) VL_PURE {
+static inline void VL_ASSIGNBIT_IO(int, int bit, CDataV& lhsr, IData) VL_PURE {
     lhsr = (lhsr | (VL_UL(1) << VL_BITBIT_I(bit)));
 }
-static inline void VL_ASSIGNBIT_IO(int, int bit, SData& lhsr, IData) VL_PURE {
+static inline void VL_ASSIGNBIT_IO(int, int bit, SDataV& lhsr, IData) VL_PURE {
     lhsr = (lhsr | (VL_UL(1) << VL_BITBIT_I(bit)));
 }
-static inline void VL_ASSIGNBIT_IO(int, int bit, IData& lhsr, IData) VL_PURE {
+static inline void VL_ASSIGNBIT_IO(int, int bit, IDataV& lhsr, IData) VL_PURE {
     lhsr = (lhsr | (VL_UL(1) << VL_BITBIT_I(bit)));
 }
-static inline void VL_ASSIGNBIT_QO(int, int bit, QData& lhsr, IData) VL_PURE {
+static inline void VL_ASSIGNBIT_QO(int, int bit, QDataV& lhsr, IData) VL_PURE {
     lhsr = (lhsr | (1ULL << VL_BITBIT_Q(bit)));
 }
 static inline void VL_ASSIGNBIT_WO(int, int bit, WDataOutP owp, IData) VL_MT_SAFE {
@@ -2393,19 +2393,19 @@ QData VL_POWSS_QQW(int obits, int, int rbits, QData lhs, WDataInP rwp, bool lsig
 
 // INTERNAL: Stuff LHS bit 0++ into OUTPUT at specified offset
 // ld may be "dirty", output is clean
-static inline void _VL_INSERT_II(int, CData& lhsr, IData ld, int hbit, int lbit) VL_PURE {
+static inline void _VL_INSERT_II(int, CDataV& lhsr, IData ld, int hbit, int lbit) VL_PURE {
     IData insmask = (VL_MASK_I(hbit - lbit + 1)) << lbit;
     lhsr = (lhsr & ~insmask) | ((ld << lbit) & insmask);
 }
-static inline void _VL_INSERT_II(int, SData& lhsr, IData ld, int hbit, int lbit) VL_PURE {
+static inline void _VL_INSERT_II(int, SDataV& lhsr, IData ld, int hbit, int lbit) VL_PURE {
     IData insmask = (VL_MASK_I(hbit - lbit + 1)) << lbit;
     lhsr = (lhsr & ~insmask) | ((ld << lbit) & insmask);
 }
-static inline void _VL_INSERT_II(int, IData& lhsr, IData ld, int hbit, int lbit) VL_PURE {
+static inline void _VL_INSERT_II(int, IDataV& lhsr, IData ld, int hbit, int lbit) VL_PURE {
     IData insmask = (VL_MASK_I(hbit - lbit + 1)) << lbit;
     lhsr = (lhsr & ~insmask) | ((ld << lbit) & insmask);
 }
-static inline void _VL_INSERT_QQ(int, QData& lhsr, QData ld, int hbit, int lbit) VL_PURE {
+static inline void _VL_INSERT_QQ(int, QDataV& lhsr, QData ld, int hbit, int lbit) VL_PURE {
     QData insmask = (VL_MASK_Q(hbit - lbit + 1)) << lbit;
     lhsr = (lhsr & ~insmask) | ((ld << lbit) & insmask);
 }
@@ -3089,22 +3089,22 @@ static inline WDataOutP VL_RTOIROUND_W_D(int obits, WDataOutP owp, double lhs) V
 // Range assignments
 
 // EMIT_RULE: VL_ASSIGNRANGE:  rclean=dirty;
-static inline void VL_ASSIGNSEL_IIII(int obits, int lsb, CData& lhsr, IData rhs) VL_PURE {
+static inline void VL_ASSIGNSEL_IIII(int obits, int lsb, CDataV& lhsr, IData rhs) VL_PURE {
     _VL_INSERT_II(obits, lhsr, rhs, lsb + obits - 1, lsb);
 }
-static inline void VL_ASSIGNSEL_IIII(int obits, int lsb, SData& lhsr, IData rhs) VL_PURE {
+static inline void VL_ASSIGNSEL_IIII(int obits, int lsb, SDataV& lhsr, IData rhs) VL_PURE {
     _VL_INSERT_II(obits, lhsr, rhs, lsb + obits - 1, lsb);
 }
-static inline void VL_ASSIGNSEL_IIII(int obits, int lsb, IData& lhsr, IData rhs) VL_PURE {
+static inline void VL_ASSIGNSEL_IIII(int obits, int lsb, IDataV& lhsr, IData rhs) VL_PURE {
     _VL_INSERT_II(obits, lhsr, rhs, lsb + obits - 1, lsb);
 }
-static inline void VL_ASSIGNSEL_QIII(int obits, int lsb, QData& lhsr, IData rhs) VL_PURE {
+static inline void VL_ASSIGNSEL_QIII(int obits, int lsb, QDataV& lhsr, IData rhs) VL_PURE {
     _VL_INSERT_QQ(obits, lhsr, rhs, lsb + obits - 1, lsb);
 }
-static inline void VL_ASSIGNSEL_QQII(int obits, int lsb, QData& lhsr, QData rhs) VL_PURE {
+static inline void VL_ASSIGNSEL_QQII(int obits, int lsb, QDataV& lhsr, QData rhs) VL_PURE {
     _VL_INSERT_QQ(obits, lhsr, rhs, lsb + obits - 1, lsb);
 }
-static inline void VL_ASSIGNSEL_QIIQ(int obits, int lsb, QData& lhsr, QData rhs) VL_PURE {
+static inline void VL_ASSIGNSEL_QIIQ(int obits, int lsb, QDataV& lhsr, QData rhs) VL_PURE {
     _VL_INSERT_QQ(obits, lhsr, rhs, lsb + obits - 1, lsb);
 }
 // static inline void VL_ASSIGNSEL_IIIW(int obits, int lsb, IData& lhsr, WDataInP rwp) VL_MT_SAFE {
