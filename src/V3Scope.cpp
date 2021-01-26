@@ -251,6 +251,7 @@ private:
     virtual void visit(AstNodeFTask* nodep) VL_OVERRIDE {
         // Add to list of blocks under this scope
         UINFO(4, "    FTASK " << nodep << endl);
+        if (nodep->user2p()) return;
         AstNodeFTask* clonep;
         if (nodep->classMethod()) {
             // Only one scope will be created, so avoid pointless cloning
