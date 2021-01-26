@@ -475,6 +475,7 @@ private:
         // Yuk.
         bool destwide = lhsp->fromp()->isWide();
         bool ones = nodep->rhsp()->isAllOnesV();
+        bool dly = VN_IS(nodep, AssignDly);
         if (VN_IS(lhsp->lsbp(), Const)) {
             // The code should work without this constant test, but it won't
             // constify as nicely as we'd like.
@@ -493,7 +494,7 @@ private:
                         // else we would just be setting it to the same exact value
                         AstNode* oldvalp = newAstWordSelClone(destp, w);
                         fixCloneLvalue(oldvalp);
-                        getVarRefp(oldvalp)->useScheduledValue(VN_IS(nodep, AssignDly));
+                        getVarRefp(oldvalp)->useScheduledValue(dly);
                         if (!ones) {
                             oldvalp
                                 = new AstAnd(lhsp->fileline(),
@@ -515,7 +516,7 @@ private:
                 }
                 AstNode* oldvalp = destp->cloneTree(true);
                 fixCloneLvalue(oldvalp);
-                getVarRefp(oldvalp)->useScheduledValue(VN_IS(nodep, AssignDly));
+                getVarRefp(oldvalp)->useScheduledValue(dly);
                 if (!ones) {
                     oldvalp = new AstAnd(lhsp->fileline(), new AstConst(lhsp->fileline(), maskold),
                                          oldvalp);
@@ -524,7 +525,10 @@ private:
                                           new AstShiftL(lhsp->fileline(), rhsp,
                                                         new AstConst(lhsp->fileline(), lsb),
                                                         destp->width()));
-                newp = new AstAssign(nodep->fileline(), destp, newp);
+                if (dly)
+                    newp = new AstAssignDly(nodep->fileline(), destp, newp);
+                else
+                    newp = new AstAssign(nodep->fileline(), destp, newp);
                 insertBefore(nodep, newp);
             }
             return true;
@@ -536,7 +540,7 @@ private:
                 AstNode* oldvalp
                     = newWordSel(lhsp->fileline(), destp->cloneTree(true), lhsp->lsbp(), 0);
                 fixCloneLvalue(oldvalp);
-                getVarRefp(oldvalp)->useScheduledValue(VN_IS(nodep, AssignDly));
+                getVarRefp(oldvalp)->useScheduledValue(dly);
                 if (!ones) {
                     oldvalp = new AstAnd(
                         lhsp->fileline(),
@@ -555,8 +559,14 @@ private:
                 AstNode* newp
                     = new AstOr(lhsp->fileline(), oldvalp,
                                 new AstShiftL(lhsp->fileline(), rhsp, shiftp, VL_EDATASIZE));
-                newp = new AstAssign(nodep->fileline(),
-                                     newWordSel(nodep->fileline(), destp, lhsp->lsbp(), 0), newp);
+                if (dly)
+                    newp = new AstAssignDly(nodep->fileline(),
+                                            newWordSel(nodep->fileline(), destp, lhsp->lsbp(), 0),
+                                            newp);
+                else
+                    newp = new AstAssign(nodep->fileline(),
+                                         newWordSel(nodep->fileline(), destp, lhsp->lsbp(), 0),
+                                         newp);
                 insertBefore(nodep, newp);
                 return true;
             } else if (destwide) {
@@ -578,7 +588,7 @@ private:
                 AstNode* destp = lhsp->fromp()->unlinkFrBack();
                 AstNode* oldvalp = destp->cloneTree(true);
                 fixCloneLvalue(oldvalp);
-                getVarRefp(oldvalp)->useScheduledValue(VN_IS(nodep, AssignDly));
+                getVarRefp(oldvalp)->useScheduledValue(dly);
 
                 V3Number maskwidth(nodep, destp->widthMin());
                 for (int bit = 0; bit < lhsp->widthConst(); bit++) maskwidth.setBit(bit, 1);
@@ -599,7 +609,10 @@ private:
                     = new AstOr(lhsp->fileline(), oldvalp,
                                 new AstShiftL(lhsp->fileline(), rhsp,
                                               lhsp->lsbp()->cloneTree(true), destp->width()));
-                newp = new AstAssign(nodep->fileline(), destp, newp);
+                if (dly)
+                    newp = new AstAssignDly(nodep->fileline(), destp, newp);
+                else
+                    newp = new AstAssign(nodep->fileline(), destp, newp);
                 // newp->dumpTree(cout, "-  new: ");
                 insertBefore(nodep, newp);
                 return true;
