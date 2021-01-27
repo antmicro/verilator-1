@@ -485,6 +485,7 @@ public:
             }
             if (!funcp->oneshot()) {
                 puts(funcp->nameProtect() + "__thread.wait_for_idle();\n");;
+                puts("if (Verilated::gotFinish()) return;\n");
             }
         } else {
             visit_call(nodep);
