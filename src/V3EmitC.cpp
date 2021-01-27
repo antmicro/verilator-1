@@ -470,6 +470,7 @@ public:
     virtual void visit(AstCTrigger* nodep) override {
         AstCFunc* funcp = nodep->funcp();
         if (funcp->proc()) {
+            if (!nodep->funcp()->oneshot()) puts("if (!Verilated::gotFinish()) {\n");
             puts("static VerilatedThread ");
             puts(funcp->nameProtect() + "__thread(");
             puts("[vlTOPp,");
@@ -492,8 +493,7 @@ public:
                 puts("}\n");
             }
             if (!funcp->oneshot()) {
-                puts(funcp->nameProtect() + "__thread.wait_for_idle();\n");;
-                puts("if (Verilated::gotFinish()) return;\n");
+                puts(funcp->nameProtect() + "__thread.wait_for_idle();\n}\n");;
             }
         } else {
             visit_call(nodep);
