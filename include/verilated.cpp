@@ -195,6 +195,15 @@ VerilatedThread::VerilatedThread(std::function<void(VerilatedThread*)> func, Ver
     });
 }
 
+void VerilatedThread::kick() {
+    std::unique_lock<std::mutex> lck(m_mtx);
+    m_ready = true;
+    m_cv.notify_all();
+    if (!Verilated::gotFinish() && !should_exit()) {
+        m_cv.wait(lck);
+    }
+}
+
 void VerilatedThread::wait_for_time(VerilatedSyms* symsp, vluint64_t time) {
     std::unique_lock<std::mutex> lck(m_mtx);
     Verilated::timedQPush(symsp, time, this);

@@ -287,12 +287,7 @@ public:
         join();
     }
 
-    void kick() {
-        std::unique_lock<std::mutex> lck(m_mtx);
-        m_ready = true;
-        m_cv.notify_all();
-        m_cv.wait(lck);
-    }
+    void kick();
 
     template<typename... Ts>
     void wait_for(std::tuple<MonitoredValue<Ts>&...> mon_vals) {
