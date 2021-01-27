@@ -11,6 +11,8 @@
 
 #include "Vt_param_public_p.h"
 
+double sc_time_stamp() { return 0; }
+
 int main(int argc, char* argv[]) {
     Vt_param_public* topp = new Vt_param_public;
 
