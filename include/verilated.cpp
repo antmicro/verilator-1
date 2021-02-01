@@ -119,9 +119,11 @@ void VerilatedThreadRegistry::idle(bool flag) {
 
 void VerilatedThreadRegistry::wait_for_idle() {
     std::unique_lock<std::mutex> lck(m_idle_mtx);
-    while (m_idle_counter != m_threads.size()) {
+    m_idle_counter++;
+    while (m_idle_counter != m_threads.size() + 1) { // The +1 is for the main thread
         m_idle_cv.wait(lck);
     }
+    m_idle_counter--;
 }
 
 void VerilatedThreadRegistry::should_exit(bool flag) {

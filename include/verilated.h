@@ -258,9 +258,11 @@ public:
     void wait_for_idle() {
         std::unique_lock<std::mutex> lck(m_mtx);
 
+        thread_registry.idle(true);
         while(m_ready && !m_should_exit && !m_idle) {
             m_cv.wait(lck);
         }
+        thread_registry.idle(false);
     }
 
     bool idle() {
