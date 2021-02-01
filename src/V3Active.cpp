@@ -316,8 +316,6 @@ private:
 
         if (!combo && !sequent) combo = true;  // If no list, Verilog 2000: always @ (*)
         if (combo && sequent) {
-            nodep->v3warn(E_UNSUPPORTED, "Unsupported: Mixed edge (pos/negedge) and activity "
-                                         "(no edge) sensitive activity list");
             sequent = false;
         }
 
