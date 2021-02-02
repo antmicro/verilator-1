@@ -804,7 +804,7 @@ public:  // But for internal use only
 #ifdef VL_THREADED
     VerilatedEvalMsgQueue* __Vm_evalMsgQp;
 #endif
-    VerilatedTimedQueue* __Vm_timedQp;
+    static VerilatedTimedQueue __Vm_timedQp;
     VerilatedSyms();
     ~VerilatedSyms();
 };

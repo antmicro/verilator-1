@@ -2625,7 +2625,7 @@ void Verilated::endOfEvalGuts(VerilatedEvalMsgQueue* evalMsgQp) VL_MT_SAFE {
 #endif
 
 bool Verilated::timedQEmpty(VerilatedSyms* symsp) VL_MT_SAFE {
-    return symsp->__Vm_timedQp->empty();
+    return VerilatedSyms::__Vm_timedQp.empty();
 }
 
 vluint64_t Verilated::timedQEarliestTime(VerilatedSyms* symsp) VL_MT_SAFE {
@@ -2633,17 +2633,17 @@ vluint64_t Verilated::timedQEarliestTime(VerilatedSyms* symsp) VL_MT_SAFE {
     // we might not have the real earliest time yet
     thread_registry.wait_for_idle();
 
-    return symsp->__Vm_timedQp->earliestTime();
+    return VerilatedSyms::__Vm_timedQp.earliestTime();
 }
 void Verilated::timedQPush(VerilatedSyms* symsp, vluint64_t time, VerilatedThread* thread) VL_MT_SAFE {
-    symsp->__Vm_timedQp->push(time, thread);
+    VerilatedSyms::__Vm_timedQp.push(time, thread);
 }
 void Verilated::timedQActivate(VerilatedSyms* symsp, vluint64_t time) VL_MT_SAFE {
-    symsp->__Vm_timedQp->activate(time);
+    VerilatedSyms::__Vm_timedQp.activate(time);
 }
 
 void Verilated::timedQWait(VerilatedSyms* symsp, std::unique_lock<std::mutex>& lck) VL_MT_SAFE {
-    symsp->__Vm_timedQp->m_cv.wait(lck);
+    VerilatedSyms::__Vm_timedQp.m_cv.wait(lck);
 }
 
 //===========================================================================
@@ -2749,25 +2749,25 @@ bool VerilatedImp::commandArgVlValue(const std::string& arg, const std::string& 
 
 //======================================================================
 // VerilatedSyms:: Methods
-
 VerilatedSyms::VerilatedSyms() {
 #ifdef VL_THREADED
     __Vm_evalMsgQp = new VerilatedEvalMsgQueue;
-    __Vm_timedQp = new VerilatedTimedQueue;
 #endif
+    //__Vm_timedQp = new VerilatedTimedQueue;
 }
 VerilatedSyms::~VerilatedSyms() {
     thread_registry.should_exit(true);
 
-    __Vm_timedQp->m_cv.notify_all();
+    __Vm_timedQp.m_cv.notify_all();
 
     thread_registry.exit();
 
 #ifdef VL_THREADED
     delete __Vm_evalMsgQp;
 #endif
-    delete __Vm_timedQp;
+    //delete __Vm_timedQp;
 }
+VerilatedTimedQueue VerilatedSyms::__Vm_timedQp;
 
 //===========================================================================
 // VerilatedModule:: Methods
