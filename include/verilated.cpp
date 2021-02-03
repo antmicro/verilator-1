@@ -138,14 +138,11 @@ void VerilatedThreadRegistry::should_exit(bool flag) {
 }
 
 void VerilatedThreadRegistry::exit() {
-    for (size_t i = 0;; i++) {
-        std::unique_lock<std::mutex> lck(m_mtx);
-        if (i < m_threads.size()) {
-            auto* thread = m_threads[i];
-            lck.unlock();
-            thread->exit();
-        } else break;
+    std::unique_lock<std::mutex> lck(m_mtx);
+    for (auto thread : m_threads) {
+	thread->exit();
     }
+    m_threads.clear();
 }
 
 VerilatedThread::VerilatedThread(std::function<void(VerilatedThread*)> func, bool oneshot, std::string name)
