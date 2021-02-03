@@ -38,6 +38,10 @@
 // Emit statements and math operators
 
 extern AstVarRef* getVarRefp(AstNode* nodep);
+#define STASH_AND_SET(var, value) \
+    auto varPre = var; \
+    var = value
+#define RESTORE(var) var = varPre
 
 class EmitCStmts : public EmitCBaseVisitor {
 private:
@@ -357,9 +361,11 @@ public:
             brace = true;
             puts("{\n");
             puts("std::unique_lock<std::mutex> lck(");
+            STASH_AND_SET(m_primitiveCast, false);
             iterateAndNextNull(nodep->lhsp());
             puts(".mtx());\n");
             iterateAndNextNull(nodep->lhsp());
+            RESTORE(m_primitiveCast);
             ofp()->blockInc();
             decind = true;
             if (!VN_IS(nodep->rhsp(), Const)) ofp()->putBreak();
@@ -379,8 +385,10 @@ public:
             VN_IS(nodep->lhsp(), ArraySel) ||
             VN_IS(nodep->lhsp(), WordSel) ||
             VN_IS(nodep->lhsp(), Sel)) {
+            STASH_AND_SET(m_primitiveCast, false);
             puts("verilated_nba_ctrl.schedule(&");
             iterateAndNextNull(nodep->lhsp());
+            RESTORE(m_primitiveCast);
             puts(", ");
             if (continuous) {
                 puts("[vlTOPp,vlSymsp");
@@ -1214,8 +1222,7 @@ public:
         if (nodep->expr1p()->isWide()) {
             emitOpName(nodep, nodep->emitC(), nodep->condp(), nodep->expr1p(), nodep->expr2p());
         } else {
-            bool primitiveCastPre = m_primitiveCast;
-            m_primitiveCast = true;
+            STASH_AND_SET(m_primitiveCast, true);
             putbs("(");
             iterateAndNextNull(nodep->condp());
             putbs(" ? ");
@@ -1223,7 +1230,7 @@ public:
             putbs(" : ");
             iterateAndNextNull(nodep->expr2p());
             puts(")");
-            m_primitiveCast = primitiveCastPre;
+            RESTORE(m_primitiveCast);
         }
     }
     virtual void visit(AstMemberSel* nodep) VL_OVERRIDE {
@@ -2364,8 +2371,7 @@ struct EmitDispState {
 } emitDispState;
 
 void EmitCStmts::displayEmit(AstNode* nodep, bool isScan) {
-    bool primitiveCastPre = m_primitiveCast;
-    m_primitiveCast = true;
+    STASH_AND_SET(m_primitiveCast, true);
     if (emitDispState.m_format == ""
         && VN_IS(nodep, Display)) {  // not fscanf etc, as they need to return value
         // NOP
@@ -2446,7 +2452,7 @@ void EmitCStmts::displayEmit(AstNode* nodep, bool isScan) {
         // Prep for next
         emitDispState.clear();
     }
-    m_primitiveCast = primitiveCastPre;
+    RESTORE(m_primitiveCast);
 }
 
 void EmitCStmts::displayArg(AstNode* dispp, AstNode** elistp, bool isScan, const string& vfmt,
