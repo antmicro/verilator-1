@@ -29,6 +29,7 @@
 #include <map>
 #include <vector>
 #include VL_INCLUDE_UNORDERED_SET
+#include <iostream>
 
 #define VL_VALUE_STRING_MAX_WIDTH 8192  // We use a static char array in VL_VALUE_STRING
 
@@ -1006,6 +1007,14 @@ public:
         puts("/* [ -> statement ] */\n");
         iterateAndNextNull(nodep->trigger());
         puts(" = 1;\n");
+        auto* varp = VN_CAST(VN_CAST(nodep->trigger(), VarRef)->varp(), Var);
+        for (auto* np = varp->nextp(); np; np = np->nextp()) {
+            if (auto* varTrigp = VN_CAST(np, Var)) {
+                if (varTrigp->name() == varp->name() + "__Vtriggered") {
+                    puts("vlTOPp->" + varTrigp->name() + " = 1;\n");
+                }
+            }
+        }
     }
     virtual void visit(AstWhile* nodep) VL_OVERRIDE {
         iterateAndNextNull(nodep->precondsp());
@@ -2943,19 +2952,18 @@ void EmitCImp::emitSettleLoop(AstNodeModule* modp, const std::string& eval_call,
     puts("int __VclockLoop = 0;\n");
     puts("QData __Vchange = 1;\n");
     puts("do {\n");
+    for (auto* nodep = modp->stmtsp(); nodep; nodep = nodep->nextp()) {
+        if ((nodep->dtypep() && nodep->dtypep()->basicp() && nodep->dtypep()->basicp()->isEventValue())
+          || nodep->name().find("__Vtriggered") != std::string::npos) {
+            puts("vlSymsp->TOPp->");
+            puts(protect(nodep->name()));
+            puts(".assign_no_notify(0);\n");
+        }
+    }
     puts("do {\n");
     puts("vlSymsp->TOPp->");
     puts(protect("__eval_change_counter"));
     puts(" = 0;\n");
-    for (auto* nodep = modp->stmtsp(); nodep; nodep = nodep->nextp()) {
-        if (auto* dtp = VN_CAST(nodep->dtypep(), BasicDType)) {
-            if (dtp->keyword().isEventValue()) {
-                puts("vlSymsp->TOPp->");
-                puts(protect(nodep->name()));
-                puts(".assign_no_notify(0);\n");
-            }
-        }
-    }
     puts(eval_call + "\n");
     puts("verilated_nba_ctrl.assign();\n");
     puts("} while (!Verilated::gotFinish() && vlSymsp->TOPp->");

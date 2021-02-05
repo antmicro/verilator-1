@@ -401,6 +401,16 @@ private:
                                                     m_evalCounterVarScopep, true),
                                       incp);
                     m_lastIfp->addIfsp(assignp);
+                    for (auto* senItemp = nodep->sensesp()->sensesp(); senItemp; senItemp = VN_CAST(nodep->nextp(), SenItem)) {
+                        if (senItemp->edgeType() == VEdgeType::ET_HIGHEDGE && senItemp->varrefp()->dtypep()->basicp()->isEventValue()) {
+                            auto* assignp = new AstAssign(nodep->fileline(),
+                                                          new AstVarRef(nodep->fileline(),
+                                                                        senItemp->varrefp()->varScopep(),
+                                                                        true),
+                                                          new AstConst(nodep->fileline(), 0));
+                            m_lastIfp->addIfsp(assignp);
+                        }
+                    }
                 }
                 // Move statements to if
                 m_lastIfp->addIfsp(stmtsp);

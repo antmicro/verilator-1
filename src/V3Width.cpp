@@ -2540,8 +2540,19 @@ private:
         if (nodep->name() == "triggered") {
             // We represent events as numbers, so can just return number
             methodOkArguments(nodep, 0, 0);
-            AstNode* newp = nodep->fromp()->unlinkFrBack();
-            nodep->replaceWith(newp);
+            auto* varp = VN_CAST(nodep->fromp(), VarRef)->varp();
+            auto* np = varp->backp();
+            while (!VN_CAST(np, NodeModule)) {
+                np = np->backp();
+            }
+            auto* modp = VN_CAST(np, NodeModule);
+            string newvarname
+                = varp->name() + string("__Vtriggered");
+            AstVar* newvarp = new AstVar(varp->fileline(), AstVarType::MODULETEMP, newvarname,
+                                        VFlagLogicPacked(), 1);
+            modp->addStmtp(newvarp);
+            auto* varrefp = new AstVarRef(nodep->fileline(), newvarp, false);
+            nodep->replaceWith(varrefp);
             VL_DO_DANGLING(pushDeletep(nodep), nodep);
         } else {
             nodep->v3error("Unknown built-in event method " << nodep->prettyNameQ());
