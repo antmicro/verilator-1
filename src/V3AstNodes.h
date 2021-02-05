@@ -8880,6 +8880,7 @@ private:
     bool m_dpiImport : 1;  // From dpi import
     bool m_dpiImportWrapper : 1;  // Wrapper from dpi import
     bool m_proc : 1;
+
 public:
     AstCFunc(FileLine* fl, const string& name, AstScope* scopep, const string& rtnType = "")
         : ASTGEN_SUPER(fl) {

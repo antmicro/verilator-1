@@ -134,7 +134,8 @@ private:
         } else if (nodep->edgeType() == VEdgeType::ET_HIGHEDGE) {
             newp = new AstVarRef(nodep->fileline(), clkvscp, VAccess::READ);
         } else if (nodep->edgeType() == VEdgeType::ET_LOWEDGE) {
-            newp = new AstNot(nodep->fileline(), new AstVarRef(nodep->fileline(), clkvscp, VAccess::READ));
+            newp = new AstNot(nodep->fileline(),
+                              new AstVarRef(nodep->fileline(), clkvscp, VAccess::READ));
         } else if (nodep->edgeType() == VEdgeType::ET_ANYEDGE) {
             AstVarScope* lastVscp = getCreateLastClk(clkvscp);
             newp = new AstXor(
@@ -229,13 +230,11 @@ private:
             m_evalFuncp = funcp;
 
             // Create counter for the _eval loop
-            string name
-                = "__eval_change_counter";
-            AstVar* cntVarp =
-                new AstVar(nodep->fileline(), AstVarType::MODULETEMP, name,
-                                      VFlagLogicPacked(), 32);
+            string name = "__eval_change_counter";
+            AstVar* cntVarp = new AstVar(nodep->fileline(), AstVarType::MODULETEMP, name,
+                                         VFlagLogicPacked(), 32);
             m_evalCounterVarScopep = new AstVarScope(m_scopep->fileline(), m_scopep, cntVarp);
-            cntVarp->sigPublic(true); // public sig so it's never optimized out
+            cntVarp->sigPublic(true);  // public sig so it's never optimized out
 
             m_scopep->addVarp(m_evalCounterVarScopep);
 
@@ -375,7 +374,7 @@ private:
     void addToInitial(AstNode* stmtsp) {
         m_initFuncp->addStmtsp(stmtsp);  // add to top level function
     }
-    virtual void visit(AstTimingControl *nodep) override {
+    virtual void visit(AstTimingControl* nodep) override {
         // Do not iterate to keep sentree in place
     }
     virtual void visit(AstActive* nodep) override {
@@ -431,15 +430,14 @@ private:
                     m_lastIfp = makeActiveIf(m_lastSenp);
                     addToEvalLoop(m_lastIfp);
 
-                    AstNode* incp = new AstAdd(nodep->fileline(),
-                                               new AstVarRef(nodep->fileline(),
-                                                             m_evalCounterVarScopep, VAccess::WRITE),
-                                               new AstConst(nodep->fileline(), 1));
-                    AstAssign* assignp =
-                        new AstAssign(nodep->fileline(),
-                                      new AstVarRef(nodep->fileline(),
-                                                    m_evalCounterVarScopep, VAccess::WRITE),
-                                      incp);
+                    AstNode* incp = new AstAdd(
+                        nodep->fileline(),
+                        new AstVarRef(nodep->fileline(), m_evalCounterVarScopep, VAccess::WRITE),
+                        new AstConst(nodep->fileline(), 1));
+                    AstAssign* assignp = new AstAssign(
+                        nodep->fileline(),
+                        new AstVarRef(nodep->fileline(), m_evalCounterVarScopep, VAccess::WRITE),
+                        incp);
                     m_lastIfp->addIfsp(assignp);
                 }
                 // Move statements to if

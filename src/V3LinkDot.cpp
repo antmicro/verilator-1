@@ -873,9 +873,7 @@ class LinkDotFindVisitor final : public AstNVisitor {
                     "Scopes should only exist right after V3Scope");
         iterateChildren(nodep);
     }
-    virtual void visit(AstTopScope* nodep) VL_OVERRIDE {
-        iterateChildren(nodep);
-    }
+    virtual void visit(AstTopScope* nodep) VL_OVERRIDE { iterateChildren(nodep); }
     virtual void visit(AstCell* nodep) override {
         UINFO(5, "   CELL under " << m_scope << " is " << nodep << endl);
         // Process XREFs/etc inside pins

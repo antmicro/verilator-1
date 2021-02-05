@@ -509,9 +509,7 @@ private:
         bool sequent = m_itemSequent;
 
         if (!combo && !sequent) combo = true;  // If no list, Verilog 2000: always @ (*)
-        if (combo && sequent) {
-            sequent = false;
-        }
+        if (combo && sequent) { sequent = false; }
 
         AstActive* wantactivep = nullptr;
         if (combo && !sequent) {

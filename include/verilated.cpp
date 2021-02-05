@@ -105,9 +105,7 @@ VerilatedThreadRegistry thread_registry;
 // the calling arguments allow for extension
 
 VerilatedThreadPool::~VerilatedThreadPool() {
-    for (auto* thread : m_threads) {
-        delete thread;
-    }
+    for (auto* thread : m_threads) { delete thread; }
 }
 
 void VerilatedThreadPool::run_once(std::function<void(VerilatedThread*)> func) {
@@ -137,14 +135,14 @@ void VerilatedThreadRegistry::idle(bool flag) {
     if (flag) {
         m_idle_counter++;
         m_idle_cv.notify_all();
-    }
-    else m_idle_counter--;
+    } else
+        m_idle_counter--;
 }
 
 void VerilatedThreadRegistry::wait_for_idle() {
     std::unique_lock<std::mutex> lck(m_idle_mtx);
     m_idle_counter++;
-    while (m_idle_counter != m_threads.size() + 1) { // The +1 is for the main thread
+    while (m_idle_counter != m_threads.size() + 1) {  // The +1 is for the main thread
         m_idle_cv.wait(lck);
     }
     m_idle_counter--;
@@ -157,19 +155,19 @@ void VerilatedThreadRegistry::should_exit(bool flag) {
             auto* thread = m_threads[i];
             lck.unlock();
             thread->should_exit(flag);
-        } else break;
+        } else
+            break;
     }
 }
 
 void VerilatedThreadRegistry::exit() {
     std::unique_lock<std::mutex> lck(m_mtx);
-    for (auto thread : m_threads) {
-	thread->exit();
-    }
+    for (auto thread : m_threads) { thread->exit(); }
     m_threads.clear();
 }
 
-VerilatedThread::VerilatedThread(std::function<void(VerilatedThread*)> func, bool oneshot, std::string name)
+VerilatedThread::VerilatedThread(std::function<void(VerilatedThread*)> func, bool oneshot,
+                                 std::string name)
     : m_func(func)
     , m_ready(false)
     , m_oneshot(oneshot)
@@ -198,7 +196,8 @@ VerilatedThread::VerilatedThread(std::function<void(VerilatedThread*)> func, boo
     }
 }
 
-VerilatedThread::VerilatedThread(std::function<void(VerilatedThread*)> func, VerilatedThreadPool* pool)
+VerilatedThread::VerilatedThread(std::function<void(VerilatedThread*)> func,
+                                 VerilatedThreadPool* pool)
     : m_func(func)
     , m_ready(false)
     , m_oneshot(false)
@@ -222,18 +221,14 @@ void VerilatedThread::kick() {
     std::unique_lock<std::mutex> lck(m_mtx);
     m_ready = true;
     m_cv.notify_all();
-    if (!Verilated::gotFinish() && !should_exit()) {
-        m_cv.wait(lck);
-    }
+    if (!Verilated::gotFinish() && !should_exit()) { m_cv.wait(lck); }
 }
 
 void VerilatedThread::wait_for_time(VerilatedSyms* symsp, vluint64_t time) {
     std::unique_lock<std::mutex> lck(m_mtx);
     Verilated::timedQPush(symsp, time, this);
     set_idle(true);
-    while (m_idle && !should_exit()) {
-        Verilated::timedQWait(symsp, lck);
-    }
+    while (m_idle && !should_exit()) { Verilated::timedQWait(symsp, lck); }
     set_idle(false);
 }
 
@@ -398,16 +393,16 @@ void VL_PRINTF_MT(const char* formatp, ...) VL_MT_SAFE {
      *
      * Substitute the mechanism with a simple mutex for now.
      */
-# if 0
+#if 0
     VerilatedThreadMsgQueue::post(VerilatedMsg([=]() {  //
         VL_PRINTF("%s", out.c_str());
     }));
-# else
+#else
     {
         std::unique_lock<std::mutex> lck(__vl_printf_mtx);
         VL_PRINTF("%s", out.c_str());
     }
-# endif
+#endif
 }
 #endif
 
@@ -553,7 +548,7 @@ WDataOutP VL_ZERO_RESET_W(int obits, WDataOutP outwp) VL_MT_SAFE {
 
 void _VL_DEBUG_PRINT_W(int lbits, WDataInP iwp) VL_MT_SAFE {
     VL_PRINTF_MT("  Data: w%d: ", lbits);
-    for (int i = VL_WORDS_I(lbits) - 1; i >= 0; --i) VL_PRINTF_MT("%08x ", (WData) iwp[i]);
+    for (int i = VL_WORDS_I(lbits) - 1; i >= 0; --i) VL_PRINTF_MT("%08x ", (WData)iwp[i]);
     VL_PRINTF_MT("\n");
 }
 
@@ -858,7 +853,8 @@ std::string _vl_vsformat_time(char* tmp, double ld, bool left, size_t width) {
 }
 
 // Do a va_arg returning a quad, assuming input argument is anything less than wide
-#define _VL_VA_ARG_Q(ap, bits) (((bits) <= VL_IDATASIZE) ? va_arg(ap, vluint32_t) : va_arg(ap, vluint64_t))
+#define _VL_VA_ARG_Q(ap, bits) \
+    (((bits) <= VL_IDATASIZE) ? va_arg(ap, vluint32_t) : va_arg(ap, vluint64_t))
 
 void _vl_vsformat(std::string& output, const char* formatp, va_list ap) VL_MT_SAFE {
     // Format a Verilog $write style format into the output list
@@ -2057,10 +2053,10 @@ bool VlReadMem::get(QData& addrr, std::string& valuer) {
                 c = tolower(c);
                 int value;
                 if (c >= 'a') {
-                    if ( c == 'x') {
-                     value = VL_RAND_RESET_I(4);
+                    if (c == 'x') {
+                        value = VL_RAND_RESET_I(4);
                     } else {
-                     value = (c - 'a' + 10);
+                        value = (c - 'a' + 10);
                     }
                 } else {
                     value = (c - '0');
@@ -2099,10 +2095,10 @@ void VlReadMem::setData(void* valuep, const std::string& rhs) {
         char c = tolower(i);
         int value;
         if (c >= 'a') {
-            if ( c == 'x') {
-             value = VL_RAND_RESET_I(4);
+            if (c == 'x') {
+                value = VL_RAND_RESET_I(4);
             } else {
-             value = (c - 'a' + 10);
+                value = (c - 'a' + 10);
             }
         } else {
             value = (c - '0');
@@ -2640,9 +2636,9 @@ void Verilated::overWidthError(const char* signame) VL_MT_SAFE {
 }
 
 void Verilated::timeBackwardsError() VL_MT_SAFE {
-     // Slowpath
-     VL_FATAL_MT("unknown", 0, "", "Time attempted to flow backwards");
-     VL_UNREACHABLE
+    // Slowpath
+    VL_FATAL_MT("unknown", 0, "", "Time attempted to flow backwards");
+    VL_UNREACHABLE
 }
 
 void Verilated::mkdir(const char* dirname) VL_MT_UNSAFE {
@@ -2699,7 +2695,8 @@ vluint64_t Verilated::timedQEarliestTime(VerilatedSyms* symsp) VL_MT_SAFE {
 
     return VerilatedSyms::__Vm_timedQp.earliestTime();
 }
-void Verilated::timedQPush(VerilatedSyms* symsp, vluint64_t time, VerilatedThread* thread) VL_MT_SAFE {
+void Verilated::timedQPush(VerilatedSyms* symsp, vluint64_t time,
+                           VerilatedThread* thread) VL_MT_SAFE {
     VerilatedSyms::__Vm_timedQp.push(time, thread);
 }
 void Verilated::timedQActivate(VerilatedSyms* symsp, vluint64_t time) VL_MT_SAFE {
@@ -2846,7 +2843,7 @@ VerilatedSyms::~VerilatedSyms() {
 #ifdef VL_THREADED
     delete __Vm_evalMsgQp;
 #endif
-    //delete __Vm_timedQp;
+    // delete __Vm_timedQp;
 }
 VerilatedTimedQueue VerilatedSyms::__Vm_timedQp;
 

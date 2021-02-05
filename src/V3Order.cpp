@@ -1758,12 +1758,8 @@ AstActive* OrderVisitor::processMoveOneLogic(const OrderLogicVertex* lvertexp,
             newFuncpr->argTypes(EmitCBaseVisitor::symClassVar());
             newFuncpr->symProlog(true);
             newStmtsr = 0;
-            if (domainp->hasInitial()) {
-                newFuncpr->oneshot(true);
-            }
-            if (domainp->hasInitial() || domainp->hasSettle()) {
-                newFuncpr->slow(true);
-            }
+            if (domainp->hasInitial()) { newFuncpr->oneshot(true); }
+            if (domainp->hasInitial() || domainp->hasSettle()) { newFuncpr->slow(true); }
             scopep->addActivep(newFuncpr);
             // Where will we be adding the call?
             activep = new AstActive(nodep->fileline(), name, domainp);

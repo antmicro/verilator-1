@@ -394,14 +394,10 @@ public:
         if (!m_suppressSemi) puts(";\n");
         if (brace) puts("}\n");
     }
-    virtual void visit(AstNodeAssign* nodep) override {
-        visit_generic_assign(nodep);
-    }
-    virtual void visit_assigndly(AstNodeAssign *nodep, bool continuous) {
-        if (VN_IS(nodep->lhsp(), VarRef) ||
-            VN_IS(nodep->lhsp(), ArraySel) ||
-            VN_IS(nodep->lhsp(), WordSel) ||
-            VN_IS(nodep->lhsp(), Sel)) {
+    virtual void visit(AstNodeAssign* nodep) override { visit_generic_assign(nodep); }
+    virtual void visit_assigndly(AstNodeAssign* nodep, bool continuous) {
+        if (VN_IS(nodep->lhsp(), VarRef) || VN_IS(nodep->lhsp(), ArraySel)
+            || VN_IS(nodep->lhsp(), WordSel) || VN_IS(nodep->lhsp(), Sel)) {
             STASH_AND_SET(m_primitiveCast, false);
             puts("verilated_nba_ctrl.schedule(&");
             iterateAndNextNull(nodep->lhsp());
@@ -410,8 +406,7 @@ public:
             if (continuous) {
                 puts("[vlTOPp,vlSymsp");
                 if (m_funcp) {
-                    if (m_funcp->isStatic().falseKnown())
-                        puts(",this");
+                    if (m_funcp->isStatic().falseKnown()) puts(",this");
                     for (auto* nodep = m_funcp->initsp(); nodep; nodep = nodep->nextp()) {
                         if (auto* varp = VN_CAST(nodep, Var)) {
                             puts(",");
@@ -422,17 +417,14 @@ public:
                 puts("] { return (");
             }
             iterateAndNextNull(nodep->rhsp());
-            if (continuous)
-                puts("); }");
+            if (continuous) puts("); }");
             puts(");\n");
         } else {
             nodep->v3warn(E_UNSUPPORTED, "Unsupported: delayed assignment type");
             nodep->dumpTree(cout, "    ");
         }
     }
-    virtual void visit(AstAssignDly* nodep) override {
-        visit_assigndly(nodep, false);
-    }
+    virtual void visit(AstAssignDly* nodep) override { visit_assigndly(nodep, false); }
     virtual void visit(AstAssignW* nodep) override {
         // Immediatelly assign the current value
         visit_generic_assign(nodep);
@@ -482,12 +474,12 @@ public:
             puts("static VerilatedThread ");
             puts(funcp->nameProtect() + "__thread(");
             puts("[vlTOPp,");
-                ccallIterateArgs(nodep);
+            ccallIterateArgs(nodep);
             puts("] (VerilatedThread* self) {");
-                puts(nodep->hiernameProtect());
-                puts(funcp->nameProtect() + "(");
-                ccallIterateArgs(nodep);
-                puts(", self); ");
+            puts(nodep->hiernameProtect());
+            puts(funcp->nameProtect() + "(");
+            ccallIterateArgs(nodep);
+            puts(", self); ");
             puts("},");
             puts(nodep->funcp()->oneshot() ? "true" : "false");
             puts(", \"" + funcp->nameProtect() + "\");\n");
@@ -501,15 +493,14 @@ public:
                 puts("}\n");
             }
             if (!funcp->oneshot()) {
-                puts(funcp->nameProtect() + "__thread.wait_for_idle();\n}\n");;
+                puts(funcp->nameProtect() + "__thread.wait_for_idle();\n}\n");
+                ;
             }
         } else {
             visit_call(nodep);
         }
     }
-    virtual void visit(AstNodeCCall* nodep) override {
-        visit_call(nodep);
-    }
+    virtual void visit(AstNodeCCall* nodep) override { visit_call(nodep); }
     virtual void visit(AstCMethodHard* nodep) override {
         iterate(nodep->fromp());
         puts(".");
@@ -904,7 +895,7 @@ public:
     virtual void visit(AstJumpLabel* nodep) override {
         puts("__Vlabel" + cvtToStr(nodep->blockp()->labelNum()) + ": ;\n");
     }
-    virtual void visit(AstDelay *nodep) override {
+    virtual void visit(AstDelay* nodep) override {
         // Make the waiting for the event local to reuse variable nates
         puts("self->wait_for_time(vlSymsp, VL_TIME_Q() + ");
         iterateAndNextNull(nodep->lhsp());
@@ -933,7 +924,9 @@ public:
     }
     void replaceVarRefps(AstNode* nodep, std::unordered_map<AstVar*, size_t>& indices) {
         if (auto* varrefp = VN_CAST(nodep, VarRef)) {
-            auto* newp = new AstCStmt(nodep->fileline(), "std::get<" + cvtToStr(indices[varrefp->varp()]) + ">(promises).value");
+            auto* newp
+                = new AstCStmt(nodep->fileline(), "std::get<" + cvtToStr(indices[varrefp->varp()])
+                                                      + ">(promises).value");
             newp->dtypep(nodep->dtypep());
             nodep->replaceWith(newp);
             VL_DO_DANGLING(nodep->deleteTree(), nodep);
@@ -992,39 +985,45 @@ public:
         for (auto* stmtp = nodep->stmtsp(); stmtp; stmtp = stmtp->nextp()) {
             puts("thread_pool.run_once([");
 
-            if (nodep->joinType().join()) puts("vlSymsp, vlTOPp, &join");
-            else if (nodep->joinType().joinAny()) puts("vlSymsp, vlTOPp, join");
-            else if (nodep->joinType().joinNone()) puts("=");
+            if (nodep->joinType().join())
+                puts("vlSymsp, vlTOPp, &join");
+            else if (nodep->joinType().joinAny())
+                puts("vlSymsp, vlTOPp, join");
+            else if (nodep->joinType().joinNone())
+                puts("=");
 
             puts("](VerilatedThread* self) mutable {\n");
-            if (auto* beginp = VN_CAST(stmtp, Begin)) iterateAndNextNull(beginp->stmtsp());
-            else visit(stmtp);
+            if (auto* beginp = VN_CAST(stmtp, Begin))
+                iterateAndNextNull(beginp->stmtsp());
+            else
+                visit(stmtp);
 
-            if (nodep->joinType().join()) puts("join.joined();\n");
-            else if (nodep->joinType().joinAny()) puts("join->joined();\n");
+            if (nodep->joinType().join())
+                puts("join.joined();\n");
+            else if (nodep->joinType().joinAny())
+                puts("join->joined();\n");
 
             puts("});\n");
         }
 
-        if (nodep->joinType().join()) puts("join.await();\n");
-        else if (nodep->joinType().joinAny()) puts("join->await();\n");
+        if (nodep->joinType().join())
+            puts("join.await();\n");
+        else if (nodep->joinType().joinAny())
+            puts("join->await();\n");
         if (!nodep->joinType().joinNone()) puts("if (self->should_exit()) return;\n}\n");
     }
     virtual void visit(AstThreadSync* nodep) override {
         puts("thread_registry.wait_for_idle();");
         puts("if (Verilated::gotFinish()) return;\n");
-
     }
-    virtual void visit(AstSenTree *nodep) override {
+    virtual void visit(AstSenTree* nodep) override {
         for (auto* itemp = nodep->sensesp(); itemp; itemp = VN_CAST(itemp->nextp(), SenItem)) {
             visit(itemp);
             if (itemp->nextp()) puts(", ");
         }
     }
-    virtual void visit(AstSenItem *nodep) override {
-        iterateAndNextNull(nodep->sensp());
-    }
-    virtual void visit(AstEventTrigger *nodep) override {
+    virtual void visit(AstSenItem* nodep) override { iterateAndNextNull(nodep->sensp()); }
+    virtual void visit(AstEventTrigger* nodep) override {
         puts("/* [ -> statement ] */\n");
         iterateAndNextNull(nodep->trigger());
         puts(" = 1;\n");
@@ -1344,25 +1343,22 @@ public:
             int width = dtypep->width();
             puts("(");
             switch (width) {
-                case 8: puts("vluint8_t"); break;
-                case 16: puts("vluint16_t"); break;
-                case 32: puts("vluint32_t"); break;
-                case 64:
-                default: puts("vluint64_t"); break;
+            case 8: puts("vluint8_t"); break;
+            case 16: puts("vluint16_t"); break;
+            case 32: puts("vluint32_t"); break;
+            case 64:
+            default: puts("vluint64_t"); break;
             }
             puts(")");
         }
     }
     virtual void visit(AstVarRef* nodep) override {
         AstNodeDType* dtypep = nodep->varp()->dtypep();
-        if (!dtypep->isWide() && m_primitiveCast)
-            emitPrimitiveCast(dtypep);
-        if (nodep->useScheduledValue())
-            puts("verilated_nba_ctrl.get_scheduled(&");
+        if (!dtypep->isWide() && m_primitiveCast) emitPrimitiveCast(dtypep);
+        if (nodep->useScheduledValue()) puts("verilated_nba_ctrl.get_scheduled(&");
         puts(nodep->hiernameProtect());
         puts(nodep->varp()->nameProtect());
-        if (nodep->useScheduledValue())
-            puts(")");
+        if (nodep->useScheduledValue()) puts(")");
     }
     void emitCvtPackStr(AstNode* nodep) {
         if (const AstConst* constp = VN_CAST(nodep, Const)) {
@@ -3105,7 +3101,8 @@ void EmitCImp::emitWrapEval(AstNodeModule* modp) {
         puts("}\n");
     }
 
-    emitSettleLoop(modp, (string("VL_DEBUG_IF(VL_DBG_MSGF(\"+ Clock loop\\n\"););\n")
+    emitSettleLoop(modp,
+                   (string("VL_DEBUG_IF(VL_DBG_MSGF(\"+ Clock loop\\n\"););\n")
                     + (v3Global.opt.trace() ? "vlSymsp->__Vm_activity = true;\n" : "")
                     + protect("_eval") + "(vlSymsp);"),
                    false);
@@ -3138,7 +3135,8 @@ void EmitCImp::emitWrapEval(AstNodeModule* modp) {
     puts("vlSymsp->__Vm_didInit = true;\n");
     puts(protect("_eval_initial") + "(vlSymsp);\n");
     if (v3Global.opt.trace()) puts("vlSymsp->__Vm_activity = true;\n");
-    emitSettleLoop(modp, (protect("_eval_settle") + "(vlSymsp);\n"  //
+    emitSettleLoop(modp,
+                   (protect("_eval_settle") + "(vlSymsp);\n"  //
                     + protect("_eval") + "(vlSymsp);"),
                    true);
     puts("}\n");

@@ -359,13 +359,13 @@ static void process() {
         // Reorder assignments in pipelined blocks
         if (v3Global.opt.oReorder()) V3Split::splitReorderAll(v3Global.rootp());
 
-        // XXX leaving this here to remember to restore it later with a switch
-        // for the static scheduler
-# if 0
+            // XXX leaving this here to remember to restore it later with a switch
+            // for the static scheduler
+#if 0
         // Create delayed assignments
         // This creates lots of duplicate ACTIVES so ActiveTop needs to be after this step
         V3Delayed::delayedAll(v3Global.rootp());
-# endif
+#endif
 
         // Make Active's on the top level.
         // Differs from V3Active, because identical clocks may be pushed
@@ -424,7 +424,7 @@ static void process() {
         if (v3Global.opt.oLocalize()) V3Localize::localizeAll(v3Global.rootp());
 
         // Icache packing; combine common code in each module's functions into subroutines
-        //if (v3Global.opt.oCombine()) V3Combine::combineAll(v3Global.rootp());
+        // if (v3Global.opt.oCombine()) V3Combine::combineAll(v3Global.rootp());
     }
 
     V3Error::abortIfErrors();

@@ -315,9 +315,10 @@ private:
         if (VN_IS(nodep->lhsp(), VarRef) && !m_sideEffect && !m_noopt) {
             AstVarScope* vscp = VN_CAST(nodep->lhsp(), VarRef)->varScopep();
             UASSERT_OBJ(vscp, nodep, "Scope lost on variable");
-            //m_lifep->simpleAssign(vscp, nodep); // Commented out for now as it makes wait() conditions
-                                                  // to be const-optimized. TODO: distinguish between vars
-                                                  // that are being waited on and ones that aren't.
+            // m_lifep->simpleAssign(vscp, nodep); // Commented out for now as it makes wait()
+            // conditions
+            // to be const-optimized. TODO: distinguish between vars
+            // that are being waited on and ones that aren't.
         } else {
             iterateAndNextNull(nodep->lhsp());
         }
