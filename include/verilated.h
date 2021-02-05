@@ -562,109 +562,6 @@ class VerilatedThread;
 
 extern std::vector<VerilatedThread*> verilated_threads;
 
-class VerilatedThread {
-
-public:
-    std::atomic<bool> m_ready;
-    std::atomic<bool> m_oneshot;
-    std::atomic<bool> m_started;
-
-    std::atomic<bool> m_should_exit;
-    std::atomic<bool> m_idle;
-
-    std::thread m_thr;
-    std::mutex m_mtx;
-    std::condition_variable m_cv;
-
-    std::mutex m_delay_mtx;
-    std::mutex m_delay_wait_mtx;
-    std::condition_variable m_delay_wait_cv;
-
-    std::function<void(void*,VerilatedThread*)> m_func;
-
-    VerilatedThread(void (*func)(void*, VerilatedThread*), void* args, bool oneshot, std::string name)
-        : m_ready(false)
-        , m_oneshot(oneshot)
-        , m_started(false)
-        , m_should_exit(false)
-        , m_idle(false)
-        , m_name(name) {
-        verilated_threads.push_back(this);
-
-        m_func = func;
-
-        m_thr = std::thread(m_func, args, this);
-    }
-
-    bool should_exit() {
-        return m_should_exit;
-    }
-
-    void should_exit(bool e) {
-        std::unique_lock<std::mutex> lck(m_delay_wait_mtx);
-        m_should_exit = e;
-        m_delay_wait_cv.notify_all();
-    }
-
-    bool ready() {
-        return m_ready;
-    }
-
-    void ready(bool r) {
-        std::unique_lock<std::mutex> lck(m_delay_wait_mtx);
-        m_ready = r;
-        m_delay_wait_cv.notify_all();
-    }
-
-    void wait_for_idle() {
-        std::unique_lock<std::mutex> lck(m_delay_wait_mtx);
-
-        while(ready() && !should_exit() && !idle()) {
-            m_delay_wait_cv.wait(lck);
-        }
-    }
-
-    bool idle() {
-        return m_idle;
-    }
-
-    void idle(bool w) {
-        std::unique_lock<std::mutex> lck(m_delay_wait_mtx);
-        m_idle = w;
-
-        if (w) {
-            m_delay_wait_cv.notify_all();
-        }
-    }
-
-    void join() {
-        m_thr.join();
-    }
-
-    void exit() {
-        should_exit(true);
-        m_cv.notify_all();
-        m_delay_wait_cv.notify_all();
-        join();
-    }
-
-    void kick() {
-        ready(true);
-        m_cv.notify_all();
-    }
-
-    // debug only
-    std::string m_name;
-    void name(std::string n) {
-        m_name = n;
-    }
-
-    std::string name() {
-        return m_name;
-    }
-
-};
-
 class VerilatedNBACtrl {
     private:
         std::map<MonitoredValueBase*, vluint64_t> data;
@@ -1423,15 +1320,15 @@ static inline double VL_ITOR_D_Q(int, QData lhs) VL_PURE {
 }
 /// Return double from lhs (numeric) signed
 double VL_ISTOR_D_W(int lbits, WDataInP lwp) VL_PURE;
-static inline double VL_ISTOR_D_I(int lbits, IData lhs) VL_PURE {
+static inline double VL_ISTOR_D_I(int lbits, IDataV lhs) VL_PURE {
     if (lbits == 32) return static_cast<double>(static_cast<vlsint32_t>(lhs));
-    WData lwp[VL_WQ_WORDS_E];
+    WDataV lwp[VL_WQ_WORDS_E];
     VL_SET_WI(lwp, lhs);
     return VL_ISTOR_D_W(lbits, lwp);
 }
-static inline double VL_ISTOR_D_Q(int lbits, QData lhs) VL_PURE {
+static inline double VL_ISTOR_D_Q(int lbits, QDataV lhs) VL_PURE {
     if (lbits == 64) return static_cast<double>(static_cast<vlsint64_t>(lhs));
-    WData lwp[VL_WQ_WORDS_E];
+    WDataV lwp[VL_WQ_WORDS_E];
     VL_SET_WQ(lwp, lhs);
     return VL_ISTOR_D_W(lbits, lwp);
 }

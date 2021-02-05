@@ -784,7 +784,7 @@ double VL_ITOR_D_W(int lbits, WDataInP lwp) VL_PURE {
 }
 double VL_ISTOR_D_W(int lbits, WDataInP lwp) VL_PURE {
     if (!VL_SIGN_W(lbits, lwp)) return VL_ITOR_D_W(lbits, lwp);
-    vluint32_t pos[VL_MULS_MAX_WORDS + 1];  // Fixed size, as MSVC++ doesn't allow [words] here
+    WDataV pos[VL_MULS_MAX_WORDS + 1];  // Fixed size, as MSVC++ doesn't allow [words] here
     VL_NEGATE_W(VL_WORDS_I(lbits), pos, lwp);
     _VL_CLEAN_INPLACE_W(lbits, pos);
     return -VL_ITOR_D_W(lbits, pos);
@@ -2473,7 +2473,7 @@ void Verilated::gotFinish(bool flag) VL_MT_SAFE {
     s_s.s_gotFinish = flag;
 }
 bool Verilated::gotFinish() VL_MT_SAFE {
-    const VerilatedLockGuard lock(m_mutex);
+    const VerilatedLockGuard lock(s_mutex);
     return s_s.s_gotFinish;
 }
 void Verilated::assertOn(bool flag) VL_MT_SAFE {
