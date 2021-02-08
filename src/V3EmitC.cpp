@@ -29,7 +29,6 @@
 #include <map>
 #include <vector>
 #include VL_INCLUDE_UNORDERED_SET
-#include <iostream>
 
 #define VL_VALUE_STRING_MAX_WIDTH 8192  // We use a static char array in VL_VALUE_STRING
 
@@ -1007,11 +1006,13 @@ public:
         puts("/* [ -> statement ] */\n");
         iterateAndNextNull(nodep->trigger());
         puts(" = 1;\n");
+        // Also mark the __Vtriggered variable
         auto* varp = VN_CAST(VN_CAST(nodep->trigger(), VarRef)->varp(), Var);
-        for (auto* np = varp->nextp(); np; np = np->nextp()) {
-            if (auto* varTrigp = VN_CAST(np, Var)) {
+        for (auto* itp = varp->nextp(); itp; itp = itp->nextp()) {
+            if (auto* varTrigp = VN_CAST(itp, Var)) {
                 if (varTrigp->name() == varp->name() + "__Vtriggered") {
                     puts("vlTOPp->" + varTrigp->name() + " = 1;\n");
+                    break;
                 }
             }
         }
@@ -2952,8 +2953,10 @@ void EmitCImp::emitSettleLoop(AstNodeModule* modp, const std::string& eval_call,
     puts("int __VclockLoop = 0;\n");
     puts("QData __Vchange = 1;\n");
     puts("do {\n");
+    // Reset events and their __Vtriggered vars
     for (auto* nodep = modp->stmtsp(); nodep; nodep = nodep->nextp()) {
-        if ((nodep->dtypep() && nodep->dtypep()->basicp() && nodep->dtypep()->basicp()->isEventValue())
+        if ((nodep->dtypep() && nodep->dtypep()->basicp()
+             && nodep->dtypep()->basicp()->isEventValue())
           || nodep->name().find("__Vtriggered") != std::string::npos) {
             puts("vlSymsp->TOPp->");
             puts(protect(nodep->name()));

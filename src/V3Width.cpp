@@ -2535,22 +2535,27 @@ private:
             nodep->v3error("Unknown built-in array method " << nodep->prettyNameQ());
         }
     }
+    AstVar* getCreateTriggeredVar(AstNode* nodep) {
+        // Find the __Vtriggered var if already created
+        string triggeredVarName = nodep->name() + string("__Vtriggered");
+        auto* triggeredVarFileline = nodep->fileline();
+        while (!VN_CAST(nodep, NodeModule)) nodep = nodep->backp();
+        auto* modp = VN_CAST(nodep, NodeModule);
+        nodep = modp->stmtsp();
+        while (nodep && nodep->name() != triggeredVarName) nodep = nodep->nextp();
+        if (nodep) return VN_CAST(nodep, Var);
+        // If not, create a new one
+        auto* varp = new AstVar(triggeredVarFileline, AstVarType::MODULETEMP, triggeredVarName,
+                                VFlagLogicPacked(), 1);
+        modp->addStmtp(varp);
+        return varp;
+    }
     void methodCallEvent(AstMethodCall* nodep, AstBasicDType* adtypep) {
         // Method call on event
         if (nodep->name() == "triggered") {
-            // We represent events as numbers, so can just return number
+            // Replace with reference to new __Vtriggered variable
             methodOkArguments(nodep, 0, 0);
-            auto* varp = VN_CAST(nodep->fromp(), VarRef)->varp();
-            auto* np = varp->backp();
-            while (!VN_CAST(np, NodeModule)) {
-                np = np->backp();
-            }
-            auto* modp = VN_CAST(np, NodeModule);
-            string newvarname
-                = varp->name() + string("__Vtriggered");
-            AstVar* newvarp = new AstVar(varp->fileline(), AstVarType::MODULETEMP, newvarname,
-                                        VFlagLogicPacked(), 1);
-            modp->addStmtp(newvarp);
+            auto* newvarp = getCreateTriggeredVar(nodep->fromp());
             auto* varrefp = new AstVarRef(nodep->fileline(), newvarp, false);
             nodep->replaceWith(varrefp);
             VL_DO_DANGLING(pushDeletep(nodep), nodep);
