@@ -300,7 +300,7 @@ static void process() {
         // Gate-based logic elimination; eliminate signals and push constant across cell boundaries
         // Instant propagation makes lots-o-constant reduction possibilities.
         if (v3Global.opt.oGate()) {
-            //V3Gate::gateAll(v3Global.rootp());
+            V3Gate::gateAll(v3Global.rootp());
             // V3Gate calls constant propagation itself.
         } else {
             v3info("Command Line disabled gate optimization with -Og/-O0.  "
