@@ -520,8 +520,7 @@ private:
     }
     virtual void visit(AstEventTrigger* nodep) VL_OVERRIDE {
         iterateChildren(nodep);
-        if (m_logicVertexp && VN_IS(nodep, EventTrigger))
-            m_logicVertexp->setConsumed("eventTrigger");
+        if (m_logicVertexp) m_logicVertexp->setConsumed("eventTrigger");
     }
 
     //--------------------
