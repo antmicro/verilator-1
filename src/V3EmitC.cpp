@@ -1008,14 +1008,8 @@ public:
         puts(" = 1;\n");
         // Also mark the __Vtriggered variable
         auto* varp = VN_CAST(VN_CAST(nodep->trigger(), VarRef)->varp(), Var);
-        for (auto* itp = varp->nextp(); itp; itp = itp->nextp()) {
-            if (auto* varTrigp = VN_CAST(itp, Var)) {
-                if (varTrigp->name() == varp->name() + "__Vtriggered") {
-                    puts("vlTOPp->" + varTrigp->name() + " = 1;\n");
-                    break;
-                }
-            }
-        }
+        if (auto* triggeredVarp = varp->triggeredVarp())
+            puts("vlTOPp->" + triggeredVarp->name() + " = 1;\n");
     }
     virtual void visit(AstWhile* nodep) VL_OVERRIDE {
         iterateAndNextNull(nodep->precondsp());
@@ -2071,6 +2065,7 @@ class EmitCImp : EmitCStmts {
         return "";
     }
 
+    void emitVarSetToZero(AstVar* nodep);
     void emitCellCtors(AstNodeModule* modp);
     void emitSensitives();
     // Medium level
@@ -2948,6 +2943,12 @@ void EmitCImp::emitSensitives() {
     }
 }
 
+void EmitCImp::emitVarSetToZero(AstVar* nodep) {
+    puts("vlSymsp->TOPp->");
+    puts(protect(nodep->name()));
+    puts(".assign_no_notify(0);\n");
+}
+
 void EmitCImp::emitSettleLoop(AstNodeModule* modp, const std::string& eval_call, bool initial) {
     putsDecoration("// Evaluate till stable\n");
     puts("int __VclockLoop = 0;\n");
@@ -2955,12 +2956,14 @@ void EmitCImp::emitSettleLoop(AstNodeModule* modp, const std::string& eval_call,
     puts("do {\n");
     // Reset events and their __Vtriggered vars
     for (auto* nodep = modp->stmtsp(); nodep; nodep = nodep->nextp()) {
-        if ((nodep->dtypep() && nodep->dtypep()->basicp()
-             && nodep->dtypep()->basicp()->isEventValue())
-          || nodep->name().find("__Vtriggered") != std::string::npos) {
-            puts("vlSymsp->TOPp->");
-            puts(protect(nodep->name()));
-            puts(".assign_no_notify(0);\n");
+        if (auto* varp = VN_CAST(nodep, Var)) {
+            if (nodep->dtypep() && nodep->dtypep()->basicp()
+                && nodep->dtypep()->basicp()->isEventValue()) {
+                emitVarSetToZero(varp);
+                if (auto* triggeredVarp = varp->triggeredVarp()) {
+                    emitVarSetToZero(triggeredVarp);
+                }
+            }
         }
     }
     puts("do {\n");

@@ -1855,6 +1855,7 @@ private:
     VLifetime m_lifetime;  // Lifetime
     VVarAttrClocker m_attrClocker;
     MTaskIdSet m_mtaskIds;  // MTaskID's that read or write this var
+    AstVar* m_triggeredVarp = nullptr;
 
     void init() {
         m_ansi = false;
@@ -2138,6 +2139,12 @@ public:
     void addConsumingMTaskId(int id) { m_mtaskIds.insert(id); }
     const MTaskIdSet& mtaskIds() const { return m_mtaskIds; }
     string mtasksString() const;
+    void triggeredVarp(AstVar* varp) { m_triggeredVarp = varp; }
+    AstVar* triggeredVarp() { return m_triggeredVarp; }
+    virtual void cloneRelink() {
+        if (m_triggeredVarp && m_triggeredVarp->clonep())
+            m_triggeredVarp = m_triggeredVarp->clonep();
+    }
 
 private:
     class VlArgTypeRecursed;

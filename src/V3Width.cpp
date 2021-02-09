@@ -2536,19 +2536,17 @@ private:
         }
     }
     AstVar* getCreateTriggeredVar(AstNode* nodep) {
-        // Find the __Vtriggered var if already created
+        auto* varp = VN_CAST(nodep, VarRef)->varp();
+        if (varp->triggeredVarp()) return varp->triggeredVarp();
         string triggeredVarName = nodep->name() + string("__Vtriggered");
         auto* triggeredVarFileline = nodep->fileline();
         while (!VN_CAST(nodep, NodeModule)) nodep = nodep->backp();
         auto* modp = VN_CAST(nodep, NodeModule);
-        nodep = modp->stmtsp();
-        while (nodep && nodep->name() != triggeredVarName) nodep = nodep->nextp();
-        if (nodep) return VN_CAST(nodep, Var);
-        // If not, create a new one
-        auto* varp = new AstVar(triggeredVarFileline, AstVarType::MODULETEMP, triggeredVarName,
+        auto* newvarp = new AstVar(triggeredVarFileline, AstVarType::MODULETEMP, triggeredVarName,
                                 VFlagLogicPacked(), 1);
-        modp->addStmtp(varp);
-        return varp;
+        varp->triggeredVarp(newvarp);
+        modp->addStmtp(newvarp);
+        return newvarp;
     }
     void methodCallEvent(AstMethodCall* nodep, AstBasicDType* adtypep) {
         // Method call on event
