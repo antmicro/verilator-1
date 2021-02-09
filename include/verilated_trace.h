@@ -3,7 +3,7 @@
 //
 // THIS MODULE IS PUBLICLY LICENSED
 //
-// Copyright 2001-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2001-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -40,7 +40,7 @@
 // Threaded tracing
 
 // A simple synchronized first in first out queue
-template <class T> class VerilatedThreadQueue {  // LCOV_EXCL_LINE  // lcov bug
+template <class T> class VerilatedThreadQueue final {  // LCOV_EXCL_LINE  // lcov bug
 private:
     VerilatedMutex m_mutex;  // Protects m_queue
     std::condition_variable_any m_cv;
@@ -83,11 +83,11 @@ public:
 
 // Commands used by thread tracing. Anonymous enum in class, as we want
 // it scoped, but we also want the automatic conversion to integer types.
-class VerilatedTraceCommand {
+class VerilatedTraceCommand final {
 public:
     // These must all fit in 4 bit at the moment, as the tracing routines
     // pack parameters in the top bits.
-    enum {
+    enum : vluint8_t {
         CHG_BIT_0 = 0x0,
         CHG_BIT_1 = 0x1,
         CHG_CDATA = 0x2,
@@ -110,7 +110,7 @@ public:
 // VerilatedTrace uses F-bounded polymorphism to access duck-typed
 // implementations in the format specific derived class, which must be passed
 // as the type parameter T_Derived
-template <class T_Derived> class VerilatedTrace {
+template <class T_Derived> class VerilatedTrace VL_NOT_FINAL {
 public:
     //=========================================================================
     // Generic tracing internals
@@ -130,11 +130,11 @@ private:
         };
         void* m_userp;  // The user pointer to pass to the callback (the symbol table)
         CallbackRecord(initCb_t cb, void* userp)
-            : m_initCb(cb)
-            , m_userp(userp) {}
+            : m_initCb{cb}
+            , m_userp{userp} {}
         CallbackRecord(dumpCb_t cb, void* userp)
-            : m_dumpCb(cb)
-            , m_userp(userp) {}
+            : m_dumpCb{cb}
+            , m_userp{userp} {}
     };
 
     vluint32_t* m_sigs_oldvalp;  ///< Old value store
@@ -216,7 +216,6 @@ protected:
     double timeRes() const { return m_timeRes; }
     double timeUnit() const { return m_timeUnit; }
     std::string timeResStr() const;
-    std::string timeUnitStr() const;
 
     void traceInit() VL_MT_UNSAFE;
 

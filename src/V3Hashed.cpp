@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -37,7 +37,7 @@
 //######################################################################
 // Hashed state, as a visitor of each AstNode
 
-class HashedVisitor : public AstNVisitor {
+class HashedVisitor final : public AstNVisitor {
 private:
     // NODE STATE
     // Entire netlist:
@@ -60,7 +60,7 @@ private:
                 nodep,
                 "Node " << nodep->prettyTypeName()
                         << " in statement position but not marked stmt (node under function)");
-            V3Hash oldHash = m_lowerHash;
+            VL_RESTORER(m_lowerHash);
             {
                 m_lowerHash = nodep->sameHash();
                 UASSERT_OBJ(!m_lowerHash.isIllegal(), nodep,
@@ -74,21 +74,20 @@ private:
                 // Store the hash value
                 nodep->user4(m_lowerHash.fullValue());
                 // UINFO(9, "    hashnode "<<m_lowerHash<<"  "<<nodep<<endl);
+                thisHash = m_lowerHash;
             }
-            thisHash = m_lowerHash;
-            m_lowerHash = oldHash;
         }
         // Update what will become the above node's hash
         m_lowerHash += m_cacheInUser4 ? V3Hashed::nodeHash(nodep) : thisHash;
     }
 
     //--------------------
-    virtual void visit(AstVar*) VL_OVERRIDE {}
-    virtual void visit(AstTypedef*) VL_OVERRIDE {}
-    virtual void visit(AstParamTypeDType*) VL_OVERRIDE {}
+    virtual void visit(AstVar*) override {}
+    virtual void visit(AstTypedef*) override {}
+    virtual void visit(AstParamTypeDType*) override {}
     virtual void visit(AstWait*) VL_OVERRIDE {}
-    virtual void visit(AstEventTrigger*) VL_OVERRIDE {}
-    virtual void visit(AstNode* nodep) VL_OVERRIDE {
+    virtual void visit(AstEventTrigger*) override {}
+    virtual void visit(AstNode* nodep) override {
         // Hash not just iterate
         nodeHashIterate(nodep);
     }
@@ -96,16 +95,16 @@ private:
 public:
     // CONSTRUCTORS
     explicit HashedVisitor(AstNode* nodep)
-        : m_cacheInUser4(true) {
+        : m_cacheInUser4{true} {
         nodeHashIterate(nodep);
         // UINFO(9,"  stmthash "<<hex<<V3Hashed::nodeHash(nodep)<<"  "<<nodep<<endl);
     }
     explicit HashedVisitor(const AstNode* nodep)
-        : m_cacheInUser4(false) {
+        : m_cacheInUser4{false} {
         nodeHashIterate(const_cast<AstNode*>(nodep));
     }
     V3Hash finalHash() const { return m_lowerHash; }
-    virtual ~HashedVisitor() {}
+    virtual ~HashedVisitor() override = default;
 };
 
 //######################################################################
@@ -118,7 +117,7 @@ V3Hash V3Hashed::uncachedHash(const AstNode* nodep) {
 
 V3Hashed::iterator V3Hashed::hashAndInsert(AstNode* nodep) {
     hash(nodep);
-    return m_hashMmap.insert(make_pair(nodeHash(nodep), nodep));
+    return m_hashMmap.emplace(nodeHash(nodep), nodep);
 }
 
 void V3Hashed::hash(AstNode* nodep) {
@@ -138,12 +137,12 @@ void V3Hashed::erase(iterator it) {
     UINFO(8, "   erase " << nodep << endl);
     UASSERT_OBJ(nodep->user4p(), nodep, "Called removeNode on non-hashed node");
     m_hashMmap.erase(it);
-    nodep->user4p(NULL);  // So we don't allow removeNode again
+    nodep->user4p(nullptr);  // So we don't allow removeNode again
 }
 
 void V3Hashed::check() {
-    for (HashMmap::iterator it = begin(); it != end(); ++it) {
-        AstNode* nodep = it->second;
+    for (const auto& itr : *this) {
+        AstNode* nodep = itr.second;
         UASSERT_OBJ(nodep->user4p(), nodep, "V3Hashed check failed, non-hashed node");
     }
 }
@@ -153,10 +152,10 @@ void V3Hashed::dumpFilePrefixed(const string& nameComment, bool tree) {
 }
 
 void V3Hashed::dumpFile(const string& filename, bool tree) {
-    const vl_unique_ptr<std::ofstream> logp(V3File::new_ofstream(filename));
+    const std::unique_ptr<std::ofstream> logp(V3File::new_ofstream(filename));
     if (logp->fail()) v3fatal("Can't write " << filename);
 
-    std::map<int, int> dist;
+    std::unordered_map<int, int> dist;
 
     V3Hash lasthash;
     int num_in_bucket = 0;
@@ -165,7 +164,7 @@ void V3Hashed::dumpFile(const string& filename, bool tree) {
             if (it != end()) lasthash = it->first;
             if (num_in_bucket) {
                 if (dist.find(num_in_bucket) == dist.end()) {
-                    dist.insert(make_pair(num_in_bucket, 1));
+                    dist.emplace(num_in_bucket, 1);
                 } else {
                     ++dist[num_in_bucket];
                 }
@@ -175,23 +174,22 @@ void V3Hashed::dumpFile(const string& filename, bool tree) {
         if (it == end()) break;
         num_in_bucket++;
     }
-    *logp << "\n*** STATS:\n" << endl;
+    *logp << "\n*** STATS:\n\n";
     *logp << "    #InBucket   Occurrences\n";
-    for (std::map<int, int>::iterator it = dist.begin(); it != dist.end(); ++it) {
-        *logp << "    " << std::setw(9) << it->first << "  " << std::setw(12) << it->second
-              << endl;
+    for (const auto& i : dist) {
+        *logp << "    " << std::setw(9) << i.first << "  " << std::setw(12) << i.second << '\n';
     }
 
-    *logp << "\n*** Dump:\n" << endl;
-    for (HashMmap::iterator it = begin(); it != end(); ++it) {
-        if (lasthash != it->first) {
-            lasthash = it->first;
-            *logp << "    " << it->first << endl;
+    *logp << "\n*** Dump:\n\n";
+    for (const auto& itr : *this) {
+        if (lasthash != itr.first) {
+            lasthash = itr.first;
+            *logp << "    " << itr.first << '\n';
         }
-        *logp << "\t" << it->second << endl;
+        *logp << "\t" << itr.second << '\n';
         // Dumping the entire tree may make nearly N^2 sized dumps,
         // because the nodes under this one may also be in the hash table!
-        if (tree) it->second->dumpTree(*logp, "    ");
+        if (tree) itr.second->dumpTree(*logp, "    ");
     }
 }
 

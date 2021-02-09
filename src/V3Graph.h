@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -45,9 +45,9 @@ typedef bool (*V3EdgeFuncP)(const V3GraphEdge* edgep);
 // it's useful to have algorithms that can walk in either direction, hence
 // some methods take GraphWay to programmatically select the direction.
 
-class GraphWay {
+class GraphWay final {
 public:
-    enum en {
+    enum en : uint8_t {
         FORWARD = 0,
         REVERSE = 1,
         NUM_WAYS = 2  // NUM_WAYS is not an actual way, it's typically
@@ -55,12 +55,12 @@ public:
     };
     enum en m_e;
     inline GraphWay()
-        : m_e(FORWARD) {}
+        : m_e{FORWARD} {}
     // cppcheck-suppress noExplicitConstructor
     inline GraphWay(en _e)
-        : m_e(_e) {}
+        : m_e{_e} {}
     explicit inline GraphWay(int _e)
-        : m_e(static_cast<en>(_e)) {}
+        : m_e(static_cast<en>(_e)) {}  // Need () or GCC 4.8 false warning
     operator en() const { return m_e; }
     const char* ascii() const {
         static const char* const names[] = {"FORWARD", "REVERSE"};
@@ -77,7 +77,7 @@ inline bool operator==(GraphWay::en lhs, const GraphWay& rhs) { return lhs == rh
 
 //============================================================================
 
-class V3Graph {
+class V3Graph VL_NOT_FINAL {
 private:
     // MEMBERS
     V3List<V3GraphVertex*> m_vertices;  // All vertices
@@ -145,12 +145,6 @@ public:
     /// Make acyclical (into a tree) by breaking a minimal subset of cutable edges.
     void acyclic(V3EdgeFuncP edgeFuncp);
 
-    /// Delete any nodes with only outputs
-    void deleteCutableOnlyEdges();
-
-    /// Any cutable edges become non-cutable
-    void makeEdgesNonCutable(V3EdgeFuncP edgeFuncp);
-
     /// Remove any redundant edges, weights become MAX of any other weight
     void removeRedundantEdges(V3EdgeFuncP edgeFuncp);
 
@@ -185,7 +179,7 @@ public:
 
 //============================================================================
 
-class V3GraphVertex {
+class V3GraphVertex VL_NOT_FINAL {
     // Vertices may be a 'gate'/wire statement OR a variable
 protected:
     friend class V3Graph;
@@ -218,7 +212,7 @@ public:
     virtual V3GraphVertex* clone(V3Graph* graphp) const {
         return new V3GraphVertex(graphp, *this);
     }
-    virtual ~V3GraphVertex() {}
+    virtual ~V3GraphVertex() = default;
     void unlinkEdges(V3Graph* graphp);
     void unlinkDelete(V3Graph* graphp);
 
@@ -229,7 +223,7 @@ public:
     virtual string dotStyle() const { return ""; }
     virtual string dotName() const { return ""; }
     virtual uint32_t rankAdder() const { return 1; }
-    virtual FileLine* fileline() const { return NULL; }  // NULL for unknown
+    virtual FileLine* fileline() const { return nullptr; }  // nullptr for unknown
     virtual int sortCmp(const V3GraphVertex* rhsp) const {
         // LHS goes first if of lower rank, or lower fanout
         if (m_rank < rhsp->m_rank) return -1;
@@ -250,11 +244,11 @@ public:
     // ITERATORS
     V3GraphVertex* verticesNextp() const { return m_vertices.nextp(); }
     V3GraphEdge* inBeginp() const { return m_ins.begin(); }
-    bool inEmpty() const { return inBeginp() == NULL; }
+    bool inEmpty() const { return inBeginp() == nullptr; }
     bool inSize1() const;
     uint32_t inHash() const;
     V3GraphEdge* outBeginp() const { return m_outs.begin(); }
-    bool outEmpty() const { return outBeginp() == NULL; }
+    bool outEmpty() const { return outBeginp() == nullptr; }
     bool outSize1() const;
     uint32_t outHash() const;
     V3GraphEdge* beginp(GraphWay way) const { return way.forward() ? outBeginp() : inBeginp(); }
@@ -265,7 +259,7 @@ public:
     /// Edges are routed around this vertex to point from "from" directly to "to"
     void rerouteEdges(V3Graph* graphp);
     /// Find the edge connecting ap and bp, where bp is wayward from ap.
-    /// If edge is not found returns NULL. O(edges) performance.
+    /// If edge is not found returns nullptr. O(edges) performance.
     V3GraphEdge* findConnectingEdgep(GraphWay way, const V3GraphVertex* waywardp);
 };
 
@@ -273,11 +267,11 @@ std::ostream& operator<<(std::ostream& os, V3GraphVertex* vertexp);
 
 //============================================================================
 
-class V3GraphEdge {
+class V3GraphEdge VL_NOT_FINAL {
     // Wires/variables aren't edges.  Edges have only a single to/from vertex
 public:
     // ENUMS
-    enum Cutable { NOT_CUTABLE = false, CUTABLE = true };  // For passing to V3GraphEdge
+    enum Cutable : uint8_t { NOT_CUTABLE = false, CUTABLE = true };  // For passing to V3GraphEdge
 protected:
     friend class V3Graph;
     friend class V3GraphVertex;
@@ -317,7 +311,7 @@ public:
     virtual V3GraphEdge* clone(V3Graph* graphp, V3GraphVertex* fromp, V3GraphVertex* top) const {
         return new V3GraphEdge(graphp, fromp, top, *this);
     }
-    virtual ~V3GraphEdge() {}
+    virtual ~V3GraphEdge() = default;
     // METHODS
     virtual string name() const { return m_fromp->name() + "->" + m_top->name(); }
     virtual string dotLabel() const { return ""; }

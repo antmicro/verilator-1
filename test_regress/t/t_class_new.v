@@ -5,10 +5,10 @@
 // SPDX-License-Identifier: CC0-1.0
 
 class ClsNoArg;
-   int imembera;
+   const int imembera;  // Ok for new() to assign to a const
    function new();
       imembera = 5;
-   endfunction
+   endfunction : new
 endclass
 
 class ClsArg;
@@ -18,6 +18,11 @@ class ClsArg;
    endfunction
    function int geta;
       return imembera;
+   endfunction
+   static function ClsArg create6;
+      ClsArg obj;
+      obj = new(6 - 1);
+      return obj;
    endfunction
 endclass
 
@@ -29,9 +34,13 @@ module t (/*AUTOARG*/);
       c1 = new;
       if (c1.imembera != 5) $stop;
 
-      c2 = new(2);
+      c2 = new(3 - 1);
       if (c2.imembera != 3) $stop;
       if (c2.geta() != 3) $stop;
+
+      c2 = ClsArg::create6();
+      if (c2.imembera != 6) $stop;
+      if (c2.geta() != 6) $stop;
 
       $write("*-* All Finished *-*\n");
       $finish;

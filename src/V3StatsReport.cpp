@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2005-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2005-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -25,12 +25,12 @@
 
 #include <iomanip>
 #include <map>
-#include VL_INCLUDE_UNORDERED_MAP
+#include <unordered_map>
 
 //######################################################################
 // Stats dumping
 
-class StatsReport {
+class StatsReport final {
     // TYPES
     typedef std::vector<V3Statistic> StatColl;
 
@@ -39,13 +39,12 @@ class StatsReport {
     static StatColl s_allStats;  ///< All statistics
 
     void header() {
-        os << "Verilator Statistics Report\n";
-        os << endl;
+        os << "Verilator Statistics Report\n\n";
 
-        os << "Information:" << endl;
-        os << "  " << V3Options::version() << endl;
-        os << "  Arguments: " << v3Global.opt.allArgsString() << endl;
-        os << endl;
+        os << "Information:\n";
+        os << "  " << V3Options::version() << '\n';
+        os << "  Arguments: " << v3Global.opt.allArgsString() << '\n';
+        os << '\n';
     }
 
     void sumit() {
@@ -53,15 +52,15 @@ class StatsReport {
         typedef std::multimap<string, V3Statistic*> ByName;
         ByName byName;
         // * is always first
-        for (StatColl::iterator it = s_allStats.begin(); it != s_allStats.end(); ++it) {
-            V3Statistic* repp = &(*it);
-            byName.insert(make_pair(repp->name(), repp));
+        for (auto& itr : s_allStats) {
+            V3Statistic* repp = &itr;
+            byName.emplace(repp->name(), repp);
         }
 
         // Process duplicates
-        V3Statistic* lastp = NULL;
-        for (ByName::iterator it = byName.begin(); it != byName.end(); ++it) {
-            V3Statistic* repp = it->second;
+        V3Statistic* lastp = nullptr;
+        for (const auto& itr : byName) {
+            V3Statistic* repp = itr.second;
             if (lastp && lastp->sumit() && lastp->printit() && lastp->name() == repp->name()
                 && lastp->stage() == repp->stage()) {
                 repp->combineWith(lastp);
@@ -76,37 +75,35 @@ class StatsReport {
         typedef std::multimap<string, const V3Statistic*> ByName;
         ByName byName;
         // * is always first
-        for (StatColl::iterator it = s_allStats.begin(); it != s_allStats.end(); ++it) {
-            const V3Statistic* repp = &(*it);
+        for (const auto& itr : s_allStats) {
+            const V3Statistic* repp = &itr;
             if (repp->stage() == "*" && repp->printit()) {
                 if (maxWidth < repp->name().length()) maxWidth = repp->name().length();
-                byName.insert(make_pair(repp->name(), repp));
+                byName.emplace(repp->name(), repp);
             }
         }
 
         // Print organized by stage
-        os << "Global Statistics:\n";
-        os << endl;
-        for (ByName::iterator it = byName.begin(); it != byName.end(); ++it) {
-            const V3Statistic* repp = it->second;
+        os << "Global Statistics:\n\n";
+        for (const auto& itr : byName) {
+            const V3Statistic* repp = itr.second;
             if (repp->perf()) continue;
             os << "  " << std::left << std::setw(maxWidth) << repp->name();
             repp->dump(os);
-            os << endl;
+            os << '\n';
         }
-        os << endl;
+        os << '\n';
 
         // Print organized by stage
-        os << "Performance Statistics:\n";
-        os << endl;
-        for (ByName::iterator it = byName.begin(); it != byName.end(); ++it) {
-            const V3Statistic* repp = it->second;
+        os << "Performance Statistics:\n\n";
+        for (const auto& itr : byName) {
+            const V3Statistic* repp = itr.second;
             if (!repp->perf()) continue;
             os << "  " << std::left << std::setw(maxWidth) << repp->name();
             repp->dump(os);
-            os << endl;
+            os << '\n';
         }
-        os << endl;
+        os << '\n';
     }
 
     void stages() {
@@ -117,7 +114,7 @@ class StatsReport {
         size_t maxWidth = 0;
         typedef std::vector<string> Stages;
         Stages stages;
-        vl_unordered_map<string, int> stageInt;
+        std::unordered_map<string, int> stageInt;
         typedef std::multimap<string, const V3Statistic*> ByName;
         ByName byName;
         // * is always first
@@ -126,21 +123,19 @@ class StatsReport {
             if (repp->stage() != "*" && repp->printit()) {
                 if (maxWidth < repp->name().length()) maxWidth = repp->name().length();
                 if (stageInt.find(repp->stage()) == stageInt.end()) {
-                    stageInt.insert(make_pair(repp->stage(), stage++));
+                    stageInt.emplace(repp->stage(), stage++);
                     stages.push_back(repp->stage());
                 }
-                byName.insert(make_pair(repp->name(), repp));
+                byName.emplace(repp->name(), repp);
             }
         }
 
         // Header
         os << "  Stat     " << std::left << std::setw(maxWidth - 5 - 2) << "";
-        for (Stages::const_iterator it = stages.begin(); it != stages.end(); ++it) {
-            os << "  " << std::left << std::setw(9) << *it;
-        }
-        os << endl;
+        for (const string& i : stages) os << "  " << std::left << std::setw(9) << i;
+        os << '\n';
         os << "  -------- " << std::left << std::setw(maxWidth - 5 - 2) << "";
-        for (Stages::const_iterator it = stages.begin(); it != stages.end(); ++it) {
+        for (auto it = stages.begin(); it != stages.end(); ++it) {
             os << "  " << std::left << std::setw(9) << "-------";
         }
         // os<<endl;
@@ -159,10 +154,10 @@ class StatsReport {
                     if ((pos = commaName.find(',')) != string::npos) commaName.erase(pos);
                     if (lastCommaName != commaName) {
                         lastCommaName = commaName;
-                        os << endl;
+                        os << '\n';
                     }
                 }
-                os << endl;
+                os << '\n';
                 col = 0;
                 os << "  " << std::left << std::setw(maxWidth) << repp->name();
             }
@@ -173,7 +168,7 @@ class StatsReport {
             repp->dump(os);
             col++;
         }
-        os << endl;
+        os << '\n';
     }
 
 public:
@@ -182,13 +177,13 @@ public:
 
     // CONSTRUCTORS
     explicit StatsReport(std::ofstream* aofp)
-        : os(*aofp) {
+        : os(*aofp) {  // Need () or GCC 4.8 false warning
         header();
         sumit();
         stars();
         stages();
     }
-    ~StatsReport() {}
+    ~StatsReport() = default;
 };
 
 StatsReport::StatColl StatsReport::s_allStats;
@@ -231,7 +226,7 @@ void V3Stats::statsReport() {
     UINFO(2, __FUNCTION__ << ": " << endl);
 
     // Open stats file
-    string filename = v3Global.opt.makeDir() + "/" + v3Global.opt.prefix() + "__stats.txt";
+    string filename = v3Global.opt.hierTopDataDir() + "/" + v3Global.opt.prefix() + "__stats.txt";
     std::ofstream* ofp(V3File::new_ofstream(filename));
     if (ofp->fail()) v3fatal("Can't write " << filename);
 

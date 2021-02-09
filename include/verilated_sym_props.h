@@ -1,7 +1,7 @@
 // -*- mode: C++; c-file-style: "cc-mode" -*-
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you can
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you can
 // redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -36,26 +36,24 @@
 /// Thread safety: Assume is constructed only with model, then any number of readers
 
 // See also V3Ast::VNumRange
-class VerilatedRange {
-    int m_left;
-    int m_right;
+class VerilatedRange final {
+    int m_left = 0;
+    int m_right = 0;
 
 protected:
     friend class VerilatedVarProps;
     friend class VerilatedScope;
-    VerilatedRange()
-        : m_left(0)
-        , m_right(0) {}
-    VerilatedRange(int left, int right)
-        : m_left(left)
-        , m_right(right) {}
+    VerilatedRange() = default;
     void init(int left, int right) {
         m_left = left;
         m_right = right;
     }
 
 public:
-    ~VerilatedRange() {}
+    VerilatedRange(int left, int right)
+        : m_left{left}
+        , m_right{right} {}
+    ~VerilatedRange() = default;
     int left() const { return m_left; }
     int right() const { return m_right; }
     int low() const { return (m_left < m_right) ? m_left : m_right; }
@@ -70,75 +68,75 @@ public:
 /// Verilator variable
 /// Thread safety: Assume is constructed only with model, then any number of readers
 
-class VerilatedVarProps {
+class VerilatedVarProps VL_NOT_FINAL {
     // TYPES
     enum { MAGIC = 0xddc4f829 };
     // MEMBERS
     const vluint32_t m_magic;  // Magic number
     const VerilatedVarType m_vltype;  // Data type
     const VerilatedVarFlags m_vlflags;  // Direction
-    const int m_pdims;  // Packed dimensions
-    const int m_udims;  // Unpacked dimensions
+    const int m_pdims;  // Packed dimensions, 0 = none
+    const int m_udims;  // Unpacked dimensions, 0 = none
     VerilatedRange m_packed;  // Packed array range
     std::vector<VerilatedRange> m_unpacked;  // Unpacked array ranges
     void initUnpacked(const int* ulims) {
         for (int i = 0; i < m_udims; ++i) {
-            const int left = ulims ? ulims[2 * i + 0] : 0;
-            const int right = ulims ? ulims[2 * i + 1] : 0;
-            m_unpacked.push_back(VerilatedRange(left, right));
+            const int uleft = ulims ? ulims[2 * i + 0] : 0;
+            const int uright = ulims ? ulims[2 * i + 1] : 0;
+            m_unpacked.emplace_back(uleft, uright);
         }
     }
     // CONSTRUCTORS
 protected:
     friend class VerilatedScope;
     VerilatedVarProps(VerilatedVarType vltype, VerilatedVarFlags vlflags, int pdims, int udims)
-        : m_magic(MAGIC)
-        , m_vltype(vltype)
-        , m_vlflags(vlflags)
-        , m_pdims(pdims)
-        , m_udims(udims) {
-        initUnpacked(NULL);
+        : m_magic{MAGIC}
+        , m_vltype{vltype}
+        , m_vlflags{vlflags}
+        , m_pdims{pdims}
+        , m_udims{udims} {
+        initUnpacked(nullptr);
     }
 
 public:
     class Unpacked {};
     // Without packed
     VerilatedVarProps(VerilatedVarType vltype, int vlflags)
-        : m_magic(MAGIC)
-        , m_vltype(vltype)
-        , m_vlflags(VerilatedVarFlags(vlflags))
-        , m_pdims(0)
-        , m_udims(0) {}
+        : m_magic{MAGIC}
+        , m_vltype{vltype}
+        , m_vlflags(VerilatedVarFlags(vlflags))  // Need () or GCC 4.8 false warning
+        , m_pdims{0}
+        , m_udims{0} {}
     VerilatedVarProps(VerilatedVarType vltype, int vlflags, Unpacked, int udims, const int* ulims)
-        : m_magic(MAGIC)
-        , m_vltype(vltype)
-        , m_vlflags(VerilatedVarFlags(vlflags))
-        , m_pdims(0)
-        , m_udims(udims) {
+        : m_magic{MAGIC}
+        , m_vltype{vltype}
+        , m_vlflags(VerilatedVarFlags(vlflags))  // Need () or GCC 4.8 false warning
+        , m_pdims{0}
+        , m_udims{udims} {
         initUnpacked(ulims);
     }
     // With packed
     class Packed {};
     VerilatedVarProps(VerilatedVarType vltype, int vlflags, Packed, int pl, int pr)
-        : m_magic(MAGIC)
-        , m_vltype(vltype)
-        , m_vlflags(VerilatedVarFlags(vlflags))
-        , m_pdims(1)
-        , m_udims(0)
-        , m_packed(pl, pr) {}
+        : m_magic{MAGIC}
+        , m_vltype{vltype}
+        , m_vlflags(VerilatedVarFlags(vlflags))  // Need () or GCC 4.8 false warning
+        , m_pdims{1}
+        , m_udims{0}
+        , m_packed{pl, pr} {}
     VerilatedVarProps(VerilatedVarType vltype, int vlflags, Packed, int pl, int pr, Unpacked,
                       int udims, const int* ulims)
-        : m_magic(MAGIC)
-        , m_vltype(vltype)
-        , m_vlflags(VerilatedVarFlags(vlflags))
-        , m_pdims(1)
-        , m_udims(udims)
-        , m_packed(pl, pr) {
+        : m_magic{MAGIC}
+        , m_vltype{vltype}
+        , m_vlflags(VerilatedVarFlags(vlflags))  // Need () or GCC 4.8 false warning
+        , m_pdims{1}
+        , m_udims{udims}
+        , m_packed{pl, pr} {
         initUnpacked(ulims);
     }
 
 public:
-    ~VerilatedVarProps() {}
+    ~VerilatedVarProps() = default;
     // METHODS
     bool magicOk() const { return m_magic == MAGIC; }
     VerilatedVarType vltype() const { return m_vltype; }
@@ -189,19 +187,19 @@ public:
 //===========================================================================
 /// Verilator DPI open array variable
 
-class VerilatedDpiOpenVar {
+class VerilatedDpiOpenVar final {
     // MEMBERS
     const VerilatedVarProps* m_propsp;  // Variable properties
     void* m_datap;  // Location of data (local to thread always, so safe)
 public:
     // CONSTRUCTORS
     VerilatedDpiOpenVar(const VerilatedVarProps* propsp, void* datap)
-        : m_propsp(propsp)
-        , m_datap(datap) {}
+        : m_propsp{propsp}
+        , m_datap{datap} {}
     VerilatedDpiOpenVar(const VerilatedVarProps* propsp, const void* datap)
-        : m_propsp(propsp)
-        , m_datap(const_cast<void*>(datap)) {}
-    ~VerilatedDpiOpenVar() {}
+        : m_propsp{propsp}
+        , m_datap{const_cast<void*>(datap)} {}
+    ~VerilatedDpiOpenVar() = default;
     // METHODS
     void* datap() const { return m_datap; }
     // METHODS - from VerilatedVarProps
@@ -227,7 +225,7 @@ public:
 /// Verilator variable
 /// Thread safety: Assume is constructed only with model, then any number of readers
 
-class VerilatedVar : public VerilatedVarProps {
+class VerilatedVar final : public VerilatedVarProps {
     // MEMBERS
     void* m_datap;  // Location of data
     const char* m_namep;  // Name - slowpath
@@ -237,13 +235,13 @@ protected:
     // CONSTRUCTORS
     VerilatedVar(const char* namep, void* datap, VerilatedVarType vltype,
                  VerilatedVarFlags vlflags, int dims, bool isParam)
-        : VerilatedVarProps(vltype, vlflags, (dims > 0 ? 1 : 0), ((dims > 1) ? dims - 1 : 0))
-        , m_datap(datap)
-        , m_namep(namep)
-        , m_isParam(isParam) {}
+        : VerilatedVarProps{vltype, vlflags, (dims > 0 ? 1 : 0), ((dims > 1) ? dims - 1 : 0)}
+        , m_datap{datap}
+        , m_namep{namep}
+        , m_isParam{isParam} {}
 
 public:
-    ~VerilatedVar() {}
+    ~VerilatedVar() = default;
     // ACCESSORS
     void* datap() const { return m_datap; }
     const VerilatedRange& range() const { return packed(); }  // Deprecated

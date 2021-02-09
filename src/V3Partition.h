@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -26,7 +26,7 @@
 #include <list>
 
 class LogicMTask;
-typedef vl_unordered_map<const MTaskMoveVertex*, LogicMTask*> Vx2MTaskMap;
+typedef std::unordered_map<const MTaskMoveVertex*, LogicMTask*> Vx2MTaskMap;
 
 //*************************************************************************
 /// V3Partition takes the fine-grained logic graph from V3Order and
@@ -34,14 +34,14 @@ typedef vl_unordered_map<const MTaskMoveVertex*, LogicMTask*> Vx2MTaskMap;
 /// of which contains of set of the logic nodes from the fine-grained
 /// graph.
 
-class V3Partition {
+class V3Partition final {
     // MEMBERS
     V3Graph* m_fineDepsGraphp;  // Fine-grained dependency graph
 public:
     // CONSTRUCTORS
     explicit V3Partition(V3Graph* fineDepsGraphp)
-        : m_fineDepsGraphp(fineDepsGraphp) {}
-    ~V3Partition() {}
+        : m_fineDepsGraphp{fineDepsGraphp} {}
+    ~V3Partition() = default;
 
     // METHODS
 
@@ -73,21 +73,20 @@ private:
 //*************************************************************************
 // Map a pointer into a id, for e.g. nodep to mtask mappings
 
-class PartPtrIdMap {
+class PartPtrIdMap final {
 private:
     // TYPES
-    typedef vl_unordered_map<const void*, vluint64_t> PtrMap;
+    typedef std::unordered_map<const void*, vluint64_t> PtrMap;
     // MEMBERS
-    mutable vluint64_t m_nextId;
+    mutable vluint64_t m_nextId = 0;
     mutable PtrMap m_id;
 
 public:
     // CONSTRUCTORS
-    PartPtrIdMap()
-        : m_nextId(0) {}
+    PartPtrIdMap() = default;
     // METHODS
     vluint64_t findId(const void* ptrp) const {
-        PtrMap::const_iterator it = m_id.find(ptrp);
+        const auto it = m_id.find(ptrp);
         if (it != m_id.end()) return it->second;
         m_id[ptrp] = m_nextId;
         return m_nextId++;

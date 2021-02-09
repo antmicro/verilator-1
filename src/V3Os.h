@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -20,13 +20,15 @@
 #include "config_build.h"
 #include "verilatedos.h"
 
+#include <array>
+
 // Limited V3 headers here - this is a base class for Vlc etc
 #include "V3Error.h"
 
 //============================================================================
 // V3Os: OS static class
 
-class V3Os {
+class V3Os final {
 public:
     // METHODS (environment)
     static string getenvStr(const string& envvar, const string& defaultValue);
@@ -55,7 +57,7 @@ public:
     static void unlinkRegexp(const string& dir, const string& regexp);
 
     // METHODS (random)
-    static vluint64_t rand64(vluint64_t* statep);
+    static vluint64_t rand64(std::array<vluint64_t, 2>& stater);
     static string trueRandom(size_t size);
 
     // METHODS (time & performance)

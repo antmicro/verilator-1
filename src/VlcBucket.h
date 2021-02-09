@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -25,15 +25,15 @@
 // This is a bitmap array - we store a single bit to indicate a test
 // has hit that point with sufficient coverage.
 
-class VlcBuckets {
+class VlcBuckets final {
 private:
     // MEMBERS
-    vluint64_t* m_datap;  ///< Pointer to first bucket (dynamically allocated)
-    vluint64_t m_dataSize;  ///< Current entries in m_datap
-    vluint64_t m_bucketsCovered;  ///< Num buckets with sufficient coverage
+    vluint64_t* m_datap = nullptr;  ///< Pointer to first bucket (dynamically allocated)
+    vluint64_t m_dataSize = 0;  ///< Current entries in m_datap
+    vluint64_t m_bucketsCovered = 0;  ///< Num buckets with sufficient coverage
 
-    static inline vluint64_t covBit(vluint64_t point) { return 1ULL << (point & 63); }
-    inline vluint64_t allocSize() const { return sizeof(vluint64_t) * m_dataSize / 64; }
+    static vluint64_t covBit(vluint64_t point) { return 1ULL << (point & 63); }
+    vluint64_t allocSize() const { return sizeof(vluint64_t) * m_dataSize / 64; }
     void allocate(vluint64_t point) {
         vluint64_t oldsize = m_dataSize;
         if (m_dataSize < point) m_dataSize = (point + 64) & ~63ULL;  // Keep power of two
@@ -51,15 +51,10 @@ private:
 
 public:
     // CONSTRUCTORS
-    VlcBuckets() {
-        m_dataSize = 0;
-        m_datap = NULL;
-        m_bucketsCovered = 0;
-        allocate(1024);
-    }
+    VlcBuckets() { allocate(1024); }
     ~VlcBuckets() {
         m_dataSize = 0;
-        VL_DO_CLEAR(free(m_datap), m_datap = NULL);
+        VL_DO_CLEAR(free(m_datap), m_datap = nullptr);
     }
 
     // ACCESSORS

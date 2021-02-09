@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -35,7 +35,7 @@
 //######################################################################
 // Localize base class
 
-class LocalizeBaseVisitor : public AstNVisitor {
+class LocalizeBaseVisitor VL_NOT_FINAL : public AstNVisitor {
 protected:
     // NODE STATE
     // Cleared on entire tree
@@ -66,32 +66,33 @@ protected:
 //######################################################################
 // Localize class functions
 
-class LocalizeDehierVisitor : public LocalizeBaseVisitor {
+class LocalizeDehierVisitor final : public LocalizeBaseVisitor {
 private:
     // NODE STATE/TYPES
     // See above
 
     // METHODS
-    virtual void visit(AstVarRef* nodep) VL_OVERRIDE {
+    virtual void visit(AstVarRef* nodep) override {
         // cppcheck-suppress unreadVariable  // cppcheck 1.90 bug
         VarFlags flags(nodep->varp());
         if (flags.m_done) {
-            nodep->hiername("");  // Remove this->
+            nodep->hiernameToProt("");  // Remove this->
+            nodep->hiernameToUnprot("");  // Remove this->
             nodep->hierThis(true);
         }
     }
-    virtual void visit(AstNode* nodep) VL_OVERRIDE { iterateChildren(nodep); }
+    virtual void visit(AstNode* nodep) override { iterateChildren(nodep); }
 
 public:
     // CONSTRUCTORS
     explicit LocalizeDehierVisitor(AstNetlist* nodep) { iterate(nodep); }
-    virtual ~LocalizeDehierVisitor() {}
+    virtual ~LocalizeDehierVisitor() override = default;
 };
 
 //######################################################################
 // Localize class functions
 
-class LocalizeVisitor : public LocalizeBaseVisitor {
+class LocalizeVisitor final : public LocalizeBaseVisitor {
 private:
     // NODE STATE/TYPES
     // See above
@@ -101,7 +102,7 @@ private:
 
     // STATE
     VDouble0 m_statLocVars;  // Statistic tracking
-    AstCFunc* m_cfuncp;  // Current active function
+    AstCFunc* m_cfuncp = nullptr;  // Current active function
     std::vector<AstVar*> m_varps;  // List of variables to consider for deletion
 
     // METHODS
@@ -118,8 +119,7 @@ private:
         flags.setNodeFlags(nodep);
     }
     void moveVars() {
-        for (std::vector<AstVar*>::iterator it = m_varps.begin(); it != m_varps.end(); ++it) {
-            AstVar* nodep = *it;
+        for (AstVar* nodep : m_varps) {
             if (nodep->valuep()) clearOptimizable(nodep, "HasInitValue");
             if (!VarFlags(nodep).m_stdFuncAsn) clearStdOptimizable(nodep, "NoStdAssign");
             VarFlags flags(nodep);
@@ -145,19 +145,21 @@ private:
     }
 
     // VISITORS
-    virtual void visit(AstNetlist* nodep) VL_OVERRIDE {
+    virtual void visit(AstNetlist* nodep) override {
         iterateChildren(nodep);
         moveVars();
     }
-    virtual void visit(AstCFunc* nodep) VL_OVERRIDE {
+    virtual void visit(AstCFunc* nodep) override {
         UINFO(4, "  CFUNC " << nodep << endl);
-        m_cfuncp = nodep;
-        searchFuncStmts(nodep->argsp());
-        searchFuncStmts(nodep->initsp());
-        searchFuncStmts(nodep->stmtsp());
-        searchFuncStmts(nodep->finalsp());
-        iterateChildren(nodep);
-        m_cfuncp = NULL;
+        VL_RESTORER(m_cfuncp);
+        {
+            m_cfuncp = nodep;
+            searchFuncStmts(nodep->argsp());
+            searchFuncStmts(nodep->initsp());
+            searchFuncStmts(nodep->stmtsp());
+            searchFuncStmts(nodep->finalsp());
+            iterateChildren(nodep);
+        }
     }
     void searchFuncStmts(AstNode* nodep) {
         // Search for basic assignments to allow moving non-blocktemps
@@ -167,7 +169,8 @@ private:
         for (; nodep; nodep = nodep->nextp()) {
             if (VN_IS(nodep, NodeAssign)) {
                 if (AstVarRef* varrefp = VN_CAST(VN_CAST(nodep, NodeAssign)->lhsp(), VarRef)) {
-                    UASSERT_OBJ(varrefp->lvalue(), varrefp, "LHS assignment not lvalue");
+                    UASSERT_OBJ(varrefp->access().isWriteOrRW(), varrefp,
+                                "LHS assignment not lvalue");
                     if (!varrefp->varp()->user4p()) {
                         UINFO(4, "      FuncAsn " << varrefp << endl);
                         varrefp->varp()->user4p(varrefp);
@@ -180,7 +183,7 @@ private:
         }
     }
 
-    virtual void visit(AstVar* nodep) VL_OVERRIDE {
+    virtual void visit(AstVar* nodep) override {
         if (!nodep->isSigPublic() && !nodep->isPrimaryIO()
             && !m_cfuncp) {  // Not already inside a function
             UINFO(4, "    BLKVAR " << nodep << endl);
@@ -188,7 +191,7 @@ private:
         }
         // No iterate; Don't want varrefs under it
     }
-    virtual void visit(AstVarRef* nodep) VL_OVERRIDE {
+    virtual void visit(AstVarRef* nodep) override {
         if (!VarFlags(nodep->varp()).m_notOpt) {
             if (!m_cfuncp) {  // Not in function, can't optimize
                 // Perhaps impossible, but better safe
@@ -211,21 +214,18 @@ private:
                 AstVarRef* firstasn = static_cast<AstVarRef*>(nodep->varp()->user4p());
                 if (firstasn && nodep != firstasn) {
                     clearStdOptimizable(nodep->varp(), "notFirstAsn");
-                    nodep->varp()->user4p(NULL);
+                    nodep->varp()->user4p(nullptr);
                 }
             }
         }
         // No iterate; Don't want varrefs under it
     }
-    virtual void visit(AstNode* nodep) VL_OVERRIDE { iterateChildren(nodep); }
+    virtual void visit(AstNode* nodep) override { iterateChildren(nodep); }
 
 public:
     // CONSTRUCTORS
-    explicit LocalizeVisitor(AstNetlist* nodep) {
-        m_cfuncp = NULL;
-        iterate(nodep);
-    }
-    virtual ~LocalizeVisitor() {
+    explicit LocalizeVisitor(AstNetlist* nodep) { iterate(nodep); }
+    virtual ~LocalizeVisitor() override {
         V3Stats::addStat("Optimizations, Vars localized", m_statLocVars);
     }
 };

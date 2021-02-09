@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -36,9 +36,9 @@ class VSymEnt;
 //######################################################################
 // Symbol table
 
-typedef std::set<const VSymEnt*> VSymConstMap;
+typedef std::unordered_set<const VSymEnt*> VSymConstMap;
 
-class VSymEnt {
+class VSymEnt final {
     // Symbol table that can have a "superior" table for resolving upper references
     // MEMBERS
     typedef std::multimap<string, VSymEnt*> IdNameMap;
@@ -46,7 +46,7 @@ class VSymEnt {
     AstNode* m_nodep;  // Node that entry belongs to
     VSymEnt* m_fallbackp;  // Table "above" this one in name scope, for fallback resolution
     VSymEnt* m_parentp;  // Table that created this table, dot notation needed to resolve into it
-    AstNodeModule* m_packagep;  // Package node is in (for V3LinkDot, unused here)
+    AstNodeModule* m_classOrPackagep;  // Package node is in (for V3LinkDot, unused here)
     string m_symPrefix;  // String to prefix symbols with (for V3LinkDot, unused here)
     bool m_exported;  // Allow importing
     bool m_imported;  // Was imported
@@ -57,7 +57,7 @@ class VSymEnt {
         return level;
     }
 #else
-    static inline int debug() { return 0; }  // NOT runtime, too hot of a function
+    static constexpr int debug() { return 0; }  // NOT runtime, too hot of a function
 #endif
 public:
     typedef IdNameMap::const_iterator const_iterator;
@@ -72,7 +72,7 @@ public:
         os << "  fallb=se" << cvtToHex(m_fallbackp);
         if (m_symPrefix != "") os << "  symPrefix=" << m_symPrefix;
         os << "  n=" << nodep();
-        os << endl;
+        os << '\n';
         if (VL_UNCOVERABLE(doneSymsr.find(this) != doneSymsr.end())) {
             os << indent << "| ^ duplicate, so no children printed\n";  // LCOV_EXCL_LINE
         } else {
@@ -100,7 +100,7 @@ public:
         m_nodep = reinterpret_cast<AstNode*>(1);
         m_fallbackp = reinterpret_cast<VSymEnt*>(1);
         m_parentp = reinterpret_cast<VSymEnt*>(1);
-        m_packagep = reinterpret_cast<AstNodeModule*>(1);
+        m_classOrPackagep = reinterpret_cast<AstNodeModule*>(1);
 #endif
     }
 #if defined(VL_DEBUG) && !defined(VL_LEAK_CHECKS)
@@ -108,10 +108,11 @@ public:
     void operator delete(void* objp, size_t size) {}
 #endif
     void fallbackp(VSymEnt* entp) { m_fallbackp = entp; }
+    VSymEnt* fallbackp() const { return m_fallbackp; }
     void parentp(VSymEnt* entp) { m_parentp = entp; }
     VSymEnt* parentp() const { return m_parentp; }
-    void packagep(AstNodeModule* entp) { m_packagep = entp; }
-    AstNodeModule* packagep() const { return m_packagep; }
+    void classOrPackagep(AstNodeModule* entp) { m_classOrPackagep = entp; }
+    AstNodeModule* classOrPackagep() const { return m_classOrPackagep; }
     AstNode* nodep() const { return m_nodep; }
     string symPrefix() const { return m_symPrefix; }
     void symPrefix(const string& name) { m_symPrefix = name; }
@@ -125,15 +126,14 @@ public:
         if (name != "" && m_idNameMap.find(name) != m_idNameMap.end()) {
             if (!V3Error::errorCount()) {  // Else may have just reported warning
                 if (debug() >= 9 || V3Error::debugDefault()) dump(cout, "- err-dump: ", 1);
-                entp->nodep()->v3fatalSrc("Inserting two symbols with same name: " << name
-                                                                                   << endl);
+                entp->nodep()->v3fatalSrc("Inserting two symbols with same name: " << name);
             }
         } else {
-            m_idNameMap.insert(make_pair(name, entp));
+            m_idNameMap.emplace(name, entp);
         }
     }
     void reinsert(const string& name, VSymEnt* entp) {
-        IdNameMap::iterator it = m_idNameMap.find(name);
+        const auto it = m_idNameMap.find(name);
         if (name != "" && it != m_idNameMap.end()) {
             UINFO(9, "     SymReinsert se" << cvtToHex(this) << " '" << name << "' se"
                                            << cvtToHex(entp) << "  " << entp->nodep() << endl);
@@ -145,7 +145,7 @@ public:
     VSymEnt* findIdFlat(const string& name) const {
         // Find identifier without looking upward through symbol hierarchy
         // First, scan this begin/end block or module for the name
-        IdNameMap::const_iterator it = m_idNameMap.find(name);
+        const auto it = m_idNameMap.find(name);
         UINFO(9, "     SymFind   se"
                      << cvtToHex(this) << " '" << name << "' -> "
                      << (it == m_idNameMap.end()
@@ -153,7 +153,7 @@ public:
                              : "se" + cvtToHex(it->second) + " n=" + cvtToHex(it->second->nodep()))
                      << endl);
         if (it != m_idNameMap.end()) return (it->second);
-        return NULL;
+        return nullptr;
     }
     VSymEnt* findIdFallback(const string& name) const {
         // Find identifier looking upward through symbol hierarchy
@@ -161,7 +161,7 @@ public:
         if (VSymEnt* entp = findIdFlat(name)) return entp;
         // Then scan the upper begin/end block or module for the name
         if (m_fallbackp) return m_fallbackp->findIdFallback(name);
-        return NULL;
+        return nullptr;
     }
     void candidateIdFlat(VSpellCheck* spellerp, const VNodeMatcher* matcherp) const {
         // Suggest alternative symbol candidates without looking upward through symbol hierarchy
@@ -211,7 +211,7 @@ public:
     void importFromPackage(VSymGraph* graphp, const VSymEnt* srcp, const string& id_or_star) {
         // Import tokens from source symbol table into this symbol table
         if (id_or_star != "*") {
-            IdNameMap::const_iterator it = srcp->m_idNameMap.find(id_or_star);
+            const auto it = srcp->m_idNameMap.find(id_or_star);
             if (it != srcp->m_idNameMap.end()) {
                 importOneSymbol(graphp, it->first, it->second, true);
             }
@@ -225,7 +225,7 @@ public:
     void exportFromPackage(VSymGraph* graphp, const VSymEnt* srcp, const string& id_or_star) {
         // Export tokens from source symbol table into this symbol table
         if (id_or_star != "*") {
-            IdNameMap::const_iterator it = srcp->m_idNameMap.find(id_or_star);
+            const auto it = vlstd::as_const(srcp->m_idNameMap).find(id_or_star);
             if (it != srcp->m_idNameMap.end()) exportOneSymbol(graphp, it->first, it->second);
         } else {
             for (IdNameMap::const_iterator it = srcp->m_idNameMap.begin();
@@ -267,7 +267,7 @@ public:
                 scopes += AstNode::prettyName(it->first);
             }
         }
-        if (scopes == "") scopes = "<no cells found>";
+        if (scopes == "") scopes = "<no instances found>";
         std::cerr << V3Error::warnMore() << "... Known scopes under '" << prettyName
                   << "': " << scopes << endl;
         if (debug()) dump(std::cerr, "       KnownScope: ", 1);
@@ -277,7 +277,7 @@ public:
 //######################################################################
 // Symbol tables
 
-class VSymGraph {
+class VSymGraph final {
     // Collection of symbol tables
     // TYPES
     typedef std::vector<VSymEnt*> SymStack;
@@ -292,7 +292,7 @@ class VSymGraph {
 public:
     explicit VSymGraph(AstNetlist* nodep) { m_symRootp = new VSymEnt(this, nodep); }
     ~VSymGraph() {
-        for (SymStack::iterator it = m_symsp.begin(); it != m_symsp.end(); ++it) delete (*it);
+        for (const VSymEnt* entp : m_symsp) delete entp;
     }
 
     // METHODS
@@ -317,7 +317,7 @@ public:
         if (v3Global.opt.dumpTree()) {
             string filename = v3Global.debugFilename(nameComment) + ".txt";
             UINFO(2, "Dumping " << filename << endl);
-            const vl_unique_ptr<std::ofstream> logp(V3File::new_ofstream(filename));
+            const std::unique_ptr<std::ofstream> logp(V3File::new_ofstream(filename));
             if (logp->fail()) v3fatal("Can't write " << filename);
             dump(*logp, "");
         }
@@ -335,9 +335,9 @@ inline VSymEnt::VSymEnt(VSymGraph* graphp, AstNode* nodep)
     // No argument to set fallbackp, as generally it's wrong to set it in the new call,
     // Instead it needs to be set on a "findOrNew()" return, as it may have been new'ed
     // by an earlier search insertion.
-    m_fallbackp = NULL;
-    m_parentp = NULL;
-    m_packagep = NULL;
+    m_fallbackp = nullptr;
+    m_parentp = nullptr;
+    m_classOrPackagep = nullptr;
     m_exported = true;
     m_imported = false;
     graphp->pushNewEnt(this);
@@ -347,7 +347,7 @@ inline VSymEnt::VSymEnt(VSymGraph* graphp, const VSymEnt* symp)
     : m_nodep(symp->m_nodep) {
     m_fallbackp = symp->m_fallbackp;
     m_parentp = symp->m_parentp;
-    m_packagep = symp->m_packagep;
+    m_classOrPackagep = symp->m_classOrPackagep;
     m_exported = symp->m_exported;
     m_imported = symp->m_imported;
     graphp->pushNewEnt(this);

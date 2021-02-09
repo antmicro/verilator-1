@@ -7,7 +7,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -24,7 +24,7 @@
 #include "V3Graph.h"
 
 #include <set>
-#include VL_INCLUDE_UNORDERED_MAP
+#include <unordered_map>
 
 //######################################################################
 // GraphStream
@@ -40,7 +40,7 @@
 template <class T_Compare> class GraphStream {
 private:
     // TYPES
-    class VxHolder {
+    class VxHolder final {
     public:
         // MEMBERS
         const V3GraphVertex* m_vxp;  // [mtask] Vertex
@@ -48,9 +48,9 @@ private:
         uint32_t m_numBlockingEdges;  // Number of blocking edges
         // CONSTRUCTORS
         VxHolder(const V3GraphVertex* vxp, uint32_t pos, uint32_t numBlockingEdges)
-            : m_vxp(vxp)
-            , m_pos(pos)
-            , m_numBlockingEdges(numBlockingEdges) {}
+            : m_vxp{vxp}
+            , m_pos{pos}
+            , m_numBlockingEdges{numBlockingEdges} {}
         // METHODS
         const V3GraphVertex* vertexp() const { return m_vxp; }
         // Decrement blocking edges count, return true if the vertex is
@@ -62,13 +62,13 @@ private:
         }
     };
 
-    class VxHolderCmp {
+    class VxHolderCmp final {
     public:
         // MEMBERS
         T_Compare m_lessThan;  // Sorting functor
         // CONSTRUCTORS
         explicit VxHolderCmp(const T_Compare& lessThan)
-            : m_lessThan(lessThan) {}
+            : m_lessThan{lessThan} {}
         // METHODS
         bool operator()(const VxHolder& a, const VxHolder& b) const {
             if (m_lessThan.operator()(a.vertexp(), b.vertexp())) return true;
@@ -81,7 +81,7 @@ private:
     };
 
     typedef std::set<VxHolder, VxHolderCmp&> ReadyVertices;
-    typedef vl_unordered_map<const V3GraphVertex*, VxHolder> WaitingVertices;
+    typedef std::map<const V3GraphVertex*, VxHolder> WaitingVertices;
 
     // MEMBERS
     VxHolderCmp m_vxHolderCmp;  // Vertext comparison functor
@@ -97,10 +97,10 @@ public:
         // NOTE: Perhaps REVERSE way should also reverse the sense of the
         // lessThan function? For now the only usage of REVERSE is not
         // sensitive to its lessThan at all, so it doesn't matter.
-        : m_vxHolderCmp(lessThan)
-        , m_readyVertices(m_vxHolderCmp)
-        , m_last(m_readyVertices.end())
-        , m_way(way) {
+        : m_vxHolderCmp{lessThan}
+        , m_readyVertices{m_vxHolderCmp}
+        , m_last{m_readyVertices.end()}
+        , m_way{way} {
         uint32_t pos = 0;
         for (const V3GraphVertex* vxp = graphp->verticesBeginp(); vxp;
              vxp = vxp->verticesNextp()) {
@@ -115,7 +115,7 @@ public:
                         depCount++;
                     }
                     VxHolder newVx(vxp, pos++, depCount);
-                    m_waitingVertices.insert(make_pair(vxp, newVx));
+                    m_waitingVertices.emplace(vxp, newVx);
                 }
             } else {  // REVERSE
                 if (vxp->outEmpty()) {
@@ -127,12 +127,12 @@ public:
                         depCount++;
                     }
                     VxHolder newVx(vxp, pos++, depCount);
-                    m_waitingVertices.insert(make_pair(vxp, newVx));
+                    m_waitingVertices.emplace(vxp, newVx);
                 }
             }
         }
     }
-    ~GraphStream() {}
+    ~GraphStream() = default;
 
     // METHODS
 
@@ -160,7 +160,7 @@ public:
     // good locality.) V3Order.cpp relies on this to order the logic
     // vertices within a given mtask without jumping over domains too much.
     const V3GraphVertex* nextp() {
-        const V3GraphVertex* resultp = NULL;
+        const V3GraphVertex* resultp = nullptr;
 
         typename ReadyVertices::iterator curIt;
         if (m_last == m_readyVertices.end()) {
@@ -197,7 +197,7 @@ private:
             for (V3GraphEdge* edgep = vertexp->outBeginp(); edgep; edgep = edgep->outNextp()) {
                 V3GraphVertex* toVertexp = edgep->top();
 
-                typename WaitingVertices::iterator it = m_waitingVertices.find(toVertexp);
+                const auto it = m_waitingVertices.find(toVertexp);
                 UASSERT_OBJ(it != m_waitingVertices.end(), toVertexp,
                             "Found edge into vertex not in waiting list.");
                 if (it->second.unblock()) {
@@ -209,7 +209,7 @@ private:
             for (V3GraphEdge* edgep = vertexp->inBeginp(); edgep; edgep = edgep->inNextp()) {
                 V3GraphVertex* fromVertexp = edgep->fromp();
 
-                typename WaitingVertices::iterator it = m_waitingVertices.find(fromVertexp);
+                const auto it = m_waitingVertices.find(fromVertexp);
                 UASSERT_OBJ(it != m_waitingVertices.end(), fromVertexp,
                             "Found edge into vertex not in waiting list.");
                 if (it->second.unblock()) {
@@ -228,6 +228,6 @@ private:
 // GraphStreamUnordered is GraphStream using a plain pointer compare to
 // break ties in the graph order. This WILL return nodes in
 // nondeterministic order.
-typedef GraphStream<std::less<const V3GraphVertex*> > GraphStreamUnordered;
+typedef GraphStream<std::less<const V3GraphVertex*>> GraphStreamUnordered;
 
 #endif  // Guard

@@ -6,9 +6,11 @@
 // any use, without warranty, 2008 by Wilson Snyder.
 // SPDX-License-Identifier: CC0-1.0
 
+#include <memory>
 #include <verilated.h>
 #include <verilated_vcd_c.h>
 
+// clang-format off
 #include VM_PREFIX_INCLUDE
 #ifdef T_TRACE_PUBLIC_FUNC_VLT
 # include "Vt_trace_public_func_vlt_t.h"
@@ -17,6 +19,7 @@
 # include "Vt_trace_public_func_t.h"
 # include "Vt_trace_public_func_glbl.h"
 #endif
+// clang-format on
 
 unsigned long long main_time = 0;
 double sc_time_stamp() { return (double)main_time; }
@@ -24,13 +27,13 @@ double sc_time_stamp() { return (double)main_time; }
 const unsigned long long dt_2 = 3;
 
 int main(int argc, char** argv, char** env) {
-    VM_PREFIX* top = new VM_PREFIX("top");
+    std::unique_ptr<VM_PREFIX> top{new VM_PREFIX("top")};
 
     Verilated::debug(0);
     Verilated::traceEverOn(true);
 
-    VerilatedVcdC* tfp = new VerilatedVcdC;
-    top->trace(tfp, 99);
+    std::unique_ptr<VerilatedVcdC> tfp{new VerilatedVcdC};
+    top->trace(tfp.get(), 99);
     tfp->open(VL_STRINGIFY(TEST_OBJ_DIR) "/simx.vcd");
 
     while (main_time <= 20) {
@@ -44,7 +47,8 @@ int main(int argc, char** argv, char** env) {
     }
     tfp->close();
     top->final();
-    VL_DO_DANGLING(delete top, top);
+    tfp.reset();
+    top.reset();
     printf("*-* All Finished *-*\n");
     return 0;
 }

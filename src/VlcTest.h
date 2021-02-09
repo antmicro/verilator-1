@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -29,28 +29,24 @@
 //********************************************************************
 // VlcTest - a single testrun i.e. a file containing coverage data
 
-class VlcTest {
+class VlcTest final {
 private:
     // MEMBERS
     string m_name;  //< Name of the test
     double m_computrons;  //< Runtime for the test
     vluint64_t m_testrun;  //< Test run number, for database use
-    vluint64_t m_rank;  //< Execution rank suggestion
-    vluint64_t m_rankPoints;  //< Ranked additional points
-    vluint64_t m_user;  //< User data for algorithms (not persisted in .dat file)
+    vluint64_t m_rank = 0;  //< Execution rank suggestion
+    vluint64_t m_rankPoints = 0;  //< Ranked additional points
+    vluint64_t m_user = 0;  //< User data for algorithms (not persisted in .dat file)
     VlcBuckets m_buckets;  //< Coverage data for each coverage point
 
 public:
     // CONSTRUCTORS
-    VlcTest(const string& name, vluint64_t testrun, double comp) {
-        m_name = name;
-        m_computrons = comp;
-        m_testrun = testrun;
-        m_rank = 0;
-        m_rankPoints = 0;
-        m_user = 0;
-    }
-    ~VlcTest() {}
+    VlcTest(const string& name, vluint64_t testrun, double comp)
+        : m_name{name}
+        , m_computrons{comp}
+        , m_testrun{testrun} {}
+    ~VlcTest() = default;
 
     // ACCESSORS
     const string& name() const { return m_name; }
@@ -69,7 +65,7 @@ public:
     static void dumpHeader() {
         cout << "Tests:\n";
         // cout<<"  Testrun, Computrons,";  // Currently not loaded
-        cout << "  Covered,     Rank,  RankPts,  Filename" << endl;
+        cout << "  Covered,     Rank,  RankPts,  Filename\n";
     }
     void dump(bool bucketsToo) {
         if (testrun() || computrons() != 0.0) {  // currently unused // LCOV_EXCL_LINE
@@ -80,7 +76,7 @@ public:
         cout << "  " << std::setw(7) << std::setfill(' ') << bucketsCovered();
         cout << ",  " << std::setw(7) << std::setfill(' ') << rank();
         cout << ",  " << std::setw(7) << std::setfill(' ') << rankPoints();
-        cout << ",  \"" << name() << "\"" << endl;
+        cout << ",  \"" << name() << "\"\n";
         if (bucketsToo) m_buckets.dump();
     }
 };
@@ -88,7 +84,7 @@ public:
 //********************************************************************
 // VlcTests - Container of all tests
 
-class VlcTests {
+class VlcTests final {
 public:
     // TYPES
     typedef std::vector<VlcTest*> ByName;
@@ -104,20 +100,16 @@ public:
     ByName::iterator end() { return m_tests.end(); }
 
     // CONSTRUCTORS
-    VlcTests() {}
+    VlcTests() = default;
     ~VlcTests() {
-        for (VlcTests::ByName::iterator it = begin(); it != end(); ++it) {
-            VL_DO_CLEAR(delete *it, *it = NULL);
-        }
+        for (auto it = begin(); it != end(); ++it) { VL_DO_CLEAR(delete *it, *it = nullptr); }
     }
 
     // METHODS
     void dump(bool bucketsToo) {
         UINFO(2, "dumpTests...\n");
         VlcTest::dumpHeader();
-        for (VlcTests::ByName::const_iterator it = begin(); it != end(); ++it) {
-            (*it)->dump(bucketsToo);
-        }
+        for (const auto& testp : m_tests) testp->dump(bucketsToo);
     }
     VlcTest* newTest(const string& name, vluint64_t testrun, double comp) {
         VlcTest* testp = new VlcTest(name, testrun, comp);
@@ -125,7 +117,7 @@ public:
         return testp;
     }
     void clearUser() {
-        for (ByName::iterator it = m_tests.begin(); it != m_tests.end(); ++it) (*it)->user(0);
+        for (const auto& testp : m_tests) testp->user(0);
     }
 };
 

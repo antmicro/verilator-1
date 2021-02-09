@@ -1,7 +1,7 @@
 // -*- mode: C++; c-file-style: "cc-mode" -*-
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you can
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you can
 // redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -31,6 +31,7 @@
 #include "verilated_sym_props.h"
 
 #include <map>
+#include <unordered_map>
 #include <vector>
 
 //======================================================================
@@ -42,26 +43,27 @@ struct VerilatedCStrCmp {
 };
 
 /// Map of sorted scope names to find associated scope class
-class VerilatedScopeNameMap
+class VerilatedScopeNameMap final
     : public std::map<const char*, const VerilatedScope*, VerilatedCStrCmp> {
 public:
-    VerilatedScopeNameMap() {}
-    ~VerilatedScopeNameMap() {}
+    VerilatedScopeNameMap() = default;
+    ~VerilatedScopeNameMap() = default;
 };
 
 /// Map of sorted variable names to find associated variable class
-class VerilatedVarNameMap : public std::map<const char*, VerilatedVar, VerilatedCStrCmp> {
+class VerilatedVarNameMap final : public std::map<const char*, VerilatedVar, VerilatedCStrCmp> {
 public:
-    VerilatedVarNameMap() {}
-    ~VerilatedVarNameMap() {}
+    VerilatedVarNameMap() = default;
+    ~VerilatedVarNameMap() = default;
 };
 
 typedef std::vector<const VerilatedScope*> VerilatedScopeVector;
 
-class VerilatedHierarchyMap : public std::map<const VerilatedScope*, VerilatedScopeVector> {
+class VerilatedHierarchyMap final
+    : public std::unordered_map<const VerilatedScope*, VerilatedScopeVector> {
 public:
-    VerilatedHierarchyMap() {}
-    ~VerilatedHierarchyMap() {}
+    VerilatedHierarchyMap() = default;
+    ~VerilatedHierarchyMap() = default;
 };
 
 #endif  // Guard

@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -31,7 +31,7 @@
 //============================================================================
 // V3File: Create streams, recording dependency information
 
-class V3File {
+class V3File final {
 public:
     static std::ifstream* new_ifstream(const string& filename) {
         addSrcDepend(filename);
@@ -76,7 +76,7 @@ public:
 
 class VInFilterImp;
 
-class VInFilter {
+class VInFilter final {
 public:
     // TYPES
     typedef std::list<string> StrList;
@@ -99,12 +99,12 @@ public:
 //============================================================================
 // V3OutFormatter: A class for automatic indentation of C++ or Verilog code.
 
-class V3OutFormatter {
+class V3OutFormatter VL_NOT_FINAL {
     // TYPES
-    enum MiscConsts { MAXSPACE = 80 };  // After this indent, stop indenting more
+    static constexpr int MAXSPACE = 80;  // After this indent, stop indenting more
 public:
-    enum AlignClass { AL_AUTO = 0, AL_STATIC = 1 };
-    enum Language {
+    enum AlignClass : uint8_t { AL_AUTO = 0, AL_STATIC = 1 };
+    enum Language : uint8_t {
         LA_C = 0,
         LA_VERILOG = 1,
         LA_MK = 2,
@@ -117,20 +117,20 @@ private:
     Language m_lang;  // Indenting Verilog code
     int m_blockIndent;  // Characters per block indent
     int m_commaWidth;  // Width after which to break at ,'s
-    int m_lineno;
-    int m_column;
-    int m_nobreak;  // Basic operator or begin paren, don't break next
-    bool m_prependIndent;
-    int m_indentLevel;  // Current {} indentation
+    int m_lineno = 1;
+    int m_column = 0;
+    int m_nobreak = false;  // Basic operator or begin paren, don't break next
+    bool m_prependIndent = true;
+    int m_indentLevel = 0;  // Current {} indentation
     std::stack<int> m_parenVec;  // Stack of columns where last ( was
-    int m_bracketLevel;  // Intenting = { block, indicates number of {'s seen.
+    int m_bracketLevel = 0;  // Intenting = { block, indicates number of {'s seen.
 
     int endLevels(const char* strg);
     void putcNoTracking(char chr);
 
 public:
     V3OutFormatter(const string& filename, Language lang);
-    virtual ~V3OutFormatter() {}
+    virtual ~V3OutFormatter() = default;
     // ACCESSORS
     string filename() const { return m_filename; }
     int column() const { return m_column; }
@@ -176,30 +176,29 @@ public:
 //============================================================================
 // V3OutFile: A class for printing to a file, with automatic indentation of C++ code.
 
-class V3OutFile : public V3OutFormatter {
+class V3OutFile VL_NOT_FINAL : public V3OutFormatter {
     // MEMBERS
     FILE* m_fp;
 
 public:
     V3OutFile(const string& filename, V3OutFormatter::Language lang);
-    virtual ~V3OutFile();
+    virtual ~V3OutFile() override;
     void putsForceIncs();
 
 private:
     // CALLBACKS
-    virtual void putcOutput(char chr) { fputc(chr, m_fp); }
+    virtual void putcOutput(char chr) override { fputc(chr, m_fp); }
 };
 
-class V3OutCFile : public V3OutFile {
-    int m_guard;  // Created header guard
+class V3OutCFile VL_NOT_FINAL : public V3OutFile {
+    int m_guard = false;  // Created header guard
     int m_private;  // 1 = Most recently emitted private:, 2 = public:
 public:
     explicit V3OutCFile(const string& filename)
-        : V3OutFile(filename, V3OutFormatter::LA_C)
-        , m_guard(false) {
+        : V3OutFile{filename, V3OutFormatter::LA_C} {
         resetPrivate();
     }
-    virtual ~V3OutCFile() {}
+    virtual ~V3OutCFile() override = default;
     virtual void putsHeader() { puts("// Verilated -*- C++ -*-\n"); }
     virtual void putsIntTopInclude() { putsForceIncs(); }
     virtual void putsGuard();
@@ -219,42 +218,42 @@ public:
     }
 };
 
-class V3OutScFile : public V3OutCFile {
+class V3OutScFile final : public V3OutCFile {
 public:
     explicit V3OutScFile(const string& filename)
-        : V3OutCFile(filename) {}
-    virtual ~V3OutScFile() {}
-    virtual void putsHeader() { puts("// Verilated -*- SystemC -*-\n"); }
-    virtual void putsIntTopInclude() {
+        : V3OutCFile{filename} {}
+    virtual ~V3OutScFile() override = default;
+    virtual void putsHeader() override { puts("// Verilated -*- SystemC -*-\n"); }
+    virtual void putsIntTopInclude() override {
         putsForceIncs();
         puts("#include \"systemc.h\"\n");
         puts("#include \"verilated_sc.h\"\n");
     }
 };
 
-class V3OutVFile : public V3OutFile {
+class V3OutVFile final : public V3OutFile {
 public:
     explicit V3OutVFile(const string& filename)
-        : V3OutFile(filename, V3OutFormatter::LA_VERILOG) {}
-    virtual ~V3OutVFile() {}
+        : V3OutFile{filename, V3OutFormatter::LA_VERILOG} {}
+    virtual ~V3OutVFile() override = default;
     virtual void putsHeader() { puts("// Verilated -*- Verilog -*-\n"); }
 };
 
-class V3OutXmlFile : public V3OutFile {
+class V3OutXmlFile final : public V3OutFile {
 public:
     explicit V3OutXmlFile(const string& filename)
-        : V3OutFile(filename, V3OutFormatter::LA_XML) {
+        : V3OutFile{filename, V3OutFormatter::LA_XML} {
         blockIndent(2);
     }
-    virtual ~V3OutXmlFile() {}
+    virtual ~V3OutXmlFile() override = default;
     virtual void putsHeader() { puts("<?xml version=\"1.0\" ?>\n"); }
 };
 
-class V3OutMkFile : public V3OutFile {
+class V3OutMkFile final : public V3OutFile {
 public:
     explicit V3OutMkFile(const string& filename)
-        : V3OutFile(filename, V3OutFormatter::LA_MK) {}
-    virtual ~V3OutMkFile() {}
+        : V3OutFile{filename, V3OutFormatter::LA_MK} {}
+    virtual ~V3OutMkFile() override = default;
     virtual void putsHeader() { puts("# Verilated -*- Makefile -*-\n"); }
     // No automatic indentation yet.
     void puts(const char* strg) { putsNoTracking(strg); }
@@ -266,7 +265,7 @@ public:
 
 class VIdProtectImp;
 
-class VIdProtect {
+class VIdProtect final {
 public:
     // METHODS
     // Rename to a new encoded string (unless earlier passthru'ed)

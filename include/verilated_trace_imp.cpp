@@ -3,7 +3,7 @@
 //
 // THIS MODULE IS PUBLICLY LICENSED
 //
-// Copyright 2001-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2001-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -19,6 +19,7 @@
 
 // clang-format off
 
+#ifndef VL_CPPCHECK
 #ifndef VL_DERIVED_T
 # error "This file should be included in trace format implementations"
 #endif
@@ -39,14 +40,14 @@
 // Static utility functions
 
 static double timescaleToDouble(const char* unitp) {
-    char* endp = NULL;
+    char* endp = nullptr;
     double value = strtod(unitp, &endp);
     // On error so we allow just "ns" to return 1e-9.
     if (value == 0.0 && endp == unitp) value = 1;
     unitp = endp;
     for (; *unitp && isspace(*unitp); unitp++) {}
     switch (*unitp) {
-    case 's': value *= 1e1; break;
+    case 's': value *= 1e0; break;
     case 'm': value *= 1e-3; break;
     case 'u': value *= 1e-6; break;
     case 'n': value *= 1e-9; break;
@@ -69,7 +70,7 @@ static std::string doubleToTimescale(double value) {
     else if (value >= 1e-18) { suffixp = "as"; value *= 1e18; }
     // clang-format on
     char valuestr[100];
-    sprintf(valuestr, "%3.0f%s", value, suffixp);
+    sprintf(valuestr, "%0.0f%s", value, suffixp);
     return valuestr;  // Gets converted to string, so no ref to stack
 }
 
@@ -276,17 +277,19 @@ template <> void VerilatedTrace<VL_DERIVED_T>::onExit(void* selfp) {
 
 template <>
 VerilatedTrace<VL_DERIVED_T>::VerilatedTrace()
-    : m_sigs_oldvalp(NULL)
-    , m_timeLastDump(0)
-    , m_fullDump(true)
-    , m_nextCode(0)
-    , m_numSignals(0)
-    , m_maxBits(0)
-    , m_scopeEscape('.')
-    , m_timeRes(1e-9)
-    , m_timeUnit(1e-9)
+    : m_sigs_oldvalp{nullptr}
+    , m_timeLastDump{0}
+    , m_fullDump{true}
+    , m_nextCode{0}
+    , m_numSignals{0}
+    , m_maxBits{0}
+    , m_scopeEscape{'.'}
+    , m_timeRes{1e-9}
+    , m_timeUnit {
+    1e-9
+}
 #ifdef VL_TRACE_THREADED
-    , m_numTraceBuffers(0)
+, m_numTraceBuffers { 0 }
 #endif
 {
     set_time_unit(Verilated::timeunitString());
@@ -294,7 +297,7 @@ VerilatedTrace<VL_DERIVED_T>::VerilatedTrace()
 }
 
 template <> VerilatedTrace<VL_DERIVED_T>::~VerilatedTrace() {
-    if (m_sigs_oldvalp) VL_DO_CLEAR(delete[] m_sigs_oldvalp, m_sigs_oldvalp = NULL);
+    if (m_sigs_oldvalp) VL_DO_CLEAR(delete[] m_sigs_oldvalp, m_sigs_oldvalp = nullptr);
     Verilated::removeFlushCb(VerilatedTrace<VL_DERIVED_T>::onFlush, this);
     Verilated::removeExitCb(VerilatedTrace<VL_DERIVED_T>::onExit, this);
 #ifdef VL_TRACE_THREADED
@@ -369,10 +372,6 @@ void VerilatedTrace<VL_DERIVED_T>::declCode(vluint32_t code, vluint32_t bits, bo
 
 template <> std::string VerilatedTrace<VL_DERIVED_T>::timeResStr() const {
     return doubleToTimescale(m_timeRes);
-}
-
-template <> std::string VerilatedTrace<VL_DERIVED_T>::timeUnitStr() const {
-    return doubleToTimescale(m_timeUnit);
 }
 
 //=========================================================================
@@ -562,7 +561,7 @@ template <> void VerilatedTrace<VL_DERIVED_T>::fullDouble(vluint32_t* oldp, doub
 // All of these take a destination pointer where the string will be emitted,
 // and a value to convert. There are a couple of variants for efficiency.
 
-inline static void cvtCDataToStr(char* dstp, CData value) {
+static inline void cvtCDataToStr(char* dstp, CData value) {
 #ifdef VL_HAVE_SSE2
     // Similar to cvtSDataToStr but only the bottom 8 byte lanes are used
     const __m128i a = _mm_cvtsi32_si128(value);
@@ -584,7 +583,7 @@ inline static void cvtCDataToStr(char* dstp, CData value) {
 #endif
 }
 
-inline static void cvtSDataToStr(char* dstp, SData value) {
+static inline void cvtSDataToStr(char* dstp, SData value) {
 #ifdef VL_HAVE_SSE2
     // We want each bit in the 16-bit input value to end up in a byte lane
     // within the 128-bit XMM register. Note that x86 is little-endian and we
@@ -620,7 +619,7 @@ inline static void cvtSDataToStr(char* dstp, SData value) {
 #endif
 }
 
-inline static void cvtIDataToStr(char* dstp, IData value) {
+static inline void cvtIDataToStr(char* dstp, IData value) {
 #ifdef VL_HAVE_AVX2
     // Similar to cvtSDataToStr but the bottom 16-bits are processed in the
     // top half of the YMM registerss
@@ -639,9 +638,46 @@ inline static void cvtIDataToStr(char* dstp, IData value) {
 #endif
 }
 
-inline static void cvtQDataToStr(char* dstp, QData value) {
+static inline void cvtQDataToStr(char* dstp, QData value) {
     cvtIDataToStr(dstp, value >> 32);
     cvtIDataToStr(dstp + 32, value);
 }
 
 #define cvtEDataToStr cvtIDataToStr
+
+//=============================================================================
+
+#ifdef VERILATED_VCD_TEST
+
+void verilated_trace_imp_selftest() {
+#define SELF_CHECK(got, exp) \
+    do { \
+        if ((got) != (exp)) VL_FATAL_MT(__FILE__, __LINE__, "", "%Error: selftest\n"); \
+    } while (0)
+
+#define SELF_CHECK_TS(scale) \
+    SELF_CHECK(doubleToTimescale(timescaleToDouble(scale)), std::string{scale});
+    SELF_CHECK_TS("1s");
+    SELF_CHECK_TS("100ms");
+    SELF_CHECK_TS("10ms");
+    SELF_CHECK_TS("1ms");
+    SELF_CHECK_TS("100us");
+    SELF_CHECK_TS("10us");
+    SELF_CHECK_TS("1us");
+    SELF_CHECK_TS("100ns");
+    SELF_CHECK_TS("10ns");
+    SELF_CHECK_TS("1ns");
+    SELF_CHECK_TS("100ps");
+    SELF_CHECK_TS("10ps");
+    SELF_CHECK_TS("1ps");
+    SELF_CHECK_TS("100fs");
+    SELF_CHECK_TS("10fs");
+    SELF_CHECK_TS("1fs");
+    SELF_CHECK_TS("100as");
+    SELF_CHECK_TS("10as");
+    SELF_CHECK_TS("1as");
+}
+
+#endif
+
+#endif  // VL_CPPCHECK

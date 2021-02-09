@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -37,12 +37,13 @@ inline bool v3EpsilonEqual(double a, double b) {
 
 class AstNode;
 
-class V3Number {
+class V3Number final {
     // Large 4-state number handling
     int m_width;  // Width as specified/calculated.
     bool m_sized : 1;  // True if the user specified the width, else we track it.
     bool m_signed : 1;  // True if signed value
     bool m_double : 1;  // True if double real value
+    bool m_isNull : 1;  // True if "null" versus normal 0
     bool m_isString : 1;  // True if string
     bool m_fromString : 1;  // True if from string literal
     bool m_autoExtend : 1;  // True if SystemVerilog extend-to-any-width
@@ -108,6 +109,8 @@ private:
         return ("01zx"[(((m_value[bit / 32] & (1UL << (bit & 31))) ? 1 : 0)
                         | ((m_valueX[bit / 32] & (1UL << (bit & 31))) ? 2 : 0))]);
     }
+
+public:
     bool bitIs0(int bit) const {
         if (bit < 0) return false;
         if (bit >= m_width) return !bitIsXZ(m_width - 1);
@@ -143,6 +146,8 @@ private:
         return ((~m_value[bit / 32] & (1UL << (bit & 31)))
                 && (m_valueX[bit / 32] & (1UL << (bit & 31))));
     }
+
+private:
     uint32_t bitsValue(int lsb, int nbits) const {
         uint32_t v = 0;
         for (int bitn = 0; bitn < nbits; bitn++) { v |= (bitIs1(lsb + bitn) << bitn); }
@@ -164,9 +169,11 @@ public:
         opCleanThis();
     }
     // Create from a verilog 32'hxxxx number.
-    V3Number(AstNode* nodep, const char* sourcep) { V3NumberCreate(nodep, sourcep, NULL); }
+    V3Number(AstNode* nodep, const char* sourcep) { V3NumberCreate(nodep, sourcep, nullptr); }
     class FileLined {};  // Fileline based errors, for parsing only, otherwise pass nodep
-    V3Number(FileLined, FileLine* fl, const char* sourcep) { V3NumberCreate(NULL, sourcep, fl); }
+    V3Number(FileLined, FileLine* fl, const char* sourcep) {
+        V3NumberCreate(nullptr, sourcep, fl);
+    }
     class VerilogStringLiteral {};  // For creator type-overload selection
     V3Number(VerilogStringLiteral, AstNode* nodep, const string& str);
     class String {};
@@ -174,12 +181,18 @@ public:
         init(nodep, 0);
         setString(value);
     }
+    class Null {};
+    V3Number(Null, AstNode* nodep) {
+        init(nodep, 0);
+        m_isNull = true;
+        m_autoExtend = true;
+    }
     explicit V3Number(const V3Number* nump, int width = 1) {
-        init(NULL, width);
+        init(nullptr, width);
         m_fileline = nump->fileline();
     }
     V3Number(const V3Number* nump, int width, uint32_t value) {
-        init(NULL, width);
+        init(nullptr, width);
         m_value[0] = value;
         opCleanThis();
         m_fileline = nump->fileline();
@@ -189,13 +202,15 @@ private:
     void V3NumberCreate(AstNode* nodep, const char* sourcep, FileLine* fl);
     void init(AstNode* nodep, int swidth, bool sized = true) {
         setNames(nodep);
+        // dtype info does NOT from nodep's dtype; nodep only for error reporting
         m_signed = false;
         m_double = false;
+        m_isNull = false;
         m_isString = false;
         m_autoExtend = false;
         m_fromString = false;
         width(swidth, sized);
-        for (int i = 0; i < words(); i++) m_value[i] = m_valueX[i] = 0;
+        for (int i = 0; i < words(); ++i) m_value[i] = m_valueX[i] = 0;
     }
     void setNames(AstNode* nodep);
     static string displayPad(size_t fmtsize, char pad, bool left, const string& in);
@@ -248,6 +263,7 @@ public:
     bool isString() const { return m_isString; }
     void isString(bool flag) { m_isString = flag; }
     bool isNegative() const { return bitIs1(width() - 1); }
+    bool isNull() const { return m_isNull; }
     bool isFourState() const;
     bool hasZ() const {
         for (int i = 0; i < words(); i++) {
@@ -271,6 +287,7 @@ public:
     void isSigned(bool ssigned) { m_signed = ssigned; }
     bool isAnyX() const;
     bool isAnyXZ() const;
+    bool isAnyZ() const;
     bool isMsbXZ() const { return bitIsXZ(m_width); }
     uint32_t toUInt() const;
     vlsint32_t toSInt() const;
@@ -314,7 +331,6 @@ public:
     V3Number& opRedOr(const V3Number& lhs);
     V3Number& opRedAnd(const V3Number& lhs);
     V3Number& opRedXor(const V3Number& lhs);
-    V3Number& opRedXnor(const V3Number& lhs);
     V3Number& opCountBits(const V3Number& expr, const V3Number& ctrl1, const V3Number& ctrl2,
                           const V3Number& ctrl3);
     V3Number& opCountOnes(const V3Number& lhs);
@@ -346,7 +362,6 @@ public:
     V3Number& opLogOr(const V3Number& lhs, const V3Number& rhs);
     V3Number& opLogEq(const V3Number& lhs, const V3Number& rhs);
     V3Number& opLogIf(const V3Number& lhs, const V3Number& rhs);
-    V3Number& opAbsS(const V3Number& lhs);
     V3Number& opNegate(const V3Number& lhs);
     V3Number& opAdd(const V3Number& lhs, const V3Number& rhs);
     V3Number& opSub(const V3Number& lhs, const V3Number& rhs);
@@ -364,10 +379,7 @@ public:
     V3Number& opAnd(const V3Number& lhs, const V3Number& rhs);
     V3Number& opChangeXor(const V3Number& lhs, const V3Number& rhs);
     V3Number& opXor(const V3Number& lhs, const V3Number& rhs);
-    V3Number& opXnor(const V3Number& lhs, const V3Number& rhs);
     V3Number& opOr(const V3Number& lhs, const V3Number& rhs);
-    V3Number& opRotR(const V3Number& lhs, const V3Number& rhs);
-    V3Number& opRotL(const V3Number& lhs, const V3Number& rhs);
     V3Number& opShiftR(const V3Number& lhs, const V3Number& rhs);
     V3Number& opShiftRS(const V3Number& lhs, const V3Number& rhs,  // Arithmetic w/carry
                         uint32_t lbits);
@@ -385,7 +397,8 @@ public:
     V3Number& opLteS(const V3Number& lhs, const V3Number& rhs);  // Signed
 
     // "D" - double (aka real) math
-    V3Number& opIToRD(const V3Number& lhs);
+    V3Number& opIToRD(const V3Number& lhs, bool isSigned = false);
+    V3Number& opISToRD(const V3Number& lhs) { return opIToRD(lhs, true); }
     V3Number& opRToIS(const V3Number& lhs);
     V3Number& opRToIRoundS(const V3Number& lhs);
     V3Number& opRealToBits(const V3Number& lhs);

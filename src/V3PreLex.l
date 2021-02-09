@@ -5,7 +5,7 @@
  *
  **************************************************************************
  *
- * Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+ * Copyright 2003-2021 by Wilson Snyder. This program is free software; you
  * can redistribute it and/or modify it under the terms of either the
  * GNU Lesser General Public License Version 3 or the Perl Artistic License
  * Version 2.0.
@@ -34,7 +34,7 @@
 
 /* clang-format on */
 
-V3PreLex* V3PreLex::s_currentLexp = NULL;  // Current lexing point
+V3PreLex* V3PreLex::s_currentLexp = nullptr;  // Current lexing point
 
 #define LEXP V3PreLex::s_currentLexp
 
@@ -55,7 +55,6 @@ void yyourtext(const char* textp, size_t size) {
 // Use this to break between tokens whereever not return'ing a token (e.g. skipping inside lexer)
 #define FL_BRK (LEXP->curFilelinep()->startToken())
 
-// Prevent conflicts from perl version
 static void linenoInc() { LEXP->linenoInc(); }
 static bool pedantic() { return LEXP->m_pedantic; }
 static void yyerror(char* msg) { LEXP->curFilelinep()->v3error(msg); }
@@ -482,9 +481,9 @@ void V3PreLex::initFirstBuffer(FileLine* filelinep) {
     streamp->m_eof = true;
     m_streampStack.push(streamp);
     //
-    m_bufferState = yy_create_buffer(NULL, YY_BUF_SIZE);
+    m_bufferState = yy_create_buffer(nullptr, YY_BUF_SIZE);
     yy_switch_to_buffer(m_bufferState);
-    yyrestart(NULL);
+    yyrestart(nullptr);
 }
 
 void V3PreLex::scanNewFile(FileLine* filelinep) {
@@ -522,7 +521,7 @@ void V3PreLex::scanBytes(const string& str) {
 void V3PreLex::scanSwitchStream(VPreStream* streamp) {
     curStreamp()->m_buffers.push_front(currentUnreadChars());
     m_streampStack.push(streamp);
-    yyrestart(NULL);
+    yyrestart(nullptr);
 }
 
 void V3PreLex::scanBytesBack(const string& str) {
@@ -595,11 +594,11 @@ string V3PreLex::cleanDbgStrg(const string& in) {
 }
 
 void V3PreLex::unused() {
-    if (0) {
+    if (VL_UNCOVERABLE(false)) {  // LCOV_EXCL_START
         // Prevent unused warnings
         yy_top_state();
         yyerror((char*)"");
-    }
+    }  // LCOV_EXCL_STOP
 }
 
 /*###################################################################

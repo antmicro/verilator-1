@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -30,11 +30,11 @@
 //######################################################################
 // Base Visitor class -- holds output file pointer
 
-class EmitCBaseVisitor : public AstNVisitor {
+class EmitCBaseVisitor VL_NOT_FINAL : public AstNVisitor {
 public:
     // STATE
-    V3OutCFile* m_ofp;
-    bool m_trackText;  // Always track AstText nodes
+    V3OutCFile* m_ofp = nullptr;
+    bool m_trackText = false;  // Always track AstText nodes
     // METHODS
     V3OutCFile* ofp() const { return m_ofp; }
     void puts(const string& str) { ofp()->puts(str); }
@@ -106,33 +106,27 @@ public:
     }
 
     // CONSTRUCTORS
-    EmitCBaseVisitor() {
-        m_ofp = NULL;
-        m_trackText = false;
-    }
-    virtual ~EmitCBaseVisitor() {}
+    EmitCBaseVisitor() = default;
+    virtual ~EmitCBaseVisitor() override = default;
 };
 
 //######################################################################
 // Count operations under the given node, as a visitor of each AstNode
 
-class EmitCBaseCounterVisitor : public AstNVisitor {
+class EmitCBaseCounterVisitor final : public AstNVisitor {
 private:
     // MEMBERS
-    int m_count;  // Number of statements
+    int m_count = 0;  // Number of statements
     // VISITORS
-    virtual void visit(AstNode* nodep) VL_OVERRIDE {
+    virtual void visit(AstNode* nodep) override {
         m_count++;
         iterateChildren(nodep);
     }
 
 public:
     // CONSTRUCTORS
-    explicit EmitCBaseCounterVisitor(AstNode* nodep) {
-        m_count = 0;
-        iterate(nodep);
-    }
-    virtual ~EmitCBaseCounterVisitor() {}
+    explicit EmitCBaseCounterVisitor(AstNode* nodep) { iterate(nodep); }
+    virtual ~EmitCBaseCounterVisitor() override = default;
     int count() const { return m_count; }
 };
 

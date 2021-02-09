@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -28,42 +28,42 @@
 //######################################################################
 // ProtectLib top-level visitor
 
-class ProtectVisitor : public AstNVisitor {
+class ProtectVisitor final : public AstNVisitor {
 private:
-    AstVFile* m_vfilep;  // DPI-enabled Verilog wrapper
-    AstCFile* m_cfilep;  // C implementation of DPI functions
+    AstVFile* m_vfilep = nullptr;  // DPI-enabled Verilog wrapper
+    AstCFile* m_cfilep = nullptr;  // C implementation of DPI functions
     // Verilog text blocks
-    AstTextBlock* m_modPortsp;  // Module port list
-    AstTextBlock* m_comboPortsp;  // Combo function port list
-    AstTextBlock* m_seqPortsp;  // Sequential function port list
-    AstTextBlock* m_comboIgnorePortsp;  // Combo ignore function port list
-    AstTextBlock* m_comboDeclsp;  // Combo signal declaration list
-    AstTextBlock* m_seqDeclsp;  // Sequential signal declaration list
-    AstTextBlock* m_tmpDeclsp;  // Temporary signal declaration list
-    AstTextBlock* m_hashValuep;  // CPP hash value
-    AstTextBlock* m_comboParamsp;  // Combo function parameter list
-    AstTextBlock* m_clkSensp;  // Clock sensitivity list
-    AstTextBlock* m_comboIgnoreParamsp;  // Combo ignore parameter list
-    AstTextBlock* m_seqParamsp;  // Sequential parameter list
-    AstTextBlock* m_nbAssignsp;  // Non-blocking assignment list
-    AstTextBlock* m_seqAssignsp;  // Sequential assignment list
-    AstTextBlock* m_comboAssignsp;  // Combo assignment list
+    AstTextBlock* m_modPortsp = nullptr;  // Module port list
+    AstTextBlock* m_comboPortsp = nullptr;  // Combo function port list
+    AstTextBlock* m_seqPortsp = nullptr;  // Sequential function port list
+    AstTextBlock* m_comboIgnorePortsp = nullptr;  // Combo ignore function port list
+    AstTextBlock* m_comboDeclsp = nullptr;  // Combo signal declaration list
+    AstTextBlock* m_seqDeclsp = nullptr;  // Sequential signal declaration list
+    AstTextBlock* m_tmpDeclsp = nullptr;  // Temporary signal declaration list
+    AstTextBlock* m_hashValuep = nullptr;  // CPP hash value
+    AstTextBlock* m_comboParamsp = nullptr;  // Combo function parameter list
+    AstTextBlock* m_clkSensp = nullptr;  // Clock sensitivity list
+    AstTextBlock* m_comboIgnoreParamsp = nullptr;  // Combo ignore parameter list
+    AstTextBlock* m_seqParamsp = nullptr;  // Sequential parameter list
+    AstTextBlock* m_nbAssignsp = nullptr;  // Non-blocking assignment list
+    AstTextBlock* m_seqAssignsp = nullptr;  // Sequential assignment list
+    AstTextBlock* m_comboAssignsp = nullptr;  // Combo assignment list
     // C text blocks
-    AstTextBlock* m_cHashValuep;  // CPP hash value
-    AstTextBlock* m_cComboParamsp;  // Combo function parameter list
-    AstTextBlock* m_cComboInsp;  // Combo input copy list
-    AstTextBlock* m_cComboOutsp;  // Combo output copy list
-    AstTextBlock* m_cSeqParamsp;  // Sequential parameter list
-    AstTextBlock* m_cSeqClksp;  // Sequential clock copy list
-    AstTextBlock* m_cSeqOutsp;  // Sequential output copy list
-    AstTextBlock* m_cIgnoreParamsp;  // Combo ignore parameter list
+    AstTextBlock* m_cHashValuep = nullptr;  // CPP hash value
+    AstTextBlock* m_cComboParamsp = nullptr;  // Combo function parameter list
+    AstTextBlock* m_cComboInsp = nullptr;  // Combo input copy list
+    AstTextBlock* m_cComboOutsp = nullptr;  // Combo output copy list
+    AstTextBlock* m_cSeqParamsp = nullptr;  // Sequential parameter list
+    AstTextBlock* m_cSeqClksp = nullptr;  // Sequential clock copy list
+    AstTextBlock* m_cSeqOutsp = nullptr;  // Sequential output copy list
+    AstTextBlock* m_cIgnoreParamsp = nullptr;  // Combo ignore parameter list
     string m_libName;
     string m_topName;
-    bool m_foundTop;  // Have seen the top module
-    bool m_hasClk;  // True if the top module has sequential logic
+    bool m_foundTop = false;  // Have seen the top module
+    bool m_hasClk = false;  // True if the top module has sequential logic
 
     // VISITORS
-    virtual void visit(AstNetlist* nodep) VL_OVERRIDE {
+    virtual void visit(AstNetlist* nodep) override {
         m_vfilep
             = new AstVFile(nodep->fileline(), v3Global.opt.makeDir() + "/" + m_libName + ".sv");
         nodep->addFilesp(m_vfilep);
@@ -73,7 +73,7 @@ private:
         iterateChildren(nodep);
     }
 
-    virtual void visit(AstNodeModule* nodep) VL_OVERRIDE {
+    virtual void visit(AstNodeModule* nodep) override {
         if (!nodep->isTop()) {
             return;
         } else {
@@ -82,7 +82,7 @@ private:
         FileLine* fl = nodep->fileline();
         // Need to know the existence of clk before createSvFile()
         m_hasClk = checkIfClockExists(nodep);
-        createSvFile(fl);
+        createSvFile(fl, nodep);
         createCppFile(fl);
 
         iterateChildren(nodep);
@@ -124,7 +124,7 @@ private:
         addComment(txtp, fl, "Evaluates the secret module's final process");
     }
 
-    void createSvFile(FileLine* fl) {
+    void createSvFile(FileLine* fl, AstNodeModule* modp) {
         // Comments
         AstTextBlock* txtp = new AstTextBlock(fl);
         addComment(txtp, fl, "Wrapper module for DPI protected library");
@@ -141,12 +141,20 @@ private:
         txtp->addText(fl, ");\n\n");
 
         // Timescale
-        addComment(txtp, fl,
-                   "Precision of submodule"
-                   " (commented out to avoid requiring timescale on all modules)");
-        addComment(txtp, fl, string("timeunit ") + v3Global.rootp()->timeunit().ascii() + ";");
-        addComment(txtp, fl,
-                   string("timeprecision ") + v3Global.rootp()->timeprecision().ascii() + ";\n");
+        if (v3Global.opt.hierChild() && v3Global.rootp()->timescaleSpecified()) {
+            // Emit timescale for hierarhical verilation if input HDL specifies timespec
+            txtp->addText(fl, string("timeunit ") + modp->timeunit().ascii() + ";\n");
+            txtp->addText(fl, string("timeprecision ") + +v3Global.rootp()->timeprecision().ascii()
+                                  + ";\n");
+        } else {
+            addComment(txtp, fl,
+                       "Precision of submodule"
+                       " (commented out to avoid requiring timescale on all modules)");
+            addComment(txtp, fl, string("timeunit ") + v3Global.rootp()->timeunit().ascii() + ";");
+            addComment(txtp, fl,
+                       string("timeprecision ") + v3Global.rootp()->timeprecision().ascii()
+                           + ";\n");
+        }
 
         // DPI declarations
         hashComment(txtp, fl);
@@ -202,7 +210,7 @@ private:
         // CPP hash value
         addComment(txtp, fl, "Hash value to make sure this file and the corresponding");
         addComment(txtp, fl, "library agree");
-        m_hashValuep = new AstTextBlock(fl, "localparam int protectlib_hash__V = ");
+        m_hashValuep = new AstTextBlock(fl, "localparam int protectlib_hash__V = 32'd");
         txtp->addNodep(m_hashValuep);
         txtp->addText(fl, "\n");
 
@@ -376,12 +384,8 @@ private:
         m_cfilep->tblockp(txtp);
     }
 
-    virtual void visit(AstVar* nodep) VL_OVERRIDE {
+    virtual void visit(AstVar* nodep) override {
         if (!nodep->isIO()) return;
-        if (VN_IS(nodep->dtypep(), UnpackArrayDType)) {
-            nodep->v3warn(E_UNSUPPORTED, "Unsupported: unpacked arrays with protect-lib on "
-                                             << nodep->prettyNameQ());
-        }
         if (nodep->direction() == VDirection::INPUT) {
             if (nodep->isUsedClock() || nodep->attrClocker() == VVarAttrClocker::CLOCKER_YES) {
                 UASSERT_OBJ(m_hasClk, nodep, "checkIfClockExists() didn't find this clock");
@@ -397,15 +401,10 @@ private:
         }
     }
 
-    virtual void visit(AstNode*) VL_OVERRIDE {}
+    virtual void visit(AstNode*) override {}
 
     string cInputConnection(AstVar* varp) {
-        string frstmt;
-        bool useSetWSvlv = V3Task::dpiToInternalFrStmt(varp, varp->name(), frstmt);
-        if (useSetWSvlv) {
-            return frstmt + " handlep__V->" + varp->name() + ", " + varp->name() + ");\n";
-        }
-        return "handlep__V->" + varp->name() + " = " + frstmt + ";\n";
+        return V3Task::assignDpiToInternal("handlep__V->" + varp->name(), varp);
     }
 
     void handleClock(AstVar* varp) {
@@ -414,7 +413,7 @@ private:
         m_seqPortsp->addNodep(varp->cloneTree(false));
         if (m_hasClk) {
             m_seqParamsp->addText(fl, varp->name() + "\n");
-            m_clkSensp->addText(fl, "edge(" + varp->name() + ")");
+            m_clkSensp->addText(fl, "posedge " + varp->name() + " or negedge " + varp->name());
         }
         m_cSeqParamsp->addText(fl, varp->dpiArgType(true, false) + "\n");
         m_cSeqClksp->addText(fl, cInputConnection(varp));
@@ -434,6 +433,13 @@ private:
 
     void handleInput(AstVar* varp) { m_modPortsp->addNodep(varp->cloneTree(false)); }
 
+    static void addLocalVariable(AstTextBlock* textp, AstVar* varp, const char* suffix) {
+        AstVar* newVarp
+            = new AstVar(varp->fileline(), AstVarType::VAR, varp->name() + suffix, varp->dtypep());
+        textp->addNodep(newVarp);
+        textp->addText(varp->fileline(), ";\n");
+    }
+
     void handleOutput(AstVar* varp) {
         FileLine* fl = varp->fileline();
         m_modPortsp->addNodep(varp->cloneTree(false));
@@ -444,18 +450,11 @@ private:
             m_seqParamsp->addText(fl, varp->name() + "_tmp__V\n");
         }
 
-        AstNodeDType* comboDtypep = varp->dtypep()->cloneTree(false);
-        m_comboDeclsp->addNodep(comboDtypep);
-        m_comboDeclsp->addText(fl, " " + varp->name() + "_combo__V;\n");
+        addLocalVariable(m_comboDeclsp, varp, "_combo__V");
 
         if (m_hasClk) {
-            AstNodeDType* seqDtypep = varp->dtypep()->cloneTree(false);
-            m_seqDeclsp->addNodep(seqDtypep);
-            m_seqDeclsp->addText(fl, " " + varp->name() + "_seq__V;\n");
-
-            AstNodeDType* tmpDtypep = varp->dtypep()->cloneTree(false);
-            m_tmpDeclsp->addNodep(tmpDtypep);
-            m_tmpDeclsp->addText(fl, " " + varp->name() + "_tmp__V;\n");
+            addLocalVariable(m_seqDeclsp, varp, "_seq__V");
+            addLocalVariable(m_tmpDeclsp, varp, "_tmp__V");
 
             m_nbAssignsp->addText(fl, varp->name() + "_seq__V <= " + varp->name() + "_tmp__V;\n");
             m_seqAssignsp->addText(fl, varp->name() + " = " + varp->name() + "_seq__V;\n");
@@ -486,35 +485,8 @@ private:
 
 public:
     explicit ProtectVisitor(AstNode* nodep)
-        : m_vfilep(NULL)
-        , m_cfilep(NULL)
-        , m_modPortsp(NULL)
-        , m_comboPortsp(NULL)
-        , m_seqPortsp(NULL)
-        , m_comboIgnorePortsp(NULL)
-        , m_comboDeclsp(NULL)
-        , m_seqDeclsp(NULL)
-        , m_tmpDeclsp(NULL)
-        , m_hashValuep(NULL)
-        , m_comboParamsp(NULL)
-        , m_clkSensp(NULL)
-        , m_comboIgnoreParamsp(NULL)
-        , m_seqParamsp(NULL)
-        , m_nbAssignsp(NULL)
-        , m_seqAssignsp(NULL)
-        , m_comboAssignsp(NULL)
-        , m_cHashValuep(NULL)
-        , m_cComboParamsp(NULL)
-        , m_cComboInsp(NULL)
-        , m_cComboOutsp(NULL)
-        , m_cSeqParamsp(NULL)
-        , m_cSeqClksp(NULL)
-        , m_cSeqOutsp(NULL)
-        , m_cIgnoreParamsp(NULL)
-        , m_libName(v3Global.opt.protectLib())
-        , m_topName(v3Global.opt.prefix())
-        , m_foundTop(false)
-        , m_hasClk(false) {
+        : m_libName{v3Global.opt.protectLib()}
+        , m_topName{v3Global.opt.prefix()} {
         iterate(nodep);
     }
 };

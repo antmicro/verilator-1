@@ -6,7 +6,7 @@
  *
  **************************************************************************
  *
- * Copyright 2003-2020 by Wilson Snyder.  Verilator is free software; you
+ * Copyright 2003-2021 by Wilson Snyder.  Verilator is free software; you
  * can redistribute it and/or modify it under the terms of either the
  * GNU Lesser General Public License Version 3 or the Perl Artistic License
  * Version 2.0.
@@ -78,7 +78,7 @@ static double lexParseDouble(FileLine* fl, const char* textp, size_t length) {
 %a 15000
 %o 25000
 
-%s V95 V01 V05 S05 S09 S12 S17
+%s V95 V01NC V01C V05 S05 S09 S12 S17
 %s STRING ATTRMODE TABLE
 %s VA5 SAX VLT
 %s SYSCHDR SYSCINT SYSCIMP SYSCIMPH SYSCCTOR SYSCDTOR
@@ -116,6 +116,7 @@ vnum    {vnum1}|{vnum2}|{vnum3}|{vnum4}|{vnum5}
   "coverage_off"        { FL; return yVLT_COVERAGE_OFF; }
   "coverage_on"         { FL; return yVLT_COVERAGE_ON; }
   "full_case"           { FL; return yVLT_FULL_CASE; }
+  "hier_block"          { FL; return yVLT_HIER_BLOCK; }
   "inline"              { FL; return yVLT_INLINE; }
   "isolate_assignments" { FL; return yVLT_ISOLATE_ASSIGNMENTS; }
   "lint_off"            { FL; return yVLT_LINT_OFF; }
@@ -154,7 +155,7 @@ vnum    {vnum1}|{vnum2}|{vnum3}|{vnum4}|{vnum5}
 
   /************************************************************************/
   /* Verilog 1995 */
-<V95,V01,V05,VA5,S05,S09,S12,S17,SAX>{
+<V95,V01NC,V01C,V05,VA5,S05,S09,S12,S17,SAX>{
   {ws}                  { FL_FWD; FL_BRK; }  /* otherwise ignore white-space */
   {crnl}                { FL_FWD; FL_BRK; }  /* Count line numbers */
   /*     Extensions to Verilog set, some specified by PSL */
@@ -190,6 +191,7 @@ vnum    {vnum1}|{vnum2}|{vnum3}|{vnum4}|{vnum5}
   "$dumpportsoff"       { FL; return yD_DUMPOFF; }
   "$dumpportson"        { FL; return yD_DUMPON; }
   "$dumpvars"           { FL; return yD_DUMPVARS; }
+  "$exit"               { FL; return yD_EXIT; }
   "$exp"                { FL; return yD_EXP; }
   "$fclose"             { FL; return yD_FCLOSE; }
   "$fdisplay"           { FL; return yD_FDISPLAY; }
@@ -203,11 +205,19 @@ vnum    {vnum1}|{vnum2}|{vnum3}|{vnum4}|{vnum5}
   "$fgets"              { FL; return yD_FGETS; }
   "$finish"             { FL; return yD_FINISH; }
   "$floor"              { FL; return yD_FLOOR; }
+  "$fmonitor"           { FL; return yD_FMONITOR; }
+  "$fmonitorb"          { FL; return yD_FMONITORB; }
+  "$fmonitorh"          { FL; return yD_FMONITORH; }
+  "$fmonitoro"          { FL; return yD_FMONITORO; }
   "$fopen"              { FL; return yD_FOPEN; }
   "$fread"              { FL; return yD_FREAD; }
   "$frewind"            { FL; return yD_FREWIND; }
   "$fscanf"             { FL; return yD_FSCANF; }
   "$fseek"              { FL; return yD_FSEEK; }
+  "$fstrobe"            { FL; return yD_FSTROBE; }
+  "$fstrobeb"           { FL; return yD_FSTROBEB; }
+  "$fstrobeh"           { FL; return yD_FSTROBEH; }
+  "$fstrobeo"           { FL; return yD_FSTROBEO; }
   "$ftell"              { FL; return yD_FTELL; }
   "$fullskew"           { FL; return yaTIMINGSPEC; }
   "$fwrite"             { FL; return yD_FWRITE; }
@@ -219,6 +229,12 @@ vnum    {vnum1}|{vnum2}|{vnum3}|{vnum4}|{vnum5}
   "$itor"               { FL; return yD_ITOR; }
   "$ln"                 { FL; return yD_LN; }
   "$log10"              { FL; return yD_LOG10; }
+  "$monitor"            { FL; return yD_MONITOR; }
+  "$monitorb"           { FL; return yD_MONITORB; }
+  "$monitorh"           { FL; return yD_MONITORH; }
+  "$monitoro"           { FL; return yD_MONITORO; }
+  "$monitoroff"         { FL; return yD_MONITOROFF; }
+  "$monitoron"          { FL; return yD_MONITORON; }
   "$nochange"           { FL; return yaTIMINGSPEC; }
   "$period"             { FL; return yaTIMINGSPEC; }
   "$pow"                { FL; return yD_POW; }
@@ -246,6 +262,10 @@ vnum    {vnum1}|{vnum2}|{vnum3}|{vnum4}|{vnum5}
   "$sscanf"             { FL; return yD_SSCANF; }
   "$stime"              { FL; return yD_STIME; }
   "$stop"               { FL; return yD_STOP; }
+  "$strobe"             { FL; return yD_STROBE; }
+  "$strobeb"            { FL; return yD_STROBEB; }
+  "$strobeh"            { FL; return yD_STROBEH; }
+  "$strobeo"            { FL; return yD_STROBEO; }
   "$swrite"             { FL; return yD_SWRITE; }
   "$swriteb"            { FL; return yD_SWRITEB; }
   "$swriteh"            { FL; return yD_SWRITEH; }
@@ -255,18 +275,20 @@ vnum    {vnum1}|{vnum2}|{vnum3}|{vnum4}|{vnum5}
   "$tanh"               { FL; return yD_TANH; }
   "$test$plusargs"      { FL; return yD_TESTPLUSARGS; }
   "$time"               { FL; return yD_TIME; }
-  "$timeskew"           { FL; return yaTIMINGSPEC; }
   "$timeformat"         { FL; return yD_TIMEFORMAT; }
+  "$timeskew"           { FL; return yaTIMINGSPEC; }
   "$typename"           { FL; return yD_TYPENAME; }
   "$ungetc"             { FL; return yD_UNGETC; }
+  "$urandom"            { FL; return yD_URANDOM; }
+  "$urandom_range"      { FL; return yD_URANDOM_RANGE; }
   "$value$plusargs"     { FL; return yD_VALUEPLUSARGS; }
   "$width"              { FL; return yaTIMINGSPEC; }
   "$write"              { FL; return yD_WRITE; }
   "$writeb"             { FL; return yD_WRITEB; }
   "$writeh"             { FL; return yD_WRITEH; }
-  "$writeo"             { FL; return yD_WRITEO; }
   "$writememb"          { FL; return yD_WRITEMEMB; }
   "$writememh"          { FL; return yD_WRITEMEMH; }
+  "$writeo"             { FL; return yD_WRITEO; }
   /*     Keywords */
   "always"              { FL; return yALWAYS; }
   "and"                 { FL; return yAND; }
@@ -373,7 +395,7 @@ vnum    {vnum1}|{vnum2}|{vnum3}|{vnum4}|{vnum5}
 }
 
   /* Verilog 2001 */
-<V01,V05,VA5,S05,S09,S12,S17,SAX>{
+<V01NC,V01C,V05,VA5,S05,S09,S12,S17,SAX>{
   /*     System Tasks */
   "$signed"             { FL; return yD_SIGNED; }
   "$unsigned"           { FL; return yD_UNSIGNED; }
@@ -390,6 +412,10 @@ vnum    {vnum1}|{vnum2}|{vnum3}|{vnum4}|{vnum5}
   "showcancelled"       { FL; return yaTIMINGSPEC; }
   "signed"              { FL; return ySIGNED; }
   "unsigned"            { FL; return yUNSIGNED; }
+}
+
+  /* Verilog 2001 Config */
+<V01C,V05,VA5,S05,S09,S12,S17,SAX>{
   /*     Generic unsupported keywords */
   "cell"                { ERROR_RSVD_WORD("Verilog 2001-config"); }
   "config"              { ERROR_RSVD_WORD("Verilog 2001-config"); }
@@ -417,11 +443,13 @@ vnum    {vnum1}|{vnum2}|{vnum3}|{vnum4}|{vnum5}
 <S05,S09,S12,S17,SAX>{
   /*     System Tasks */
   "$bits"               { FL; return yD_BITS; }
+  "$changed"            { FL; return yD_CHANGED; }
   "$countbits"          { FL; return yD_COUNTBITS; }
   "$countones"          { FL; return yD_COUNTONES; }
   "$dimensions"         { FL; return yD_DIMENSIONS; }
   "$error"              { FL; return yD_ERROR; }
   "$fatal"              { FL; return yD_FATAL; }
+  "$fell"               { FL; return yD_FELL; }
   "$high"               { FL; return yD_HIGH; }
   "$increment"          { FL; return yD_INCREMENT; }
   "$info"               { FL; return yD_INFO; }
@@ -434,6 +462,7 @@ vnum    {vnum1}|{vnum2}|{vnum3}|{vnum4}|{vnum5}
   "$past"               { FL; return yD_PAST; }
   "$right"              { FL; return yD_RIGHT; }
   "$root"               { FL; return yD_ROOT; }
+  "$rose"               { FL; return yD_ROSE; }
   "$size"               { FL; return yD_SIZE; }
   "$stable"             { FL; return yD_STABLE; }
   "$unpacked_dimensions" { FL; return yD_UNPACKED_DIMENSIONS; }
@@ -581,7 +610,7 @@ vnum    {vnum1}|{vnum2}|{vnum3}|{vnum4}|{vnum5}
   /* No new keywords */
 
   /* Default PLI rule */
-<V95,V01,V05,VA5,S05,S09,S12,S17,SAX>{
+<V95,V01NC,V01C,V05,VA5,S05,S09,S12,S17,SAX>{
   "$"[a-zA-Z_$][a-zA-Z0-9_$]*   { string str (yytext, yyleng);
                                   yylval.strp = PARSEP->newString(AstNode::encodeName(str));
                                   FL; return yaD_PLI;
@@ -685,7 +714,7 @@ vnum    {vnum1}|{vnum2}|{vnum3}|{vnum4}|{vnum5}
   /* Meta comments */
 
   /* Converted from //{cmt}verilator ...{cmt} by preprocessor */
-<V95,V01,V05,VA5,S05,S09,S12,S17,SAX>{
+<V95,V01NC,V01C,V05,VA5,S05,S09,S12,S17,SAX>{
   "/*verilator"{ws}*"*/"                { FL_FWD; FL_BRK; }  /* Ignore empty comments, may be `endif // verilator */
   "/*verilator clock_enable*/"          { FL; return yVL_CLOCK_ENABLE; }
   "/*verilator clocker*/"               { FL; return yVL_CLOCKER; }
@@ -693,6 +722,7 @@ vnum    {vnum1}|{vnum2}|{vnum3}|{vnum4}|{vnum5}
   "/*verilator coverage_off*/"          { FL_FWD; PARSEP->lexFileline()->coverageOn(false); FL_BRK; }
   "/*verilator coverage_on*/"           { FL_FWD; PARSEP->lexFileline()->coverageOn(true); FL_BRK; }
   "/*verilator full_case*/"             { FL; return yVL_FULL_CASE; }
+  "/*verilator hier_block*/"            { FL; return yVL_HIER_BLOCK; }
   "/*verilator inline_module*/"         { FL; return yVL_INLINE_MODULE; }
   "/*verilator isolate_assignments*/"   { FL; return yVL_ISOLATE_ASSIGNMENTS; }
   "/*verilator lint_off"[^*]*"*/"       { FL; PARSEP->lexVerilatorCmtLint(yylval.fl, yytext, true); FL_BRK; }
@@ -709,10 +739,9 @@ vnum    {vnum1}|{vnum2}|{vnum3}|{vnum4}|{vnum5}
   "/*verilator public_flat_rw*/"        { FL; return yVL_PUBLIC_FLAT_RW; }  // The @(edge) is converted by the preproc
   "/*verilator public_module*/"         { FL; return yVL_PUBLIC_MODULE; }
   "/*verilator sc_bv*/"                 { FL; return yVL_SC_BV; }
-  "/*verilator sc_clock*/"              { FL; return yVL_CLOCK; }
+  "/*verilator sc_clock*/"              { FL; yylval.fl->v3warn(DEPRECATED, "sc_clock is ignored"); FL_BRK; }
   "/*verilator sformat*/"               { FL; return yVL_SFORMAT; }
   "/*verilator split_var*/"             { FL; return yVL_SPLIT_VAR; }
-  "/*verilator systemc_clock*/"         { FL; return yVL_CLOCK; }
   "/*verilator tag"[^*]*"*/"            { FL; yylval.strp = PARSEP->newString(V3ParseImp::lexParseTag(yytext));
                                           return yVL_TAG; }
   "/*verilator tracing_off*/"           { FL_FWD; PARSEP->lexFileline()->tracingOn(false); FL_BRK; }
@@ -725,7 +754,7 @@ vnum    {vnum1}|{vnum2}|{vnum3}|{vnum4}|{vnum5}
   /************************************************************************/
 
   /* Single character operator thingies */
-<V95,V01,V05,VA5,S05,S09,S12,S17,SAX>{
+<V95,V01NC,V01C,V05,VA5,S05,S09,S12,S17,SAX>{
   "{"                   { FL; return yytext[0]; }
   "}"                   { FL; return yytext[0]; }
   "!"                   { FL; return yytext[0]; }
@@ -759,7 +788,7 @@ vnum    {vnum1}|{vnum2}|{vnum3}|{vnum4}|{vnum5}
   /* Operators and multi-character symbols */
 
   /* Verilog 1995 Operators */
-<V95,V01,V05,VA5,S05,S09,S12,S17,SAX>{
+<V95,V01NC,V01C,V05,VA5,S05,S09,S12,S17,SAX>{
   "&&"                  { FL; return yP_ANDAND; }
   "||"                  { FL; return yP_OROR; }
   "<="                  { FL; return yP_LTE; }
@@ -781,7 +810,7 @@ vnum    {vnum1}|{vnum2}|{vnum3}|{vnum4}|{vnum5}
 }
 
   /* Verilog 2001 Operators */
-<V01,V05,VA5,S05,S09,S12,S17,SAX>{
+<V01NC,V01C,V05,VA5,S05,S09,S12,S17,SAX>{
   "<<<"                 { FL; return yP_SLEFT; }
   ">>>"                 { FL; return yP_SSRIGHT; }
   "**"                  { FL; return yP_POW; }
@@ -833,7 +862,7 @@ vnum    {vnum1}|{vnum2}|{vnum3}|{vnum4}|{vnum5}
 }
 
   /* Identifiers and numbers */
-<V95,V01,V05,VA5,S05,S09,S12,S17,SAX,VLT>{
+<V95,V01NC,V01C,V05,VA5,S05,S09,S12,S17,SAX,VLT>{
   {escid}               { FL; yylval.strp = PARSEP->newString
                                 (AstNode::encodeName(string(yytext+1)));  // +1 to skip the backslash
                           return yaID__LEX;
@@ -911,7 +940,7 @@ vnum    {vnum1}|{vnum2}|{vnum3}|{vnum4}|{vnum5}
   /************************************************************************/
   /* Attributes */
   /* Note simulators vary in support for "(* /_*something*_/ foo*)" where _ doesn't exist */
-<V95,V01,V05,VA5,S05,S09,S12,S17,SAX>{
+<V95,V01NC,V01C,V05,VA5,S05,S09,S12,S17,SAX>{
     "(*"({ws}|{crnl})*({id}|{escid})    { yymore(); yy_push_state(ATTRMODE); }  /* Doesn't match (*), but (* attr_spec */
 }
 
@@ -931,7 +960,7 @@ vnum    {vnum1}|{vnum2}|{vnum3}|{vnum4}|{vnum5}
   /* Common for all SYSC header states */
   /* OPTIMIZE: we return one per line, make it one for the entire block */
   /* If add to this list also add to V3LanguageWords.h */
-<V95,V01,V05,VA5,S05,S09,S12,S17,SAX,VLT,SYSCHDR,SYSCINT,SYSCIMP,SYSCIMPH,SYSCCTOR,SYSCDTOR,IGNORE>{
+<V95,V01NC,V01C,V05,VA5,S05,S09,S12,S17,SAX,VLT,SYSCHDR,SYSCINT,SYSCIMP,SYSCIMPH,SYSCCTOR,SYSCDTOR,IGNORE>{
   "`accelerate"                         { FL_FWD; FL_BRK; }  // Verilog-XL compatibility
   "`autoexpand_vectornets"              { FL_FWD; FL_BRK; }  // Verilog-XL compatibility
   "`celldefine"                         { FL_FWD; PARSEP->lexFileline()->celldefineOn(true); FL_BRK; }
@@ -979,8 +1008,8 @@ vnum    {vnum1}|{vnum2}|{vnum3}|{vnum4}|{vnum5}
 
   /* See also setLanguage below */
   "`begin_keywords"[ \t]*\"1364-1995\"          { FL_FWD; yy_push_state(V95); PARSEP->lexPushKeywords(YY_START); FL_BRK; }
-  "`begin_keywords"[ \t]*\"1364-2001\"          { FL_FWD; yy_push_state(V01); PARSEP->lexPushKeywords(YY_START); FL_BRK; }
-  "`begin_keywords"[ \t]*\"1364-2001-noconfig\" { FL_FWD; yy_push_state(V01); PARSEP->lexPushKeywords(YY_START); FL_BRK; }
+  "`begin_keywords"[ \t]*\"1364-2001\"          { FL_FWD; yy_push_state(V01C); PARSEP->lexPushKeywords(YY_START); FL_BRK; }
+  "`begin_keywords"[ \t]*\"1364-2001-noconfig\" { FL_FWD; yy_push_state(V01NC); PARSEP->lexPushKeywords(YY_START); FL_BRK; }
   "`begin_keywords"[ \t]*\"1364-2005\"          { FL_FWD; yy_push_state(V05); PARSEP->lexPushKeywords(YY_START); FL_BRK; }
   "`begin_keywords"[ \t]*\"VAMS[-0-9.]*\"       { FL_FWD; yy_push_state(VA5); PARSEP->lexPushKeywords(YY_START); FL_BRK; }
   "`begin_keywords"[ \t]*\"1800-2005\"          { FL_FWD; yy_push_state(S05); PARSEP->lexPushKeywords(YY_START); FL_BRK; }
@@ -1027,7 +1056,7 @@ vnum    {vnum1}|{vnum2}|{vnum3}|{vnum4}|{vnum5}
   /************************************************************************/
   /* Default rules - leave last */
 
-<V95,V01,V05,VA5,S05,S09,S12,S17,SAX,VLT>{
+<V95,V01NC,V01C,V05,VA5,S05,S09,S12,S17,SAX,VLT>{
   "`"[a-zA-Z_0-9]+      { FL; V3ParseImp::lexErrorPreprocDirective(yylval.fl, yytext); FL_BRK; }
   "//"[^\n]*            { FL_FWD; FL_BRK; }  /* throw away single line comments */
   .                     { FL; return yytext[0]; }       /* return single char ops. */

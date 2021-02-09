@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -31,7 +31,7 @@
 
 #include <algorithm>
 #include <iomanip>
-#include VL_INCLUDE_UNORDERED_SET
+#include <unordered_set>
 
 //######################################################################
 // FileLineSingleton class functions
@@ -58,12 +58,12 @@ string FileLineSingleton::filenameLetters(int fileno) {
 //! We associate a language with each source file, so we also set the default
 //! for this.
 int FileLineSingleton::nameToNumber(const string& filename) {
-    FileNameNumMap::const_iterator it = m_namemap.find(filename);
+    const auto it = vlstd::as_const(m_namemap).find(filename);
     if (VL_LIKELY(it != m_namemap.end())) return it->second;
     int num = m_names.size();
     m_names.push_back(filename);
     m_languages.push_back(V3LangCode::mostRecent());
-    m_namemap.insert(make_pair(filename, num));
+    m_namemap.emplace(filename, num);
     return num;
 }
 
@@ -90,8 +90,8 @@ int VFileContent::debug() {
 
 void VFileContent::pushText(const string& text) {
     if (m_lines.size() == 0) {
-        m_lines.push_back("");  // no such thing as line [0]
-        m_lines.push_back("");  // start with no leftover
+        m_lines.emplace_back("");  // no such thing as line [0]
+        m_lines.emplace_back("");  // start with no leftover
     }
 
     // Any leftover text is stored on largest line (might be "")
@@ -112,7 +112,7 @@ void VFileContent::pushText(const string& text) {
         }
     }
     // Keep leftover for next time
-    m_lines.push_back(string(leftover, line_start));  // Might be ""
+    m_lines.emplace_back(string(leftover, line_start));  // Might be ""
 }
 
 string VFileContent::getLine(int lineno) const {
@@ -142,16 +142,9 @@ std::ostream& operator<<(std::ostream& os, VFileContent* contentp) {
 //######################################################################
 // FileLine class functions
 
+// Sort of a singleton
 FileLine::FileLine(FileLine::EmptySecret) {
-    // Sort of a singleton
-    m_firstLineno = 0;
-    m_lastLineno = 0;
-    m_firstColumn = 0;
-    m_lastColumn = 0;
     m_filenameno = singleton().nameToNumber(FileLine::builtInFilename());
-    m_contentp = NULL;
-    m_contentLineno = 0;
-    m_parent = NULL;
 
     m_warnOn = 0;
     for (int codei = V3ErrorCode::EC_MIN; codei < V3ErrorCode::_ENUM_MAX; codei++) {
@@ -250,7 +243,7 @@ FileLine* FileLine::copyOrSameFileLine() {
 #ifndef _V3ERROR_NO_GLOBAL_
     V3Config::applyIgnores(this);  // Toggle warnings based on global config file
 #endif
-    static FileLine* lastNewp = NULL;
+    static FileLine* lastNewp = nullptr;
     if (lastNewp && *lastNewp == *this) {  // Compares lineno, filename, etc
         return lastNewp;
     }
@@ -310,11 +303,6 @@ bool FileLine::warnOff(const string& msg, bool flag) {
     V3ErrorCode code(msg.c_str());
     if (code < V3ErrorCode::EC_FIRST_WARN) {
         return false;
-#ifndef _V3ERROR_NO_GLOBAL_
-    } else if (v3Global.opt.lintOnly()  // Lint mode is allowed to suppress some errors
-               && code < V3ErrorCode::EC_MIN) {
-        return false;
-#endif
     } else {
         warnOff(code, flag);
         return true;
@@ -442,7 +430,7 @@ string FileLine::warnContext(bool secondary) const {
 }
 
 #ifdef VL_LEAK_CHECKS
-typedef vl_unordered_set<FileLine*> FileLineCheckSet;
+typedef std::unordered_set<FileLine*> FileLineCheckSet;
 FileLineCheckSet fileLineLeakChecks;
 
 void* FileLine::operator new(size_t size) {
@@ -454,7 +442,7 @@ void* FileLine::operator new(size_t size) {
 void FileLine::operator delete(void* objp, size_t size) {
     if (!objp) return;
     FileLine* flp = static_cast<FileLine*>(objp);
-    FileLineCheckSet::iterator it = fileLineLeakChecks.find(flp);
+    const auto it = fileLineLeakChecks.find(flp);
     if (it != fileLineLeakChecks.end()) {
         fileLineLeakChecks.erase(it);
     } else {
@@ -470,7 +458,7 @@ void FileLine::deleteAllRemaining() {
     // that way.  Unfortunately this makes our leak checking a big mess, so
     // only when leak checking we'll track them all and cleanup.
     while (true) {
-        FileLineCheckSet::iterator it = fileLineLeakChecks.begin();
+        const auto it = fileLineLeakChecks.begin();
         if (it == fileLineLeakChecks.end()) break;
         delete *it;
         // Operator delete will remove the iterated object from the list.

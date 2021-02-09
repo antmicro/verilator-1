@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -22,8 +22,10 @@
 
 // No V3 headers here - this is a base class for Vlc etc
 
-#include <string>
+#include <map>
 #include <sstream>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 //######################################################################
@@ -65,7 +67,7 @@ inline string ucfirst(const string& text) {
 //######################################################################
 // VString - String manipulation
 
-class VString {
+class VString final {
     static bool wildmatchi(const char* s, const char* p);
 
 public:
@@ -80,8 +82,15 @@ public:
     static string downcase(const string& str);
     // Convert string to upper case (toupper)
     static string upcase(const string& str);
+    // Insert esc just before tgt
+    static string quoteAny(const string& str, char tgt, char esc);
+    // Replace any \'s with \\  (two consecutive backslashes)
+    static string quoteBackslash(const string& str) { return quoteAny(str, '\\', '\\'); }
     // Replace any %'s with %%
-    static string quotePercent(const string& str);
+    static string quotePercent(const string& str) { return quoteAny(str, '%', '%'); }
+    // Surround a raw string by double quote and escape if necessary
+    // e.g. input abc's  becomes "\"abc\'s\""
+    static string quoteStringLiteralForShell(const string& str);
     // Replace any unprintable with space
     // This includes removing tabs, so column tracking is correct
     static string spaceUnprintable(const string& str);
@@ -96,7 +105,7 @@ public:
 //######################################################################
 // VHashSha256 - Compute Sha256 hashes
 
-class VHashSha256 {
+class VHashSha256 final {
     // As blocks must be processed in 64 byte chunks, this does not at present
     // support calling input() on multiple non-64B chunks and getting the correct
     // hash. To do that first combine the string before calling here.
@@ -105,16 +114,25 @@ class VHashSha256 {
     // MEMBERS
     uint32_t m_inthash[8];  // Intermediate hash, in host order
     string m_remainder;  // Unhashed data
-    bool m_final;  // Finalized
-    size_t m_totLength;  // Total all-chunk length as needed by output digest
+    bool m_final = false;  // Finalized
+    size_t m_totLength = 0;  // Total all-chunk length as needed by output digest
 public:
     // CONSTRUCTORS
-    VHashSha256() { init(); }
-    explicit VHashSha256(const string& data) {
-        init();
+    VHashSha256() {
+        m_inthash[0] = 0x6a09e667;
+        m_inthash[1] = 0xbb67ae85;
+        m_inthash[2] = 0x3c6ef372;
+        m_inthash[3] = 0xa54ff53a;
+        m_inthash[4] = 0x510e527f;
+        m_inthash[5] = 0x9b05688c;
+        m_inthash[6] = 0x1f83d9ab;
+        m_inthash[7] = 0x5be0cd19;
+    }
+    explicit VHashSha256(const string& data)
+        : VHashSha256{} {
         insert(data);
     }
-    ~VHashSha256() {}
+    ~VHashSha256() = default;
 
     // METHODS
     string digestBinary();  // Return digest as 32 character binary
@@ -131,18 +149,6 @@ public:
     void insert(uint64_t value) { insert(cvtToStr(value)); }
 
 private:
-    void init() {
-        m_inthash[0] = 0x6a09e667;
-        m_inthash[1] = 0xbb67ae85;
-        m_inthash[2] = 0x3c6ef372;
-        m_inthash[3] = 0xa54ff53a;
-        m_inthash[4] = 0x510e527f;
-        m_inthash[5] = 0x9b05688c;
-        m_inthash[6] = 0x1f83d9ab;
-        m_inthash[7] = 0x5be0cd19;
-        m_final = false;
-        m_totLength = 0;
-    }
     static void selfTestOne(const string& data, const string& data2, const string& exp,
                             const string& exp64);
     void finalize();  // Process remaining data
@@ -152,17 +158,19 @@ private:
 // VName - string which contains a possibly hashed string
 // TODO use this wherever there is currently a "string m_name"
 
-class VName {
+class VName final {
     string m_name;
     string m_hashed;
+    static std::map<string, string> s_dehashMap;  // hashed -> original decoder
 
     static size_t s_maxLength;  // Length at which to start hashing
     static size_t s_minLength;  // Length to preserve if over maxLength
+
 public:
     // CONSTRUCTORS
     explicit VName(const string& name)
-        : m_name(name) {}
-    ~VName() {}
+        : m_name{name} {}
+    ~VName() = default;
     // METHODS
     void name(const string& name) {
         m_name = name;
@@ -174,15 +182,16 @@ public:
     // Length at which to start hashing, 0=disable
     static void maxLength(size_t flag) { s_maxLength = flag; }
     static size_t maxLength() { return s_maxLength; }
+    static string dehash(const string& in);
 };
 
 //######################################################################
 // VSpellCheck - Find near-match spelling suggestions given list of possibilities
 
-class VSpellCheck {
+class VSpellCheck final {
     // CONSTANTS
-    enum { NUM_CANDIDATE_LIMIT = 10000 };  // Avoid searching huge netlists
-    enum { LENGTH_LIMIT = 100 };  // Maximum string length to search
+    static constexpr unsigned NUM_CANDIDATE_LIMIT = 10000;  // Avoid searching huge netlists
+    static constexpr unsigned LENGTH_LIMIT = 100;  // Maximum string length to search
     // TYPES
     typedef unsigned int EditDistance;
     typedef std::vector<string> Candidates;
@@ -190,8 +199,8 @@ class VSpellCheck {
     Candidates m_candidates;  // Strings we try to match
 public:
     // CONSTRUCTORS
-    explicit VSpellCheck() {}
-    ~VSpellCheck() {}
+    VSpellCheck() = default;
+    ~VSpellCheck() = default;
     // METHODS
     // Push a symbol table value to be considered as a candidate
     // The first item pushed has highest priority, all else being equal

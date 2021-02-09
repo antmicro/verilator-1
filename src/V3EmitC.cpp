@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -23,16 +23,18 @@
 #include "V3EmitCBase.h"
 #include "V3Number.h"
 #include "V3PartitionGraph.h"
+#include "V3Task.h"
 #include "V3TSP.h"
 
 #include <algorithm>
 #include <map>
 #include <vector>
-#include VL_INCLUDE_UNORDERED_SET
+#include <unordered_set>
 
-#define VL_VALUE_STRING_MAX_WIDTH 8192  // We use a static char array in VL_VALUE_STRING
+constexpr int VL_VALUE_STRING_MAX_WIDTH = 8192;  // We use a static char array in VL_VALUE_STRING
 
-#define EMITC_NUM_CONSTW 8  // Number of VL_CONST_W_*X's in verilated.h (IE VL_CONST_W_8X is last)
+constexpr int EMITC_NUM_CONSTW
+    = 8;  // Number of VL_CONST_W_*X's in verilated.h (IE VL_CONST_W_8X is last)
 
 //######################################################################
 // Emit statements and math operators
@@ -43,7 +45,7 @@ extern AstVarRef* getVarRefp(AstNode* nodep);
     var = value
 #define RESTORE(var) var = varPre
 
-class EmitCStmts : public EmitCBaseVisitor {
+class EmitCStmts VL_NOT_FINAL : public EmitCBaseVisitor {
 private:
     typedef std::vector<const AstVar*> VarVec;
     typedef std::map<int, VarVec> VarSortMap;  // Map size class to VarVec
@@ -72,7 +74,7 @@ public:
     int splitSize() const { return m_splitSize; }
     void splitSizeInc(int count) { m_splitSize += count; }
     void splitSizeInc(AstNode* nodep) { splitSizeInc(EmitCBaseCounterVisitor(nodep).count()); }
-    bool splitNeeded() {
+    bool splitNeeded() const {
         return (splitSize() && v3Global.opt.outputSplit()
                 && v3Global.opt.outputSplit() < splitSize());
     }
@@ -85,7 +87,7 @@ public:
                     char fmtLetter);
 
     void emitVarDecl(const AstVar* nodep, const string& prefixIfImp);
-    typedef enum {
+    typedef enum : uint8_t {
         EVL_CLASS_IO,
         EVL_CLASS_SIG,
         EVL_CLASS_TEMP,
@@ -165,6 +167,7 @@ public:
     }
 
     void emitParams(AstNodeModule* modp, bool init, bool* firstp, string& sectionr) {
+        bool anyi = false;
         for (AstNode* nodep = modp->stmtsp(); nodep; nodep = nodep->nextp()) {
             if (const AstVar* varp = VN_CAST(nodep, Var)) {
                 if (varp->isParam() && (varp->isUsedParam() || varp->isSigPublic())) {
@@ -173,20 +176,23 @@ public:
                         sectionr = "";
                     }
                     UASSERT_OBJ(varp->valuep(), nodep, "No init for a param?");
-                    // These should be static const values, however microsloth VC++ doesn't
-                    // support them.  They also cause problems with GDB under GCC2.95.
+                    // These should be static const values, however older MSVC++ did't
+                    // support them; should be ok now under C++11, need to refactor.
                     if (varp->isWide()) {  // Unsupported for output
                         if (!init) {
                             putsDecoration("// enum WData " + varp->nameProtect() + "  //wide");
                         }
                     } else if (varp->isString()) {
                         if (init) {
-                            emitCtorSep(firstp);
-                            puts(protect("var_" + varp->name()) + " (");
+                            puts("const std::string ");
+                            puts(prefixNameProtect(modp) + "::" + protect("var_" + varp->name())
+                                 + "(");
                             iterateAndNextNull(varp->valuep());
-                            puts(")");
+                            puts(");\n");
+                            anyi = true;
                         } else {
-                            puts("const std::string " + protect("var_" + varp->name()) + ";\n");
+                            puts("static const std::string " + protect("var_" + varp->name())
+                                 + ";\n");
                         }
                     } else if (!VN_IS(varp->valuep(), Const)) {  // Unsupported for output
                         // putsDecoration("// enum ..... "+varp->nameProtect()
@@ -196,10 +202,12 @@ public:
                                       ->isOpaque()) {  // Can't put out e.g. doubles
                     } else {
                         if (init) {
-                            emitCtorSep(firstp);
-                            puts(protect("var_" + varp->name()) + " (");
+                            puts(varp->isQuad() ? "const QData " : "const IData ");
+                            puts(prefixNameProtect(modp) + "::" + protect("var_" + varp->name())
+                                 + "(");
                             iterateAndNextNull(varp->valuep());
-                            puts(")");
+                            puts(");\n");
+                            anyi = true;
                         } else {
                             // enum
                             puts(varp->isQuad() ? "enum _QData" : "enum _IData");
@@ -207,17 +215,18 @@ public:
                             iterateAndNextNull(varp->valuep());
                             puts("};\n");
                             // var
-                            puts(varp->isQuad() ? "const QData " : "const IData ");
+                            puts(varp->isQuad() ? "static const QData " : "static const IData ");
                             puts(protect("var_" + varp->name()) + ";\n");
                         }
                     }
                 }
             }
         }
+        if (anyi) puts("\n");
     }
 
     struct CmpName {
-        inline bool operator()(const AstNode* lhsp, const AstNode* rhsp) const {
+        bool operator()(const AstNode* lhsp, const AstNode* rhsp) const {
             return lhsp->name() < rhsp->name();
         }
     };
@@ -236,8 +245,7 @@ public:
 
         stable_sort(funcsp.begin(), funcsp.end(), CmpName());
 
-        for (FuncVec::iterator it = funcsp.begin(); it != funcsp.end(); ++it) {
-            const AstCFunc* funcp = *it;
+        for (const AstCFunc* funcp : funcsp) {
             ofp()->putsPrivate(funcp->declPrivate());
             if (!funcp->ifdef().empty()) puts("#ifdef " + funcp->ifdef() + "\n");
             if (funcp->isStatic().trueUnknown()) puts("static ");
@@ -276,6 +284,15 @@ public:
             }
             // No AstCFunc for this one, as it's synthetic. Just write it:
             puts("static void __Vmtask__final(bool even_cycle, void* symtab);\n");
+        }
+    }
+    void ccallIterateArgs(AstNodeCCall* nodep) {
+        puts(nodep->argTypes());
+        bool comma = (nodep->argTypes() != "");
+        for (AstNode* subnodep = nodep->argsp(); subnodep; subnodep = subnodep->nextp()) {
+            if (comma) puts(", ");
+            iterate(subnodep);
+            comma = true;
         }
     }
 
@@ -377,14 +394,10 @@ public:
         if (!m_suppressSemi) puts(";\n");
         if (brace) puts("}\n");
     }
-    virtual void visit(AstNodeAssign* nodep) VL_OVERRIDE {
-        visit_generic_assign(nodep);
-    }
-    virtual void visit_assigndly(AstNodeAssign *nodep, bool continuous) {
-        if (VN_IS(nodep->lhsp(), VarRef) ||
-            VN_IS(nodep->lhsp(), ArraySel) ||
-            VN_IS(nodep->lhsp(), WordSel) ||
-            VN_IS(nodep->lhsp(), Sel)) {
+    virtual void visit(AstNodeAssign* nodep) override { visit_generic_assign(nodep); }
+    virtual void visit_assigndly(AstNodeAssign* nodep, bool continuous) {
+        if (VN_IS(nodep->lhsp(), VarRef) || VN_IS(nodep->lhsp(), ArraySel)
+            || VN_IS(nodep->lhsp(), WordSel) || VN_IS(nodep->lhsp(), Sel)) {
             STASH_AND_SET(m_primitiveCast, false);
             puts("verilated_nba_ctrl.schedule(&");
             iterateAndNextNull(nodep->lhsp());
@@ -393,8 +406,7 @@ public:
             if (continuous) {
                 puts("[vlTOPp,vlSymsp");
                 if (m_funcp) {
-                    if (m_funcp->isStatic().falseKnown())
-                        puts(",this");
+                    if (m_funcp->isStatic().falseKnown()) puts(",this");
                     for (auto* nodep = m_funcp->initsp(); nodep; nodep = nodep->nextp()) {
                         if (auto* varp = VN_CAST(nodep, Var)) {
                             puts(",");
@@ -405,26 +417,23 @@ public:
                 puts("] { return (");
             }
             iterateAndNextNull(nodep->rhsp());
-            if (continuous)
-                puts("); }");
+            if (continuous) puts("); }");
             puts(");\n");
         } else {
             nodep->v3warn(E_UNSUPPORTED, "Unsupported: delayed assignment type");
             nodep->dumpTree(cout, "    ");
         }
     }
-    virtual void visit(AstAssignDly* nodep) VL_OVERRIDE {
-        visit_assigndly(nodep, false);
-    }
-    virtual void visit(AstAssignW* nodep) VL_OVERRIDE {
+    virtual void visit(AstAssignDly* nodep) override { visit_assigndly(nodep, false); }
+    virtual void visit(AstAssignW* nodep) override {
         // Immediatelly assign the current value
         visit_generic_assign(nodep);
         // And take advantage of the NBA mechanism to update continuous assignments
         // after regular NBA has been done
         visit_assigndly(nodep, true);
     }
-    virtual void visit(AstAlwaysPublic*) VL_OVERRIDE {}
-    virtual void visit(AstAssocSel* nodep) VL_OVERRIDE {
+    virtual void visit(AstAlwaysPublic*) override {}
+    virtual void visit(AstAssocSel* nodep) override {
         iterateAndNextNull(nodep->fromp());
         putbs(".at(");
         AstAssocArrayDType* adtypep = VN_CAST(nodep->fromp()->dtypep(), AssocArrayDType);
@@ -439,15 +448,6 @@ public:
             puts(".data()");  // Access returned std::array as C array
         }
     }
-    virtual void visit_call_args(AstNodeCCall* nodep) {
-        puts(nodep->argTypes());
-        bool comma = (nodep->argTypes() != "");
-        for (AstNode* subnodep = nodep->argsp(); subnodep; subnodep = subnodep->nextp()) {
-            if (comma) puts(", ");
-            iterate(subnodep);
-            comma = true;
-        }
-    }
     virtual void visit_call(AstNodeCCall* nodep) {
         if (AstCMethodCall* ccallp = VN_CAST(nodep, CMethodCall)) {
             // make this a Ast type for future opt
@@ -459,7 +459,7 @@ public:
         puts(nodep->funcp()->nameProtect());
 
         puts("(");
-        visit_call_args(nodep);
+        ccallIterateArgs(nodep);
         if (VN_IS(nodep->backp(), NodeMath) || VN_IS(nodep->backp(), CReturn)) {
             // We should have a separate CCall for math and statement usage, but...
             puts(")");
@@ -467,19 +467,19 @@ public:
             puts(");\n");
         }
     }
-    virtual void visit(AstCTrigger* nodep) VL_OVERRIDE {
+    virtual void visit(AstCTrigger* nodep) override {
         AstCFunc* funcp = nodep->funcp();
         if (funcp->proc()) {
             if (!nodep->funcp()->oneshot()) puts("if (!Verilated::gotFinish()) {\n");
             puts("static VerilatedThread ");
             puts(funcp->nameProtect() + "__thread(");
             puts("[vlTOPp,");
-                visit_call_args(nodep);
+            ccallIterateArgs(nodep);
             puts("] (VerilatedThread* self) {");
-                puts(nodep->hiernameProtect());
-                puts(funcp->nameProtect() + "(");
-                visit_call_args(nodep);
-                puts(", self); ");
+            puts(nodep->hiernameProtect());
+            puts(funcp->nameProtect() + "(");
+            ccallIterateArgs(nodep);
+            puts(", self); ");
             puts("},");
             puts(nodep->funcp()->oneshot() ? "true" : "false");
             puts(", \"" + funcp->nameProtect() + "\");\n");
@@ -493,16 +493,15 @@ public:
                 puts("}\n");
             }
             if (!funcp->oneshot()) {
-                puts(funcp->nameProtect() + "__thread.wait_for_idle();\n}\n");;
+                puts(funcp->nameProtect() + "__thread.wait_for_idle();\n}\n");
+                ;
             }
         } else {
             visit_call(nodep);
         }
     }
-    virtual void visit(AstNodeCCall* nodep) VL_OVERRIDE {
-        visit_call(nodep);
-    }
-    virtual void visit(AstCMethodHard* nodep) VL_OVERRIDE {
+    virtual void visit(AstNodeCCall* nodep) override { visit_call(nodep); }
+    virtual void visit(AstCMethodHard* nodep) override {
         iterate(nodep->fromp());
         puts(".");
         puts(nodep->nameProtect());
@@ -530,14 +529,30 @@ public:
         UASSERT_OBJ(!nodep->isStatement() || VN_IS(nodep->dtypep(), VoidDType), nodep,
                     "Statement of non-void data type");
     }
-    virtual void visit(AstIntfRef* nodep) VL_OVERRIDE {
+    virtual void visit(AstLambdaArgRef* nodep) override { putbs(nodep->nameProtect()); }
+    virtual void visit(AstWith* nodep) override {
+        // With uses a C++11 lambda
+        putbs("[=](");
+        if (auto* argrefp = nodep->indexArgRefp()) {
+            putbs(argrefp->dtypep()->cType(argrefp->nameProtect(), false, false));
+            puts(",");
+        }
+        if (auto* argrefp = nodep->valueArgRefp()) {
+            putbs(argrefp->dtypep()->cType(argrefp->nameProtect(), false, false));
+        }
+        // Probably fragile, V3Task may need to convert to a AstCReturn
+        puts(") { return ");
+        iterateAndNextNull(nodep->exprp());
+        puts("; }\n");
+    }
+    virtual void visit(AstIntfRef* nodep) override {
         putsQuoted(VIdProtect::protectWordsIf(AstNode::vcdName(nodep->name()), nodep->protect()));
     }
-    virtual void visit(AstNodeCase* nodep) VL_OVERRIDE {  // LCOV_EXCL_LINE
+    virtual void visit(AstNodeCase* nodep) override {  // LCOV_EXCL_LINE
         // In V3Case...
         nodep->v3fatalSrc("Case statements should have been reduced out");
     }
-    virtual void visit(AstComment* nodep) VL_OVERRIDE {
+    virtual void visit(AstComment* nodep) override {
         string at;
         if (nodep->showAt()) {
             at = " at " + nodep->fileline()->ascii();
@@ -549,7 +564,7 @@ public:
         }
         iterateChildren(nodep);
     }
-    virtual void visit(AstCoverDecl* nodep) VL_OVERRIDE {
+    virtual void visit(AstCoverDecl* nodep) override {
         puts("__vlCoverInsert(");  // As Declared in emitCoverageDecl
         puts("&(vlSymsp->__Vcoverage[");
         puts(cvtToStr(nodep->dataDeclThisp()->binNum()));
@@ -577,7 +592,7 @@ public:
         putsQuoted(nodep->linescov());
         puts(");\n");
     }
-    virtual void visit(AstCoverInc* nodep) VL_OVERRIDE {
+    virtual void visit(AstCoverInc* nodep) override {
         if (v3Global.opt.threads()) {
             puts("vlSymsp->__Vcoverage[");
             puts(cvtToStr(nodep->declp()->dataDeclThisp()->binNum()));
@@ -588,17 +603,17 @@ public:
             puts("]);\n");
         }
     }
-    virtual void visit(AstCReturn* nodep) VL_OVERRIDE {
+    virtual void visit(AstCReturn* nodep) override {
         puts("return (");
         iterateAndNextNull(nodep->lhsp());
         puts(");\n");
     }
-    virtual void visit(AstDisplay* nodep) VL_OVERRIDE {
+    virtual void visit(AstDisplay* nodep) override {
         string text = nodep->fmtp()->text();
         if (nodep->addNewline()) text += "\n";
         displayNode(nodep, nodep->fmtp()->scopeNamep(), text, nodep->fmtp()->exprsp(), false);
     }
-    virtual void visit(AstDumpCtl* nodep) VL_OVERRIDE {
+    virtual void visit(AstDumpCtl* nodep) override {
         switch (nodep->ctlType()) {
         case VDumpCtlType::FILE:
             puts("vl_dumpctl_filenamep(true, ");
@@ -637,7 +652,7 @@ public:
         default: nodep->v3fatalSrc("Bad case, unexpected " << nodep->ctlType().ascii());
         }
     }
-    virtual void visit(AstScopeName* nodep) VL_OVERRIDE {
+    virtual void visit(AstScopeName* nodep) override {
         // For use under AstCCalls for dpiImports.  ScopeNames under
         // displays are handled in AstDisplay
         if (!nodep->dpiExport()) {
@@ -646,46 +661,46 @@ public:
             putbs("(&(vlSymsp->" + protect("__Vscope_" + scope) + "))");
         }
     }
-    virtual void visit(AstSFormat* nodep) VL_OVERRIDE {
+    virtual void visit(AstSFormat* nodep) override {
         displayNode(nodep, nodep->fmtp()->scopeNamep(), nodep->fmtp()->text(),
                     nodep->fmtp()->exprsp(), false);
     }
-    virtual void visit(AstSFormatF* nodep) VL_OVERRIDE {
+    virtual void visit(AstSFormatF* nodep) override {
         displayNode(nodep, nodep->scopeNamep(), nodep->text(), nodep->exprsp(), false);
     }
-    virtual void visit(AstFScanF* nodep) VL_OVERRIDE {
-        displayNode(nodep, NULL, nodep->text(), nodep->exprsp(), true);
+    virtual void visit(AstFScanF* nodep) override {
+        displayNode(nodep, nullptr, nodep->text(), nodep->exprsp(), true);
     }
-    virtual void visit(AstSScanF* nodep) VL_OVERRIDE {
-        displayNode(nodep, NULL, nodep->text(), nodep->exprsp(), true);
+    virtual void visit(AstSScanF* nodep) override {
+        displayNode(nodep, nullptr, nodep->text(), nodep->exprsp(), true);
     }
-    virtual void visit(AstValuePlusArgs* nodep) VL_OVERRIDE {
+    virtual void visit(AstValuePlusArgs* nodep) override {
         puts("VL_VALUEPLUSARGS_IN");
         emitIQW(nodep->outp());
         puts("(");
         puts(cvtToStr(nodep->outp()->widthMin()));
-        puts(",");
+        puts(", ");
         emitCvtPackStr(nodep->searchp());
-        puts(",");
+        puts(", ");
         putbs("");
         iterateAndNextNull(nodep->outp());
         puts(")");
     }
-    virtual void visit(AstTestPlusArgs* nodep) VL_OVERRIDE {
+    virtual void visit(AstTestPlusArgs* nodep) override {
         puts("VL_TESTPLUSARGS_I(");
         putsQuoted(nodep->text());
         puts(")");
     }
-    virtual void visit(AstFError* nodep) VL_OVERRIDE {
+    virtual void visit(AstFError* nodep) override {
         puts("VL_FERROR_IN(");
         iterateAndNextNull(nodep->filep());
         putbs(", ");
         iterateAndNextNull(nodep->strp());
         puts(")");
     }
-    virtual void visit(AstFGetS* nodep) VL_OVERRIDE {
+    virtual void visit(AstFGetS* nodep) override {
         checkMaxWords(nodep);
-        emitOpName(nodep, nodep->emitC(), nodep->lhsp(), nodep->rhsp(), NULL);
+        emitOpName(nodep, nodep->emitC(), nodep->lhsp(), nodep->rhsp(), nullptr);
     }
 
     void checkMaxWords(AstNode* nodep) {
@@ -696,7 +711,7 @@ public:
                 << " bits exceeds hardcoded limit VL_TO_STRING_MAX_WORDS in verilatedos.h");
         }
     }
-    virtual void visit(AstFOpen* nodep) VL_OVERRIDE {
+    virtual void visit(AstFOpen* nodep) override {
         iterateAndNextNull(nodep->filep());
         puts(" = VL_FOPEN_NN(");
         emitCvtPackStr(nodep->filenamep());
@@ -706,20 +721,20 @@ public:
         emitCvtPackStr(nodep->modep());
         puts(");\n");
     }
-    virtual void visit(AstFOpenMcd* nodep) VL_OVERRIDE {
+    virtual void visit(AstFOpenMcd* nodep) override {
         iterateAndNextNull(nodep->filep());
         puts(" = VL_FOPEN_MCD_N(");
         emitCvtPackStr(nodep->filenamep());
         puts(");\n");
     }
-    virtual void visit(AstNodeReadWriteMem* nodep) VL_OVERRIDE {
+    virtual void visit(AstNodeReadWriteMem* nodep) override {
         puts(nodep->cFuncPrefixp());
         puts("N(");
         puts(nodep->isHex() ? "true" : "false");
         putbs(", ");
         // Need real storage width
         puts(cvtToStr(nodep->memp()->dtypep()->subDTypep()->widthMin()));
-        uint32_t array_lsb = 0;
+        uint32_t array_lo = 0;
         {
             const AstVarRef* varrefp = VN_CAST(nodep->memp(), VarRef);
             if (!varrefp) {
@@ -730,9 +745,9 @@ public:
                        = VN_CAST(varrefp->varp()->dtypeSkipRefp(), UnpackArrayDType)) {
                 putbs(", ");
                 puts(cvtToStr(varrefp->varp()->dtypep()->arrayUnpackedElements()));
-                array_lsb = adtypep->lsb();
+                array_lo = adtypep->lo();
                 putbs(", ");
-                puts(cvtToStr(array_lsb));
+                puts(cvtToStr(array_lo));
             } else {
                 nodep->v3error(nodep->verilogKwd()
                                << " loading other than unpacked/associative-array variable");
@@ -746,7 +761,7 @@ public:
         if (nodep->lsbp()) {
             iterateAndNextNull(nodep->lsbp());
         } else {
-            puts(cvtToStr(array_lsb));
+            puts(cvtToStr(array_lo));
         }
         putbs(", ");
         if (nodep->msbp()) {
@@ -756,14 +771,14 @@ public:
         }
         puts(");\n");
     }
-    virtual void visit(AstFClose* nodep) VL_OVERRIDE {
+    virtual void visit(AstFClose* nodep) override {
         puts("VL_FCLOSE_I(");
         iterateAndNextNull(nodep->filep());
         puts("); ");
         iterateAndNextNull(nodep->filep());  // For safety, so user doesn't later WRITE with it.
         puts(" = 0;\n");
     }
-    virtual void visit(AstFFlush* nodep) VL_OVERRIDE {
+    virtual void visit(AstFFlush* nodep) override {
         if (!nodep->filep()) {
             puts("Verilated::runFlushCallbacks();\n");
         } else {
@@ -774,7 +789,7 @@ public:
             puts("); }\n");
         }
     }
-    virtual void visit(AstFSeek* nodep) VL_OVERRIDE {
+    virtual void visit(AstFSeek* nodep) override {
         puts("(VL_FSEEK_I(");
         iterateAndNextNull(nodep->filep());
         puts(",");
@@ -783,22 +798,22 @@ public:
         iterateAndNextNull(nodep->operation());
         puts(")==-1?-1:0)");
     }
-    virtual void visit(AstFTell* nodep) VL_OVERRIDE {
+    virtual void visit(AstFTell* nodep) override {
         puts("VL_FTELL_I(");
         iterateAndNextNull(nodep->filep());
         puts(")");
     }
-    virtual void visit(AstFRewind* nodep) VL_OVERRIDE {
+    virtual void visit(AstFRewind* nodep) override {
         puts("(VL_FSEEK_I(");
         iterateAndNextNull(nodep->filep());
         puts(", 0, 0)==-1?-1:0)");
     }
-    virtual void visit(AstFRead* nodep) VL_OVERRIDE {
+    virtual void visit(AstFRead* nodep) override {
         puts("VL_FREAD_I(");
         puts(cvtToStr(nodep->memp()->widthMin()));  // Need real storage width
         putbs(",");
         bool memory = false;
-        uint32_t array_lsb = 0;
+        uint32_t array_lo = 0;
         uint32_t array_size = 0;
         {
             const AstVarRef* varrefp = VN_CAST(nodep->memp(), VarRef);
@@ -808,14 +823,14 @@ public:
             } else if (const AstUnpackArrayDType* adtypep
                        = VN_CAST(varrefp->varp()->dtypeSkipRefp(), UnpackArrayDType)) {
                 memory = true;
-                array_lsb = adtypep->lsb();
+                array_lo = adtypep->lo();
                 array_size = adtypep->elementsConst();
             } else {
                 nodep->v3error(nodep->verilogKwd()
                                << " loading other than unpacked-array variable");
             }
         }
-        puts(cvtToStr(array_lsb));
+        puts(cvtToStr(array_lo));
         putbs(",");
         puts(cvtToStr(array_size));
         putbs(", ");
@@ -828,7 +843,7 @@ public:
         if (nodep->startp()) {
             iterateAndNextNull(nodep->startp());
         } else {
-            puts(cvtToStr(array_lsb));
+            puts(cvtToStr(array_lo));
         }
         putbs(", ");
         if (nodep->countp()) {
@@ -836,14 +851,14 @@ public:
         } else {
             puts(cvtToStr(array_size));
         }
-        puts(")\n");
+        puts(")");
     }
-    virtual void visit(AstSysFuncAsTask* nodep) VL_OVERRIDE {
+    virtual void visit(AstSysFuncAsTask* nodep) override {
         if (!nodep->lhsp()->isWide()) puts("(void)");
         iterateAndNextNull(nodep->lhsp());
         if (!nodep->lhsp()->isWide()) puts(";");
     }
-    virtual void visit(AstSystemT* nodep) VL_OVERRIDE {
+    virtual void visit(AstSystemT* nodep) override {
         puts("(void)VL_SYSTEM_I");
         emitIQW(nodep->lhsp());
         puts("(");
@@ -855,7 +870,7 @@ public:
         iterateAndNextNull(nodep->lhsp());
         puts(");\n");
     }
-    virtual void visit(AstSystemF* nodep) VL_OVERRIDE {
+    virtual void visit(AstSystemF* nodep) override {
         puts("VL_SYSTEM_I");
         emitIQW(nodep->lhsp());
         puts("(");
@@ -867,27 +882,27 @@ public:
         iterateAndNextNull(nodep->lhsp());
         puts(")");
     }
-    virtual void visit(AstJumpBlock* nodep) VL_OVERRIDE {
+    virtual void visit(AstJumpBlock* nodep) override {
         nodep->labelNum(++m_labelNum);
         puts("{\n");  // Make it visually obvious label jumps outside these
         iterateAndNextNull(nodep->stmtsp());
         iterateAndNextNull(nodep->endStmtsp());
         puts("}\n");
     }
-    virtual void visit(AstJumpGo* nodep) VL_OVERRIDE {
+    virtual void visit(AstJumpGo* nodep) override {
         puts("goto __Vlabel" + cvtToStr(nodep->labelp()->blockp()->labelNum()) + ";\n");
     }
-    virtual void visit(AstJumpLabel* nodep) VL_OVERRIDE {
+    virtual void visit(AstJumpLabel* nodep) override {
         puts("__Vlabel" + cvtToStr(nodep->blockp()->labelNum()) + ": ;\n");
     }
-    virtual void visit(AstDelay *nodep) VL_OVERRIDE {
+    virtual void visit(AstDelay* nodep) override {
         // Make the waiting for the event local to reuse variable nates
         puts("self->wait_for_time(vlSymsp, VL_TIME_Q() + ");
         iterateAndNextNull(nodep->lhsp());
         puts(");\n");
         puts("if (self->should_exit()) return;\n");
     }
-    virtual void visit(AstTimingControl* nodep) VL_OVERRIDE {
+    virtual void visit(AstTimingControl* nodep) override {
         puts("/* [@ statement] */\n");
         puts("self->wait_for(std::forward_as_tuple(");
         iterateAndNextNull(nodep->sensesp());
@@ -909,7 +924,9 @@ public:
     }
     void replaceVarRefps(AstNode* nodep, std::unordered_map<AstVar*, size_t>& indices) {
         if (auto* varrefp = VN_CAST(nodep, VarRef)) {
-            auto* newp = new AstCStmt(nodep->fileline(), "std::get<" + cvtToStr(indices[varrefp->varp()]) + ">(promises).value");
+            auto* newp
+                = new AstCStmt(nodep->fileline(), "std::get<" + cvtToStr(indices[varrefp->varp()])
+                                                      + ">(promises).value");
             newp->dtypep(nodep->dtypep());
             nodep->replaceWith(newp);
             VL_DO_DANGLING(nodep->deleteTree(), nodep);
@@ -920,7 +937,7 @@ public:
             if (nodep->op4p()) replaceVarRefps(nodep->op4p(), indices);
         }
     }
-    virtual void visit(AstWait* nodep) VL_OVERRIDE {
+    virtual void visit(AstWait* nodep) override {
         puts("/* [wait statement] */\n");
 
         std::unordered_map<AstVar*, AstVarRef*> varrefps;
@@ -954,8 +971,7 @@ public:
 
         puts("if (self->should_exit()) return;\n");
     }
-
-    virtual void visit(AstFork* nodep) VL_OVERRIDE {
+    virtual void visit(AstFork* nodep) override {
         if (nodep->joinType().join()) {
             size_t thread_count = 0;
             for (auto* stmtp = nodep->stmtsp(); stmtp; stmtp = stmtp->nextp()) thread_count++;
@@ -969,40 +985,45 @@ public:
         for (auto* stmtp = nodep->stmtsp(); stmtp; stmtp = stmtp->nextp()) {
             puts("thread_pool.run_once([");
 
-            if (nodep->joinType().join()) puts("vlSymsp, vlTOPp, &join");
-            else if (nodep->joinType().joinAny()) puts("vlSymsp, vlTOPp, join");
-            else if (nodep->joinType().joinNone()) puts("=");
+            if (nodep->joinType().join())
+                puts("vlSymsp, vlTOPp, &join");
+            else if (nodep->joinType().joinAny())
+                puts("vlSymsp, vlTOPp, join");
+            else if (nodep->joinType().joinNone())
+                puts("=");
 
             puts("](VerilatedThread* self) mutable {\n");
-            if (auto* beginp = VN_CAST(stmtp, Begin)) iterateAndNextNull(beginp->stmtsp());
-            else visit(stmtp);
+            if (auto* beginp = VN_CAST(stmtp, Begin))
+                iterateAndNextNull(beginp->stmtsp());
+            else
+                visit(stmtp);
 
-            if (nodep->joinType().join()) puts("join.joined();\n");
-            else if (nodep->joinType().joinAny()) puts("join->joined();\n");
+            if (nodep->joinType().join())
+                puts("join.joined();\n");
+            else if (nodep->joinType().joinAny())
+                puts("join->joined();\n");
 
             puts("});\n");
         }
 
-        if (nodep->joinType().join()) puts("join.await();\n");
-        else if (nodep->joinType().joinAny()) puts("join->await();\n");
+        if (nodep->joinType().join())
+            puts("join.await();\n");
+        else if (nodep->joinType().joinAny())
+            puts("join->await();\n");
         if (!nodep->joinType().joinNone()) puts("if (self->should_exit()) return;\n}\n");
     }
-
-    virtual void visit(AstThreadSync* nodep) VL_OVERRIDE {
-        puts("thread_registry.wait_for_idle();\n");
+    virtual void visit(AstThreadSync* nodep) override {
+        puts("thread_registry.wait_for_idle();");
         puts("if (Verilated::gotFinish()) return;\n");
-
     }
-    virtual void visit(AstSenTree *nodep) VL_OVERRIDE {
+    virtual void visit(AstSenTree* nodep) override {
         for (auto* itemp = nodep->sensesp(); itemp; itemp = VN_CAST(itemp->nextp(), SenItem)) {
             visit(itemp);
             if (itemp->nextp()) puts(", ");
         }
     }
-    virtual void visit(AstSenItem *nodep) VL_OVERRIDE {
-        iterateAndNextNull(nodep->sensp());
-    }
-    virtual void visit(AstEventTrigger *nodep) VL_OVERRIDE {
+    virtual void visit(AstSenItem* nodep) override { iterateAndNextNull(nodep->sensp()); }
+    virtual void visit(AstEventTrigger* nodep) override {
         puts("/* [ -> statement ] */\n");
         iterateAndNextNull(nodep->trigger());
         puts(" = 1;\n");
@@ -1011,7 +1032,7 @@ public:
         if (auto* triggeredVarp = varp->triggeredVarp())
             puts("vlTOPp->" + triggeredVarp->name() + " = 1;\n");
     }
-    virtual void visit(AstWhile* nodep) VL_OVERRIDE {
+    virtual void visit(AstWhile* nodep) override {
         iterateAndNextNull(nodep->precondsp());
         puts("while (");
         iterateAndNextNull(nodep->condp());
@@ -1021,7 +1042,7 @@ public:
         iterateAndNextNull(nodep->precondsp());  // Need to recompute before next loop
         puts("}\n");
     }
-    virtual void visit(AstNodeIf* nodep) VL_OVERRIDE {
+    virtual void visit(AstNodeIf* nodep) override {
         puts("if (");
         if (!nodep->branchPred().unknown()) {
             puts(nodep->branchPred().ascii());
@@ -1037,7 +1058,16 @@ public:
         }
         puts("}\n");
     }
-    virtual void visit(AstStop* nodep) VL_OVERRIDE {
+    virtual void visit(AstExprStmt* nodep) override {
+        // GCC allows compound statements in expressions, but this is not standard.
+        // So we use an immediate-evaluation lambda and comma operator
+        putbs("([&]() {\n");
+        iterateAndNextNull(nodep->stmtsp());
+        puts("}(), ");
+        iterateAndNextNull(nodep->resultp());
+        puts(")");
+    }
+    virtual void visit(AstStop* nodep) override {
         puts("VL_STOP_MT(");
         putsQuoted(protect(nodep->fileline()->filename()));
         puts(", ");
@@ -1045,35 +1075,38 @@ public:
         puts(", \"\"");
         puts(");\n");
     }
-    virtual void visit(AstFinish* nodep) VL_OVERRIDE {
+    virtual void visit(AstFinish* nodep) override {
         puts("VL_FINISH_MT(");
         putsQuoted(protect(nodep->fileline()->filename()));
         puts(", ");
         puts(cvtToStr(nodep->fileline()->lineno()));
         puts(", \"\");\n");
     }
-    virtual void visit(AstPrintTimeScale* nodep) VL_OVERRIDE {
+    virtual void visit(AstPrintTimeScale* nodep) override {
         puts("VL_PRINTTIMESCALE(");
         putsQuoted(protect(nodep->name()));
         puts(", ");
         putsQuoted(nodep->timeunit().ascii());
         puts(");\n");
     }
-    virtual void visit(AstTime* nodep) VL_OVERRIDE {
+    virtual void visit(AstRand* nodep) override {
+        emitOpName(nodep, nodep->emitC(), nodep->seedp(), nullptr, nullptr);
+    }
+    virtual void visit(AstTime* nodep) override {
         puts("VL_TIME_UNITED_Q(");
         if (nodep->timeunit().isNone()) nodep->v3fatalSrc("$time has no units");
         puts(cvtToStr(nodep->timeunit().multiplier()
                       / v3Global.rootp()->timeprecision().multiplier()));
         puts(")");
     }
-    virtual void visit(AstTimeD* nodep) VL_OVERRIDE {
+    virtual void visit(AstTimeD* nodep) override {
         puts("VL_TIME_UNITED_D(");
         if (nodep->timeunit().isNone()) nodep->v3fatalSrc("$realtime has no units");
         puts(cvtToStr(nodep->timeunit().multiplier()
                       / v3Global.rootp()->timeprecision().multiplier()));
         puts(")");
     }
-    virtual void visit(AstTimeFormat* nodep) VL_OVERRIDE {
+    virtual void visit(AstTimeFormat* nodep) override {
         puts("VL_TIMEFORMAT_IINI(");
         iterateAndNextNull(nodep->unitsp());
         puts(", ");
@@ -1084,34 +1117,34 @@ public:
         iterateAndNextNull(nodep->widthp());
         puts(");\n");
     }
-    virtual void visit(AstNodeSimpleText* nodep) VL_OVERRIDE {
+    virtual void visit(AstNodeSimpleText* nodep) override {
         if (nodep->tracking() || m_trackText) {
             puts(nodep->text());
         } else {
             ofp()->putsNoTracking(nodep->text());
         }
     }
-    virtual void visit(AstTextBlock* nodep) VL_OVERRIDE {
+    virtual void visit(AstTextBlock* nodep) override {
         visit(VN_CAST(nodep, NodeSimpleText));
         for (AstNode* childp = nodep->nodesp(); childp; childp = childp->nextp()) {
             iterate(childp);
             if (nodep->commas() && childp->nextp()) puts(", ");
         }
     }
-    virtual void visit(AstCStmt* nodep) VL_OVERRIDE {
+    virtual void visit(AstCStmt* nodep) override {
         putbs("");
         iterateAndNextNull(nodep->bodysp());
     }
-    virtual void visit(AstCMath* nodep) VL_OVERRIDE {
+    virtual void visit(AstCMath* nodep) override {
         putbs("");
         iterateAndNextNull(nodep->bodysp());
     }
-    virtual void visit(AstUCStmt* nodep) VL_OVERRIDE {
+    virtual void visit(AstUCStmt* nodep) override {
         putsDecoration(ifNoProtect("// $c statement at " + nodep->fileline()->ascii() + "\n"));
         iterateAndNextNull(nodep->bodysp());
         puts("\n");
     }
-    virtual void visit(AstUCFunc* nodep) VL_OVERRIDE {
+    virtual void visit(AstUCFunc* nodep) override {
         puts("\n");
         putsDecoration(ifNoProtect("// $c function at " + nodep->fileline()->ascii() + "\n"));
         iterateAndNextNull(nodep->bodysp());
@@ -1119,10 +1152,19 @@ public:
     }
 
     // Operators
-    virtual void visit(AstNodeTermop* nodep) VL_OVERRIDE {
-        emitOpName(nodep, nodep->emitC(), NULL, NULL, NULL);
+    virtual void visit(AstNodeTermop* nodep) override {
+        emitOpName(nodep, nodep->emitC(), nullptr, nullptr, nullptr);
     }
-    virtual void visit(AstNodeUniop* nodep) VL_OVERRIDE {
+    virtual void visit(AstNodeUniop* nodep) override {
+        if (nodep->emitCheckMaxWords()
+            && (nodep->widthWords() > VL_MULS_MAX_WORDS
+                || nodep->lhsp()->widthWords() > VL_MULS_MAX_WORDS)) {
+            nodep->v3warn(
+                E_UNSUPPORTED,
+                "Unsupported: "
+                    << nodep->prettyOperatorName() << " operator of " << nodep->width()
+                    << " bits exceeds hardcoded limit VL_MULS_MAX_WORDS in verilatedos.h");
+        }
         if (emitSimpleOk(nodep)) {
             putbs("(");
             puts(nodep->emitSimpleOperator());
@@ -1130,10 +1172,17 @@ public:
             iterateAndNextNull(nodep->lhsp());
             puts(")");
         } else {
-            emitOpName(nodep, nodep->emitC(), nodep->lhsp(), NULL, NULL);
+            emitOpName(nodep, nodep->emitC(), nodep->lhsp(), nullptr, nullptr);
         }
     }
-    virtual void visit(AstNodeBiop* nodep) VL_OVERRIDE {
+    virtual void visit(AstNodeBiop* nodep) override {
+        if (nodep->emitCheckMaxWords() && nodep->widthWords() > VL_MULS_MAX_WORDS) {
+            nodep->v3warn(
+                E_UNSUPPORTED,
+                "Unsupported: "
+                    << nodep->prettyOperatorName() << " operator of " << nodep->width()
+                    << " bits exceeds hardcoded limit VL_MULS_MAX_WORDS in verilatedos.h");
+        }
         if (emitSimpleOk(nodep)) {
             putbs("(");
             iterateAndNextNull(nodep->lhsp());
@@ -1143,14 +1192,14 @@ public:
             iterateAndNextNull(nodep->rhsp());
             puts(")");
         } else {
-            emitOpName(nodep, nodep->emitC(), nodep->lhsp(), nodep->rhsp(), NULL);
+            emitOpName(nodep, nodep->emitC(), nodep->lhsp(), nodep->rhsp(), nullptr);
         }
     }
-    virtual void visit(AstNodeTriop* nodep) VL_OVERRIDE {
+    virtual void visit(AstNodeTriop* nodep) override {
         UASSERT_OBJ(!emitSimpleOk(nodep), nodep, "Triop cannot be described in a simple way");
         emitOpName(nodep, nodep->emitC(), nodep->lhsp(), nodep->rhsp(), nodep->thsp());
     }
-    virtual void visit(AstRedXor* nodep) VL_OVERRIDE {
+    virtual void visit(AstRedXor* nodep) override {
         if (nodep->lhsp()->isWide()) {
             visit(VN_CAST(nodep, NodeUniop));
         } else {
@@ -1161,57 +1210,7 @@ public:
             puts(")");
         }
     }
-    virtual void visit(AstMulS* nodep) VL_OVERRIDE {
-        if (nodep->widthWords() > VL_MULS_MAX_WORDS) {
-            nodep->v3warn(
-                E_UNSUPPORTED,
-                "Unsupported: Signed multiply of "
-                    << nodep->width()
-                    << " bits exceeds hardcoded limit VL_MULS_MAX_WORDS in verilatedos.h");
-        }
-        visit(VN_CAST(nodep, NodeBiop));
-    }
-    virtual void visit(AstPow* nodep) VL_OVERRIDE {
-        if (nodep->widthWords() > VL_MULS_MAX_WORDS) {
-            nodep->v3warn(
-                E_UNSUPPORTED,
-                "Unsupported: Power of "
-                    << nodep->width()
-                    << " bits exceeds hardcoded limit VL_MULS_MAX_WORDS in verilatedos.h");
-        }
-        visit(VN_CAST(nodep, NodeBiop));
-    }
-    virtual void visit(AstPowSS* nodep) VL_OVERRIDE {
-        if (nodep->widthWords() > VL_MULS_MAX_WORDS) {
-            nodep->v3warn(
-                E_UNSUPPORTED,
-                "Unsupported: Power of "
-                    << nodep->width()
-                    << " bits exceeds hardcoded limit VL_MULS_MAX_WORDS in verilatedos.h");
-        }
-        visit(VN_CAST(nodep, NodeBiop));
-    }
-    virtual void visit(AstPowSU* nodep) VL_OVERRIDE {
-        if (nodep->widthWords() > VL_MULS_MAX_WORDS) {
-            nodep->v3warn(
-                E_UNSUPPORTED,
-                "Unsupported: Power of "
-                    << nodep->width()
-                    << " bits exceeds hardcoded limit VL_MULS_MAX_WORDS in verilatedos.h");
-        }
-        visit(VN_CAST(nodep, NodeBiop));
-    }
-    virtual void visit(AstPowUS* nodep) VL_OVERRIDE {
-        if (nodep->widthWords() > VL_MULS_MAX_WORDS) {
-            nodep->v3warn(
-                E_UNSUPPORTED,
-                "Unsupported: Power of "
-                    << nodep->width()
-                    << " bits exceeds hardcoded limit VL_MULS_MAX_WORDS in verilatedos.h");
-        }
-        visit(VN_CAST(nodep, NodeBiop));
-    }
-    virtual void visit(AstCCast* nodep) VL_OVERRIDE {
+    virtual void visit(AstCCast* nodep) override {
         // Extending a value of the same word width is just a NOP.
         if (nodep->size() <= VL_IDATASIZE) {
             puts("(IData)(");
@@ -1221,7 +1220,7 @@ public:
         iterateAndNextNull(nodep->lhsp());
         puts(")");
     }
-    virtual void visit(AstNodeCond* nodep) VL_OVERRIDE {
+    virtual void visit(AstNodeCond* nodep) override {
         // Widths match up already, so we'll just use C++'s operator w/o any temps.
         if (nodep->expr1p()->isWide()) {
             emitOpName(nodep, nodep->emitC(), nodep->condp(), nodep->expr1p(), nodep->expr2p());
@@ -1237,12 +1236,12 @@ public:
             RESTORE(m_primitiveCast);
         }
     }
-    virtual void visit(AstMemberSel* nodep) VL_OVERRIDE {
+    virtual void visit(AstMemberSel* nodep) override {
         iterateAndNextNull(nodep->fromp());
         putbs("->");
         puts(nodep->varp()->nameProtect());
     }
-    virtual void visit(AstNullCheck* nodep) VL_OVERRIDE {
+    virtual void visit(AstNullCheck* nodep) override {
         puts("VL_NULL_CHECK(");
         iterateAndNextNull(nodep->lhsp());
         puts(", ");
@@ -1251,24 +1250,24 @@ public:
         puts(cvtToStr(nodep->fileline()->lineno()));
         puts(")");
     }
-    virtual void visit(AstCNew* nodep) VL_OVERRIDE {
+    virtual void visit(AstCNew* nodep) override {
         puts("std::make_shared<" + prefixNameProtect(nodep->dtypep()) + ">(");
         puts("vlSymsp");  // TODO make this part of argsp, and eliminate when unnecessary
         if (nodep->argsp()) puts(", ");
         iterateAndNextNull(nodep->argsp());
         puts(")");
     }
-    virtual void visit(AstNewCopy* nodep) VL_OVERRIDE {
+    virtual void visit(AstNewCopy* nodep) override {
         puts("std::make_shared<" + prefixNameProtect(nodep->dtypep()) + ">(");
         puts("*");  // i.e. make into a reference
         iterateAndNextNull(nodep->rhsp());
         puts(")");
     }
-    virtual void visit(AstSel* nodep) VL_OVERRIDE {
+    virtual void visit(AstSel* nodep) override {
         // Note ASSIGN checks for this on a LHS
         emitOpName(nodep, nodep->emitC(), nodep->fromp(), nodep->lsbp(), nodep->thsp());
     }
-    virtual void visit(AstReplicate* nodep) VL_OVERRIDE {
+    virtual void visit(AstReplicate* nodep) override {
         if (nodep->lhsp()->widthMin() == 1 && !nodep->isWide()) {
             UASSERT_OBJ((static_cast<int>(VN_CAST(nodep->rhsp(), Const)->toUInt())
                          * nodep->lhsp()->widthMin())
@@ -1286,10 +1285,10 @@ public:
             iterateAndNextNull(nodep->rhsp());
             puts(")");
         } else {
-            emitOpName(nodep, nodep->emitC(), nodep->lhsp(), nodep->rhsp(), NULL);
+            emitOpName(nodep, nodep->emitC(), nodep->lhsp(), nodep->rhsp(), nullptr);
         }
     }
-    virtual void visit(AstStreamL* nodep) VL_OVERRIDE {
+    virtual void visit(AstStreamL* nodep) override {
         // Attempt to use a "fast" stream function for slice size = power of 2
         if (!nodep->isWide()) {
             uint32_t isPow2 = VN_CAST(nodep->rhsp(), Const)->num().countOnes() == 1;
@@ -1311,9 +1310,16 @@ public:
             }
         }
         emitOpName(nodep, "VL_STREAML_%nq%lq%rq(%nw,%lw,%rw, %P, %li, %ri)", nodep->lhsp(),
-                   nodep->rhsp(), NULL);
+                   nodep->rhsp(), nullptr);
     }
-    virtual void visit(AstCountBits* nodep) VL_OVERRIDE {
+    virtual void visit(AstCastDynamic* nodep) override {
+        putbs("VL_CAST_DYNAMIC(");
+        iterateAndNextNull(nodep->lhsp());
+        puts(", ");
+        iterateAndNextNull(nodep->rhsp());
+        puts(")");
+    }
+    virtual void visit(AstCountBits* nodep) override {
         putbs("VL_COUNTBITS_");
         emitIQW(nodep->lhsp());
         puts("(");
@@ -1341,25 +1347,22 @@ public:
             int width = dtypep->width();
             puts("(");
             switch (width) {
-                case 8: puts("vluint8_t"); break;
-                case 16: puts("vluint16_t"); break;
-                case 32: puts("vluint32_t"); break;
-                case 64:
-                default: puts("vluint64_t"); break;
+            case 8: puts("vluint8_t"); break;
+            case 16: puts("vluint16_t"); break;
+            case 32: puts("vluint32_t"); break;
+            case 64:
+            default: puts("vluint64_t"); break;
             }
             puts(")");
         }
     }
-    virtual void visit(AstVarRef* nodep) VL_OVERRIDE {
+    virtual void visit(AstVarRef* nodep) override {
         AstNodeDType* dtypep = nodep->varp()->dtypep();
-        if (!dtypep->isWide() && m_primitiveCast)
-            emitPrimitiveCast(dtypep);
-        if (nodep->useScheduledValue())
-            puts("verilated_nba_ctrl.get_scheduled(&");
+        if (!dtypep->isWide() && m_primitiveCast) emitPrimitiveCast(dtypep);
+        if (nodep->useScheduledValue()) puts("verilated_nba_ctrl.get_scheduled(&");
         puts(nodep->hiernameProtect());
         puts(nodep->varp()->nameProtect());
-        if (nodep->useScheduledValue())
-            puts(")");
+        if (nodep->useScheduledValue()) puts(")");
     }
     void emitCvtPackStr(AstNode* nodep) {
         if (const AstConst* constp = VN_CAST(nodep, Const)) {
@@ -1492,83 +1495,81 @@ public:
             puts(assignString);
             puts(" = ");
         }
-        emitConstant(constp, NULL, assignString);
+        emitConstant(constp, nullptr, assignString);
         puts(";\n");
     }
-    virtual void visit(AstConst* nodep) VL_OVERRIDE {
+    virtual void visit(AstConst* nodep) override {
         if (nodep->isWide()) {
             UASSERT_OBJ(m_wideTempRefp, nodep, "Wide Constant w/ no temp");
             emitConstant(nodep, m_wideTempRefp, "");
-            m_wideTempRefp = NULL;  // We used it, barf if set it a second time
+            m_wideTempRefp = nullptr;  // We used it, barf if set it a second time
         } else {
-            emitConstant(nodep, NULL, "");
+            emitConstant(nodep, nullptr, "");
         }
     }
 
     // Just iterate
-    virtual void visit(AstNetlist* nodep) VL_OVERRIDE { iterateChildren(nodep); }
-    virtual void visit(AstTopScope* nodep) VL_OVERRIDE { iterateChildren(nodep); }
-    virtual void visit(AstScope* nodep) VL_OVERRIDE { iterateChildren(nodep); }
+    virtual void visit(AstNetlist* nodep) override { iterateChildren(nodep); }
+    virtual void visit(AstTopScope* nodep) override { iterateChildren(nodep); }
+    virtual void visit(AstScope* nodep) override { iterateChildren(nodep); }
     // NOPs
-    virtual void visit(AstTypedef*) VL_OVERRIDE {}
-    virtual void visit(AstPragma*) VL_OVERRIDE {}
-    virtual void visit(AstCell*) VL_OVERRIDE {}  // Handled outside the Visit class
-    virtual void visit(AstVar*) VL_OVERRIDE {}  // Handled outside the Visit class
-    virtual void visit(AstNodeText*) VL_OVERRIDE {}  // Handled outside the Visit class
-    virtual void visit(AstTraceDecl*) VL_OVERRIDE {}  // Handled outside the Visit class
-    virtual void visit(AstTraceInc*) VL_OVERRIDE {}  // Handled outside the Visit class
-    virtual void visit(AstCFile*) VL_OVERRIDE {}  // Handled outside the Visit class
-    virtual void visit(AstCellInline*) VL_OVERRIDE {}  // Handled outside visit (in EmitCSyms)
-    virtual void visit(AstCUse*) VL_OVERRIDE {}  // Handled outside the Visit class
+    virtual void visit(AstTypedef*) override {}
+    virtual void visit(AstPragma*) override {}
+    virtual void visit(AstCell*) override {}  // Handled outside the Visit class
+    virtual void visit(AstVar*) override {}  // Handled outside the Visit class
+    virtual void visit(AstNodeText*) override {}  // Handled outside the Visit class
+    virtual void visit(AstTraceDecl*) override {}  // Handled outside the Visit class
+    virtual void visit(AstTraceInc*) override {}  // Handled outside the Visit class
+    virtual void visit(AstCFile*) override {}  // Handled outside the Visit class
+    virtual void visit(AstCellInline*) override {}  // Handled outside visit (in EmitCSyms)
+    virtual void visit(AstCUse*) override {}  // Handled outside the Visit class
     // Default
-    virtual void visit(AstNode* nodep) VL_OVERRIDE {
+    virtual void visit(AstNode* nodep) override {
         puts(string("\n???? // ") + nodep->prettyTypeName() + "\n");
         iterateChildren(nodep);
         nodep->v3fatalSrc("Unknown node type reached emitter: " << nodep->prettyTypeName());
     }
 
-    void init() {
+    EmitCStmts() {
         m_suppressSemi = false;
-        m_wideTempRefp = NULL;
+        m_wideTempRefp = nullptr;
         m_labelNum = 0;
         m_splitSize = 0;
         m_splitFilenum = 0;
         m_funcp = nullptr;
     }
-
-public:
-    EmitCStmts() { init(); }
-    EmitCStmts(AstNode* nodep, V3OutCFile* ofp, bool trackText = false) {
-        init();
+    EmitCStmts(AstNode* nodep, V3OutCFile* ofp, bool trackText = false)
+        : EmitCStmts{} {
         m_ofp = ofp;
         m_trackText = trackText;
         iterate(nodep);
     }
-    virtual ~EmitCStmts() {}
+    virtual ~EmitCStmts() override = default;
 };
 
 //######################################################################
 // Establish mtask variable sort order in mtasks mode
 
-class EmitVarTspSorter : public V3TSP::TspStateBase {
+class EmitVarTspSorter final : public V3TSP::TspStateBase {
 private:
     // MEMBERS
     const MTaskIdSet& m_mtaskIds;  // Mtask we're ordering
-    static unsigned m_serialNext;  // Unique ID to establish serial order
+    static unsigned s_serialNext;  // Unique ID to establish serial order
     unsigned m_serial;  // Serial ordering
 public:
     // CONSTRUCTORS
     explicit EmitVarTspSorter(const MTaskIdSet& mtaskIds)
-        : m_mtaskIds(mtaskIds)
-        , m_serial(++m_serialNext) {}
-    virtual ~EmitVarTspSorter() {}
+        : m_mtaskIds(mtaskIds) {  // Cannot be {} or GCC 4.8 false warning
+        m_serial = ++s_serialNext;  // Cannot be ()/{} or GCC 4.8 false warning
+    }
+    virtual ~EmitVarTspSorter() = default;
     // METHODS
-    bool operator<(const TspStateBase& other) const {
+    virtual bool operator<(const TspStateBase& other) const override {
         return operator<(dynamic_cast<const EmitVarTspSorter&>(other));
     }
     bool operator<(const EmitVarTspSorter& other) const { return m_serial < other.m_serial; }
     const MTaskIdSet& mtaskIds() const { return m_mtaskIds; }
-    virtual int cost(const TspStateBase* otherp) const {
+    virtual int cost(const TspStateBase* otherp) const override {
         return cost(dynamic_cast<const EmitVarTspSorter*>(otherp));
     }
     virtual int cost(const EmitVarTspSorter* otherp) const {
@@ -1579,24 +1580,24 @@ public:
     // Returns the number of elements in set_a that don't appear in set_b
     static int diffs(const MTaskIdSet& set_a, const MTaskIdSet& set_b) {
         int diffs = 0;
-        for (MTaskIdSet::iterator it = set_a.begin(); it != set_a.end(); ++it) {
-            if (set_b.find(*it) == set_b.end()) ++diffs;
+        for (int i : set_a) {
+            if (set_b.find(i) == set_b.end()) ++diffs;
         }
         return diffs;
     }
 };
 
-unsigned EmitVarTspSorter::m_serialNext = 0;
+unsigned EmitVarTspSorter::s_serialNext = 0;
 
 //######################################################################
 // Internal EmitC implementation
 
-class EmitCImp : EmitCStmts {
+class EmitCImp final : EmitCStmts {
     // MEMBERS
-    AstNodeModule* m_modp;
+    AstNodeModule* m_modp = nullptr;
     std::vector<AstChangeDet*> m_blkChangeDetVec;  // All encountered changes in block
-    bool m_slow;  // Creating __Slow file
-    bool m_fast;  // Creating non __Slow file (or both)
+    bool m_slow = false;  // Creating __Slow file
+    bool m_fast = false;  // Creating non __Slow file (or both)
 
     //---------------------------------------
     // METHODS
@@ -1646,7 +1647,7 @@ class EmitCImp : EmitCStmts {
         string filenameNoExt = v3Global.opt.makeDir() + "/" + prefixNameProtect(modp);
         if (filenum) filenameNoExt += "__" + cvtToStr(filenum);
         filenameNoExt += (slow ? "__Slow" : "");
-        V3OutCFile* ofp = NULL;
+        V3OutCFile* ofp = nullptr;
         if (v3Global.opt.lintOnly()) {
             // Unfortunately we have some lint checks here, so we can't just skip processing.
             // We should move them to a different stage.
@@ -1707,7 +1708,7 @@ class EmitCImp : EmitCStmts {
         string recName;
         if (v3Global.opt.profThreads()) {
             recName = "__Vprfthr_" + cvtToStr(curExecMTaskp->id());
-            puts("VlProfileRec* " + recName + " = NULL;\n");
+            puts("VlProfileRec* " + recName + " = nullptr;\n");
             // Leave this if() here, as don't want to call VL_RDTSC_Q unless profiling
             puts("if (VL_UNLIKELY(vlTOPp->__Vm_profile_cycle_start)) {\n");
             puts(recName + " = vlTOPp->__Vm_threadPoolp->profileAppend();\n");
@@ -1751,7 +1752,7 @@ class EmitCImp : EmitCStmts {
         }
     }
 
-    virtual void visit(AstMTaskBody* nodep) VL_OVERRIDE {
+    virtual void visit(AstMTaskBody* nodep) override {
         ExecMTask* mtp = nodep->execMTaskp();
         puts("\n");
         puts("void ");
@@ -1801,7 +1802,7 @@ class EmitCImp : EmitCStmts {
         if (!m_blkChangeDetVec.empty()) puts("return __req;\n");
     }
     using EmitCStmts::visit;  // Suppress hidden overloaded virtual function warning
-    virtual void visit(AstCFunc* nodep) VL_OVERRIDE {
+    virtual void visit(AstCFunc* nodep) override {
         m_funcp = nodep;
         // TRACE_* and DPI handled elsewhere
         if (nodep->funcType().isTrace()) return;
@@ -1829,6 +1830,14 @@ class EmitCImp : EmitCStmts {
             puts("(" + cFuncArgs(nodep) + ", VerilatedThread* self)");
         }
         if (nodep->isConst().trueKnown()) puts(" const");
+
+        // TODO perhaps better to have a new AstCCtorInit so we can pass arguments
+        // rather than requiring a string here
+        if (!nodep->ctorInits().empty()) {
+            puts(": ");
+            puts(nodep->ctorInits());
+        }
+
         puts(" {\n");
 
         put_cfunc_body(nodep);
@@ -1844,9 +1853,7 @@ class EmitCImp : EmitCStmts {
         puts("QData __req = false;  // Logically a bool\n");  // But not because it results in
                                                               // faster code
         bool gotOne = false;
-        for (std::vector<AstChangeDet*>::iterator it = m_blkChangeDetVec.begin();
-             it != m_blkChangeDetVec.end(); ++it) {
-            AstChangeDet* changep = *it;
+        for (AstChangeDet* changep : m_blkChangeDetVec) {
             if (changep->lhsp()) {
                 if (!gotOne) {  // Not a clocked block
                     puts("__req |= (");
@@ -1859,9 +1866,7 @@ class EmitCImp : EmitCStmts {
         if (gotOne) puts(");\n");
         if (gotOne && !v3Global.opt.protectIds()) {
             // puts("VL_DEBUG_IF( if (__req) cout<<\"- CLOCKREQ );");
-            for (std::vector<AstChangeDet*>::iterator it = m_blkChangeDetVec.begin();
-                 it != m_blkChangeDetVec.end(); ++it) {
-                AstChangeDet* nodep = *it;
+            for (AstChangeDet* nodep : m_blkChangeDetVec) {
                 if (nodep->lhsp()) {
                     puts("VL_DEBUG_IF( if(__req && (");
                     bool gotOneIgnore = false;
@@ -1879,16 +1884,65 @@ class EmitCImp : EmitCStmts {
         }
     }
 
-    virtual void visit(AstChangeDet* nodep) VL_OVERRIDE {  //
+    virtual void visit(AstConsAssoc* nodep) override {
+        putbs(nodep->dtypep()->cType("", false, false));
+        puts("()");
+        if (nodep->defaultp()) {
+            putbs(".setDefault(");
+            iterateAndNextNull(nodep->defaultp());
+            puts(")");
+        }
+    }
+    virtual void visit(AstSetAssoc* nodep) override {
+        iterateAndNextNull(nodep->lhsp());
+        putbs(".set(");
+        iterateAndNextNull(nodep->keyp());
+        puts(", ");
+        putbs("");
+        iterateAndNextNull(nodep->valuep());
+        puts(")");
+    }
+    virtual void visit(AstConsDynArray* nodep) override {
+        putbs(nodep->dtypep()->cType("", false, false));
+        if (!nodep->lhsp()) {
+            puts("()");
+        } else {
+            puts("::cons(");
+            iterateAndNextNull(nodep->lhsp());
+            if (nodep->rhsp()) {
+                puts(", ");
+                putbs("");
+            }
+            iterateAndNextNull(nodep->rhsp());
+            puts(")");
+        }
+    }
+    virtual void visit(AstConsQueue* nodep) override {
+        putbs(nodep->dtypep()->cType("", false, false));
+        if (!nodep->lhsp()) {
+            puts("()");
+        } else {
+            puts("::cons(");
+            iterateAndNextNull(nodep->lhsp());
+            if (nodep->rhsp()) {
+                puts(", ");
+                putbs("");
+            }
+            iterateAndNextNull(nodep->rhsp());
+            puts(")");
+        }
+    }
+
+    virtual void visit(AstChangeDet* nodep) override {  //
         m_blkChangeDetVec.push_back(nodep);
     }
 
-    virtual void visit(AstCReset* nodep) VL_OVERRIDE {
+    virtual void visit(AstCReset* nodep) override {
         AstVar* varp = nodep->varrefp()->varp();
         emitVarReset(varp);
     }
 
-    virtual void visit(AstExecGraph* nodep) VL_OVERRIDE {
+    virtual void visit(AstExecGraph* nodep) override {
         UASSERT_OBJ(nodep == v3Global.rootp()->execGraphp(), nodep,
                     "ExecGraph should be a singleton!");
         // The location of the AstExecGraph within the containing _eval()
@@ -1967,19 +2021,16 @@ class EmitCImp : EmitCStmts {
         } else if (AstInitArray* initarp = VN_CAST(varp->valuep(), InitArray)) {
             if (AstUnpackArrayDType* adtypep = VN_CAST(dtypep, UnpackArrayDType)) {
                 if (initarp->defaultp()) {
-                    // MSVC++ pre V7 doesn't support 'for (int ...)', so declare in sep block
-                    puts("{ int __Vi=0;");
-                    puts(" for (; __Vi<" + cvtToStr(adtypep->elementsConst()));
+                    puts("for (int __Vi=0; __Vi<" + cvtToStr(adtypep->elementsConst()));
                     puts("; ++__Vi) {\n");
                     emitSetVarConstant(varp->nameProtect() + "[__Vi]",
                                        VN_CAST(initarp->defaultp(), Const));
-                    puts("}}\n");
+                    puts("}\n");
                 }
                 const AstInitArray::KeyItemMap& mapr = initarp->map();
-                for (AstInitArray::KeyItemMap::const_iterator it = mapr.begin(); it != mapr.end();
-                     ++it) {
-                    AstNode* valuep = it->second->valuep();
-                    emitSetVarConstant(varp->nameProtect() + "[" + cvtToStr(it->first) + "]",
+                for (const auto& itr : mapr) {
+                    AstNode* valuep = itr.second->valuep();
+                    emitSetVarConstant(varp->nameProtect() + "[" + cvtToStr(itr.first) + "]",
                                        VN_CAST(valuep, Const));
                 }
             } else {
@@ -2012,15 +2063,14 @@ class EmitCImp : EmitCStmts {
             return emitVarResetRecurse(varp, adtypep->subDTypep(), depth + 1,
                                        ".atDefault()" + cvtarray);
         } else if (AstUnpackArrayDType* adtypep = VN_CAST(dtypep, UnpackArrayDType)) {
-            UASSERT_OBJ(adtypep->msb() >= adtypep->lsb(), varp,
+            UASSERT_OBJ(adtypep->hi() >= adtypep->lo(), varp,
                         "Should have swapped msb & lsb earlier.");
             string ivar = string("__Vi") + cvtToStr(depth);
-            // MSVC++ pre V7 doesn't support 'for (int ...)', so declare in sep block
-            string pre = ("{ int " + ivar + "=" + cvtToStr(0) + ";" + " for (; " + ivar + "<"
+            string pre = ("for (int " + ivar + "=" + cvtToStr(0) + "; " + ivar + "<"
                           + cvtToStr(adtypep->elementsConst()) + "; ++" + ivar + ") {\n");
             string below = emitVarResetRecurse(varp, adtypep->subDTypep(), depth + 1,
                                                suffix + "[" + ivar + "]");
-            string post = "}}\n";
+            string post = "}\n";
             return below.empty() ? "" : pre + below + post;
         } else if (basicp && basicp->keyword() == AstBasicDTypeKwd::STRING) {
             // String's constructor deals with it
@@ -2088,12 +2138,8 @@ class EmitCImp : EmitCStmts {
     void maybeSplit(AstNodeModule* modp);
 
 public:
-    EmitCImp() {
-        m_modp = NULL;
-        m_slow = false;
-        m_fast = false;
-    }
-    virtual ~EmitCImp() {}
+    EmitCImp() = default;
+    virtual ~EmitCImp() override = default;
     void mainImp(AstNodeModule* modp, bool slow);
     void mainInt(AstNodeModule* modp);
     void mainDoFunc(AstCFunc* nodep) { iterate(nodep); }
@@ -2150,11 +2196,21 @@ void EmitCStmts::emitVarDecl(const AstVar* nodep, const string& prefixIfImp) {
         emitDeclArrayBrackets(nodep);
         // If it's a packed struct/array then nodep->width is the whole
         // thing, msb/lsb is just lowest dimension
-        puts("," + cvtToStr(basicp->lsb() + nodep->width() - 1) + "," + cvtToStr(basicp->lsb()));
+        puts("," + cvtToStr(basicp->lo() + nodep->width() - 1) + "," + cvtToStr(basicp->lo()));
         if (nodep->isWide()) puts("," + cvtToStr(nodep->widthWords()));
         puts(");\n");
     } else {
         // strings and other fundamental c types
+        if (nodep->isFuncLocal() && nodep->isString()) {
+            const string name = nodep->name();
+            const string suffix = V3Task::dpiTemporaryVarSuffix();
+            // string temporary variable for DPI-C needs to be static because c_str() will be
+            // passed to C code and the lifetime of the variable must be long enough. See also
+            // Issue 2622.
+            const bool beStatic = name.size() >= suffix.size()
+                                  && name.substr(name.size() - suffix.size()) == suffix;
+            if (beStatic) puts("static VL_THREAD_LOCAL ");
+        }
         puts(nodep->vlArgType(true, false, false, prefixIfImp));
         puts(";\n");
     }
@@ -2174,9 +2230,7 @@ void EmitCStmts::emitVarCtors(bool* firstp) {
     if (!m_ctorVarsVec.empty()) {
         ofp()->indentInc();
         puts("\n");
-        puts("#if (SYSTEMC_VERSION>20011000)\n");  // SystemC 2.0.1 and newer
-        for (VarVec::iterator it = m_ctorVarsVec.begin(); it != m_ctorVarsVec.end(); ++it) {
-            const AstVar* varp = *it;
+        for (const AstVar* varp : m_ctorVarsVec) {
             bool isArray = !VN_CAST(varp->dtypeSkipRefp(), BasicDType);
             if (isArray) {
                 puts("// Skipping array: ");
@@ -2190,7 +2244,7 @@ void EmitCStmts::emitVarCtors(bool* firstp) {
                 puts(")");
             }
         }
-        puts("\n#endif\n");
+        puts("\n");
         ofp()->indentDec();
     }
 }
@@ -2265,7 +2319,7 @@ void EmitCStmts::emitOpName(AstNode* nodep, const string& format, AstNode* lhsp,
         } else if (pos[0] == '%') {
             ++pos;
             bool detail = false;
-            AstNode* detailp = NULL;
+            AstNode* detailp = nullptr;
             switch (pos[0]) {
             case '%': puts("%"); break;
             case 'k': putbs(""); break;
@@ -2292,7 +2346,7 @@ void EmitCStmts::emitOpName(AstNode* nodep, const string& format, AstNode* lhsp,
                     COMMA;
                     puts(m_wideTempRefp->hiernameProtect());
                     puts(m_wideTempRefp->varp()->nameProtect());
-                    m_wideTempRefp = NULL;
+                    m_wideTempRefp = nullptr;
                     needComma = true;
                 }
                 break;
@@ -2450,10 +2504,11 @@ void EmitCStmts::displayEmit(AstNode* nodep, bool isScan) {
         }
         // End
         puts(")");
-        if (isStmt)
+        if (isStmt) {
             puts(";\n");
-        else
+        } else {
             puts(" ");
+        }
         // Prep for next
         emitDispState.clear();
     }
@@ -2463,7 +2518,7 @@ void EmitCStmts::displayEmit(AstNode* nodep, bool isScan) {
 void EmitCStmts::displayArg(AstNode* dispp, AstNode** elistp, bool isScan, const string& vfmt,
                             bool ignore, char fmtLetter) {
     // Print display argument, edits elistp
-    AstNode* argp = NULL;
+    AstNode* argp = nullptr;
     if (!ignore) {
         argp = *elistp;
         // Prep for next parameter
@@ -2499,10 +2554,15 @@ void EmitCStmts::displayArg(AstNode* dispp, AstNode** elistp, bool isScan, const
     }
     emitDispState.pushFormat(pfmt);
     if (!ignore) {
-        emitDispState.pushArg(' ', NULL, cvtToStr(argp->widthMin()));
+        if (argp->dtypep()->basicp()->keyword() == AstBasicDTypeKwd::STRING) {
+            // string in SystemVerilog is std::string in C++ which is not POD
+            emitDispState.pushArg(' ', nullptr, "-1");
+        } else {
+            emitDispState.pushArg(' ', nullptr, cvtToStr(argp->widthMin()));
+        }
         emitDispState.pushArg(fmtLetter, argp, "");
     } else {
-        emitDispState.pushArg(fmtLetter, NULL, "");
+        emitDispState.pushArg(fmtLetter, nullptr, "");
     }
 }
 
@@ -2585,7 +2645,7 @@ void EmitCStmts::displayNode(AstNode* nodep, AstScopeName* scopenamep, const str
                 } else {
                     emitDispState.pushFormat("%N");  // Add a . when needed
                 }
-                emitDispState.pushArg(' ', NULL, "vlSymsp->name()");
+                emitDispState.pushArg(' ', nullptr, "vlSymsp->name()");
                 emitDispState.pushFormat(suffix);
                 break;
             }
@@ -2610,7 +2670,7 @@ void EmitCStmts::displayNode(AstNode* nodep, AstScopeName* scopenamep, const str
 //######################################################################
 // Internal EmitC
 
-void EmitCImp::emitCoverageDecl(AstNodeModule* modp) {
+void EmitCImp::emitCoverageDecl(AstNodeModule*) {
     if (v3Global.opt.coverage()) {
         ofp()->putsPrivate(true);
         putsDecoration("// Coverage\n");
@@ -2645,7 +2705,7 @@ void EmitCImp::emitMTaskVertexCtors(bool* firstp) {
 
     // This will flip to 'true' before the start of the 0th cycle.
     emitCtorSep(firstp);
-    puts("__Vm_threadPoolp(NULL)");
+    puts("__Vm_threadPoolp(nullptr)");
     if (v3Global.opt.profThreads()) {
         emitCtorSep(firstp);
         puts("__Vm_profile_cycle_start(0)");
@@ -2657,6 +2717,9 @@ void EmitCImp::emitMTaskVertexCtors(bool* firstp) {
 void EmitCImp::emitCtorImp(AstNodeModule* modp) {
     puts("\n");
     bool first = true;
+    string section;
+    emitParams(modp, true, &first, section /*ref*/);
+
     if (VN_IS(modp, Class)) {
         modp->v3fatalSrc("constructors should be AstCFuncs instead");
     } else if (optSystemC() && modp->isTop()) {
@@ -2667,8 +2730,7 @@ void EmitCImp::emitCtorImp(AstNodeModule* modp) {
     }
     emitVarCtors(&first);
     if (modp->isTop() && v3Global.opt.mtasks()) emitMTaskVertexCtors(&first);
-    string section("");
-    emitParams(modp, true, &first, section /*ref*/);
+
     puts(" {\n");
     emitCellCtors(modp);
     emitSensitives();
@@ -2735,7 +2797,7 @@ void EmitCImp::emitConfigureImp(AstNodeModule* modp) {
     splitSizeInc(10);
 }
 
-void EmitCImp::emitCoverageImp(AstNodeModule* modp) {
+void EmitCImp::emitCoverageImp(AstNodeModule*) {
     if (v3Global.opt.coverage()) {
         puts("\n// Coverage\n");
         // Rather than putting out VL_COVER_INSERT calls directly, we do it via this function
@@ -2776,7 +2838,7 @@ void EmitCImp::emitDestructorImp(AstNodeModule* modp) {
     puts(prefixNameProtect(modp) + "::~" + prefixNameProtect(modp) + "() {\n");
     if (modp->isTop()) {
         if (v3Global.opt.mtasks()) {
-            puts("VL_DO_CLEAR(delete __Vm_threadPoolp, __Vm_threadPoolp = NULL);\n");
+            puts("VL_DO_CLEAR(delete __Vm_threadPoolp, __Vm_threadPoolp = nullptr);\n");
         }
         // Call via function in __Trace.cpp as this .cpp file does not have trace header
         if (v3Global.needTraceDumper()) {
@@ -2786,7 +2848,7 @@ void EmitCImp::emitDestructorImp(AstNodeModule* modp) {
         }
     }
     emitTextSection(AstType::atScDtor);
-    if (modp->isTop()) puts("VL_DO_CLEAR(delete __VlSymsp, __VlSymsp = NULL);\n");
+    if (modp->isTop()) puts("VL_DO_CLEAR(delete __VlSymsp, __VlSymsp = nullptr);\n");
     puts("}\n");
     splitSizeInc(10);
 }
@@ -2834,13 +2896,11 @@ void EmitCImp::emitSavableImp(AstNodeModule* modp) {
                         for (AstUnpackArrayDType* arrayp = VN_CAST(elementp, UnpackArrayDType);
                              arrayp; arrayp = VN_CAST(elementp, UnpackArrayDType)) {
                             int vecnum = vects++;
-                            UASSERT_OBJ(arrayp->msb() >= arrayp->lsb(), varp,
+                            UASSERT_OBJ(arrayp->hi() >= arrayp->lo(), varp,
                                         "Should have swapped msb & lsb earlier.");
                             string ivar = string("__Vi") + cvtToStr(vecnum);
-                            // MSVC++ pre V7 doesn't support 'for (int ...)',
-                            // so declare in sep block
-                            puts("{ int __Vi" + cvtToStr(vecnum) + "=" + cvtToStr(0) + ";");
-                            puts(" for (; " + ivar + "<" + cvtToStr(arrayp->elementsConst()));
+                            puts("for (int __Vi" + cvtToStr(vecnum) + "=" + cvtToStr(0));
+                            puts("; " + ivar + "<" + cvtToStr(arrayp->elementsConst()));
                             puts("; ++" + ivar + ") {\n");
                             elementp = arrayp->subDTypep()->skipRefp();
                         }
@@ -2851,14 +2911,14 @@ void EmitCImp::emitSavableImp(AstNodeModule* modp) {
                             && !(basicp && basicp->keyword() == AstBasicDTypeKwd::STRING)) {
                             int vecnum = vects++;
                             string ivar = string("__Vi") + cvtToStr(vecnum);
-                            puts("{ int __Vi" + cvtToStr(vecnum) + "=" + cvtToStr(0) + ";");
-                            puts(" for (; " + ivar + "<" + cvtToStr(elementp->widthWords()));
+                            puts("for (int __Vi" + cvtToStr(vecnum) + "=" + cvtToStr(0));
+                            puts("; " + ivar + "<" + cvtToStr(elementp->widthWords()));
                             puts("; ++" + ivar + ") {\n");
                         }
                         puts("os" + op + varp->nameProtect());
                         for (int v = 0; v < vects; ++v) puts("[__Vi" + cvtToStr(v) + "]");
                         puts(";\n");
-                        for (int v = 0; v < vects; ++v) puts("}}\n");
+                        for (int v = 0; v < vects; ++v) puts("}\n");
                     }
                 }
             }
@@ -2923,19 +2983,17 @@ void EmitCImp::emitSensitives() {
                          arrayp;
                          arrayp = VN_CAST(arrayp->subDTypep()->skipRefp(), UnpackArrayDType)) {
                         int vecnum = vects++;
-                        UASSERT_OBJ(arrayp->msb() >= arrayp->lsb(), varp,
+                        UASSERT_OBJ(arrayp->hi() >= arrayp->lo(), varp,
                                     "Should have swapped msb & lsb earlier.");
                         string ivar = string("__Vi") + cvtToStr(vecnum);
-                        // MSVC++ pre V7 doesn't support 'for (int ...)', so declare in sep block
-                        puts("{ int __Vi" + cvtToStr(vecnum) + "=" + cvtToStr(arrayp->lsb())
-                             + ";");
-                        puts(" for (; " + ivar + "<=" + cvtToStr(arrayp->msb()));
+                        puts("for (int __Vi" + cvtToStr(vecnum) + "=" + cvtToStr(arrayp->lo()));
+                        puts("; " + ivar + "<=" + cvtToStr(arrayp->hi()));
                         puts("; ++" + ivar + ") {\n");
                     }
                     puts("sensitive << " + varp->nameProtect());
                     for (int v = 0; v < vects; ++v) puts("[__Vi" + cvtToStr(v) + "]");
                     puts(";\n");
-                    for (int v = 0; v < vects; ++v) puts("}}\n");
+                    for (int v = 0; v < vects; ++v) puts("}\n");
                 }
             }
         }
@@ -3057,7 +3115,8 @@ void EmitCImp::emitWrapEval(AstNodeModule* modp) {
         puts("}\n");
     }
 
-    emitSettleLoop(modp, (string("VL_DEBUG_IF(VL_DBG_MSGF(\"+ Clock loop\\n\"););\n")
+    emitSettleLoop(modp,
+                   (string("VL_DEBUG_IF(VL_DBG_MSGF(\"+ Clock loop\\n\"););\n")
                     + (v3Global.opt.trace() ? "vlSymsp->__Vm_activity = true;\n" : "")
                     + protect("_eval") + "(vlSymsp);"),
                    false);
@@ -3090,7 +3149,8 @@ void EmitCImp::emitWrapEval(AstNodeModule* modp) {
     puts("vlSymsp->__Vm_didInit = true;\n");
     puts(protect("_eval_initial") + "(vlSymsp);\n");
     if (v3Global.opt.trace()) puts("vlSymsp->__Vm_activity = true;\n");
-    emitSettleLoop(modp, (protect("_eval_settle") + "(vlSymsp);\n"  //
+    emitSettleLoop(modp,
+                   (protect("_eval_settle") + "(vlSymsp);\n"  //
                     + protect("_eval") + "(vlSymsp);"),
                    true);
     puts("}\n");
@@ -3195,8 +3255,8 @@ void EmitCStmts::emitVarSort(const VarSortMap& vmap, VarVec* sortedp) {
     if (!v3Global.opt.mtasks()) {
         // Plain old serial mode. Sort by size, from small to large,
         // to optimize for both packing and small offsets in code.
-        for (VarSortMap::const_iterator it = vmap.begin(); it != vmap.end(); ++it) {
-            for (VarVec::const_iterator jt = it->second.begin(); jt != it->second.end(); ++jt) {
+        for (const auto& itr : vmap) {
+            for (VarVec::const_iterator jt = itr.second.begin(); jt != itr.second.end(); ++jt) {
                 sortedp->push_back(*jt);
             }
         }
@@ -3204,15 +3264,12 @@ void EmitCStmts::emitVarSort(const VarSortMap& vmap, VarVec* sortedp) {
     }
 
     // MacroTask mode.  Sort by MTask-affinity group first, size second.
-    typedef std::map<MTaskIdSet, VarSortMap> MTaskVarSortMap;
+    typedef std::map<const MTaskIdSet, VarSortMap> MTaskVarSortMap;
     MTaskVarSortMap m2v;
     for (VarSortMap::const_iterator it = vmap.begin(); it != vmap.end(); ++it) {
         int size_class = it->first;
         const VarVec& vec = it->second;
-        for (VarVec::const_iterator jt = vec.begin(); jt != vec.end(); ++jt) {
-            const AstVar* varp = *jt;
-            m2v[varp->mtaskIds()][size_class].push_back(varp);
-        }
+        for (const AstVar* varp : vec) { m2v[varp->mtaskIds()][size_class].push_back(varp); }
     }
 
     // Create a TSP sort state for each MTaskIdSet footprint
@@ -3269,14 +3326,14 @@ void EmitCStmts::emitSortedVarList(const VarVec& anons, const VarVec& nonanons,
 
         if (anonL1s != 1)
             puts("// Anonymous structures to workaround compiler member-count bugs\n");
-        VarVec::const_iterator it = anons.begin();
-        for (int l3 = 0; l3 < anonL3s && it != anons.end(); ++l3) {
+        auto it = anons.cbegin();
+        for (int l3 = 0; l3 < anonL3s && it != anons.cend(); ++l3) {
             if (anonL3s != 1) puts("struct {\n");
-            for (int l2 = 0; l2 < anonL2s && it != anons.end(); ++l2) {
+            for (int l2 = 0; l2 < anonL2s && it != anons.cend(); ++l2) {
                 if (anonL2s != 1) puts("struct {\n");
-                for (int l1 = 0; l1 < anonL1s && it != anons.end(); ++l1) {
+                for (int l1 = 0; l1 < anonL1s && it != anons.cend(); ++l1) {
                     if (anonL1s != 1) puts("struct {\n");
-                    for (int l0 = 0; l0 < lim && it != anons.end(); ++l0) {
+                    for (int l0 = 0; l0 < lim && it != anons.cend(); ++l0) {
                         const AstVar* varp = *it;
                         emitVarCmtChg(varp, &curVarCmt);
                         emitVarDecl(varp, prefixIfImp);
@@ -3296,8 +3353,7 @@ void EmitCStmts::emitSortedVarList(const VarVec& anons, const VarVec& nonanons,
         }
     }
     // Output nonanons
-    for (VarVec::const_iterator it = nonanons.begin(); it != nonanons.end(); ++it) {
-        const AstVar* varp = *it;
+    for (const AstVar* varp : nonanons) {
         emitVarCmtChg(varp, &curVarCmt);
         emitVarDecl(varp, prefixIfImp);
     }
@@ -3336,7 +3392,7 @@ void EmitCImp::emitMTaskState() {
     puts("bool __Vm_even_cycle;\n");
 }
 
-void EmitCImp::emitIntTop(AstNodeModule* modp) {
+void EmitCImp::emitIntTop(AstNodeModule*) {
     // Always have this first; gcc has short circuiting if #ifdef is first in a file
     ofp()->putsGuard();
     puts("\n");
@@ -3373,7 +3429,8 @@ void EmitCImp::emitInt(AstNodeModule* modp) {
 
     if (AstClass* classp = VN_CAST(modp, Class)) {
         puts("class " + prefixNameProtect(modp));
-        if (classp->extendsp()) puts(" : public " + classp->extendsp()->classp()->nameProtect());
+        if (classp->extendsp())
+            puts(" : public " + prefixNameProtect(classp->extendsp()->classp()));
         puts(" {\n");
     } else if (optSystemC() && modp->isTop()) {
         puts("SC_MODULE(" + prefixNameProtect(modp) + ") {\n");
@@ -3485,7 +3542,7 @@ void EmitCImp::emitInt(AstNodeModule* modp) {
              + "C* tfp, int levels, int options = 0);\n");
         if (optSystemC()) {
             puts("/// SC tracing; avoid overloaded virtual function lint warning\n");
-            puts("virtual void trace(sc_trace_file* tfp) const { "
+            puts("virtual void trace(sc_trace_file* tfp) const override { "
                  "::sc_core::sc_module::trace(tfp); }\n");
         }
     }
@@ -3536,13 +3593,13 @@ void EmitCImp::emitInt(AstNodeModule* modp) {
 
     puts("\n// INTERNAL METHODS\n");
     if (modp->isTop()) {
-        ofp()->putsPrivate(true);  // private:
+        ofp()->putsPrivate(false);  // public: as accessed by another VL_MODULE
         puts("static void " + protect("_eval_initial_loop") + "(" + EmitCBaseVisitor::symClassVar()
              + ");\n");
         if (v3Global.needTraceDumper()) {
-            if (!optSystemC()) puts("void _traceDump();");
-            puts("void _traceDumpOpen();");
-            puts("void _traceDumpClose();");
+            if (!optSystemC()) puts("void _traceDump();\n");
+            puts("void _traceDumpOpen();\n");
+            puts("void _traceDumpClose();\n");
         }
     }
 
@@ -3635,7 +3692,7 @@ void EmitCImp::maybeSplit(AstNodeModule* fileModp) {
         // Splitting file, so using parallel build.
         v3Global.useParallelBuild(true);
         // Close old file
-        VL_DO_CLEAR(delete m_ofp, m_ofp = NULL);
+        VL_DO_CLEAR(delete m_ofp, m_ofp = nullptr);
         // Open a new file
         m_ofp = newOutCFile(fileModp, !m_fast, true /*source*/, splitFilenumInc());
         emitImpTop(fileModp);
@@ -3661,7 +3718,7 @@ void EmitCImp::mainInt(AstNodeModule* modp) {
         m_modp = modp;
     }
     ofp()->putsEndGuard();
-    VL_DO_CLEAR(delete m_ofp, m_ofp = NULL);
+    VL_DO_CLEAR(delete m_ofp, m_ofp = nullptr);
 }
 
 void EmitCImp::mainImp(AstNodeModule* modp, bool slow) {
@@ -3704,22 +3761,23 @@ void EmitCImp::mainImp(AstNodeModule* modp, bool slow) {
             }
         }
     }
-    VL_DO_CLEAR(delete m_ofp, m_ofp = NULL);
+    VL_DO_CLEAR(delete m_ofp, m_ofp = nullptr);
 }
 
 //######################################################################
 // Tracing routines
 
-class EmitCTrace : EmitCStmts {
+class EmitCTrace final : EmitCStmts {
     // NODE STATE/TYPES
     // Cleared on netlist
     //  AstNode::user1()        -> int.  Enum number
     AstUser1InUse m_inuser1;
 
     // MEMBERS
+    AstCFunc* m_cfuncp = nullptr;  // Function we're in now
     bool m_slow;  // Making slow file
-    int m_enumNum;  // Enumeration number (whole netlist)
-    int m_baseCode;  // Code of first AstTraceInc in this function
+    int m_enumNum = 0;  // Enumeration number (whole netlist)
+    int m_baseCode = -1;  // Code of first AstTraceInc in this function
 
     // METHODS
     void newOutCFile(int filenum) {
@@ -3757,7 +3815,7 @@ class EmitCTrace : EmitCStmts {
 
         if (v3Global.needTraceDumper() && !optSystemC()) {
             puts("void " + topClassName() + "::_traceDump() {\n");
-            // Caller checked for __Vm_dumperp non-NULL
+            // Caller checked for __Vm_dumperp non-nullptr
             puts("const VerilatedLockGuard lock(__VlSymsp->__Vm_dumperMutex);\n");
             puts("__VlSymsp->__Vm_dumperp->dump(VL_TIME_Q());\n");
             puts("}\n");
@@ -3781,7 +3839,8 @@ class EmitCTrace : EmitCStmts {
             puts("void " + topClassName() + "::_traceDumpClose() {\n");
             puts("const VerilatedLockGuard lock(__VlSymsp->__Vm_dumperMutex);\n");
             puts("__VlSymsp->__Vm_dumping = false;\n");
-            puts("VL_DO_CLEAR(delete __VlSymsp->__Vm_dumperp, __VlSymsp->__Vm_dumperp = NULL);\n");
+            puts("VL_DO_CLEAR(delete __VlSymsp->__Vm_dumperp, __VlSymsp->__Vm_dumperp = "
+                 "nullptr);\n");
             puts("}\n");
             splitSizeInc(10);
         }
@@ -4040,21 +4099,22 @@ class EmitCTrace : EmitCStmts {
 
     // VISITORS
     using EmitCStmts::visit;  // Suppress hidden overloaded virtual function warning
-    virtual void visit(AstNetlist* nodep) VL_OVERRIDE {
+    virtual void visit(AstNetlist* nodep) override {
         // Top module only
         iterate(nodep->topModulep());
     }
-    virtual void visit(AstNodeModule* nodep) VL_OVERRIDE { iterateChildren(nodep); }
-    virtual void visit(AstCFunc* nodep) VL_OVERRIDE {
+    virtual void visit(AstNodeModule* nodep) override { iterateChildren(nodep); }
+    virtual void visit(AstCFunc* nodep) override {
         if (nodep->slow() != m_slow) return;
+        VL_RESTORER(m_cfuncp);
         if (nodep->funcType().isTrace()) {  // TRACE_*
-            m_funcp = nodep;
+            m_cfuncp = nodep;
 
             if (splitNeeded()) {
                 // Splitting file, so using parallel build.
                 v3Global.useParallelBuild(true);
                 // Close old file
-                VL_DO_CLEAR(delete m_ofp, m_ofp = NULL);
+                VL_DO_CLEAR(delete m_ofp, m_ofp = nullptr);
                 // Open a new file
                 newOutCFile(splitFilenumInc());
             }
@@ -4118,9 +4178,8 @@ class EmitCTrace : EmitCStmts {
             }
             puts("}\n");
         }
-        m_funcp = NULL;
     }
-    virtual void visit(AstTraceDecl* nodep) VL_OVERRIDE {
+    virtual void visit(AstTraceDecl* nodep) override {
         int enumNum = emitTraceDeclDType(nodep->dtypep());
         if (nodep->arrayRange().ranged()) {
             puts("{int i; for (i=0; i<" + cvtToStr(nodep->arrayRange().elements()) + "; i++) {\n");
@@ -4131,7 +4190,7 @@ class EmitCTrace : EmitCStmts {
             puts("\n");
         }
     }
-    virtual void visit(AstTraceInc* nodep) VL_OVERRIDE {
+    virtual void visit(AstTraceInc* nodep) override {
         if (nodep->declp()->arrayRange().ranged()) {
             // It traces faster if we unroll the loop
             for (int i = 0; i < nodep->declp()->arrayRange().elements(); i++) {
@@ -4141,16 +4200,13 @@ class EmitCTrace : EmitCStmts {
             emitTraceChangeOne(nodep, -1);
         }
     }
-    virtual void visit(AstCoverDecl* nodep) VL_OVERRIDE {}
-    virtual void visit(AstCoverInc* nodep) VL_OVERRIDE {}
+    virtual void visit(AstCoverDecl* nodep) override {}
+    virtual void visit(AstCoverInc* nodep) override {}
 
 public:
-    explicit EmitCTrace(bool slow) {
-        m_funcp = NULL;
-        m_slow = slow;
-        m_enumNum = 0;
-    }
-    virtual ~EmitCTrace() {}
+    explicit EmitCTrace(bool slow)
+        : m_slow{slow} {}
+    virtual ~EmitCTrace() override = default;
     void main() {
         // Put out the file
         newOutCFile(0);
@@ -4159,7 +4215,7 @@ public:
 
         iterate(v3Global.rootp());
 
-        VL_DO_CLEAR(delete m_ofp, m_ofp = NULL);
+        VL_DO_CLEAR(delete m_ofp, m_ofp = nullptr);
     }
 };
 
@@ -4173,8 +4229,8 @@ void V3EmitC::emitc() {
          nodep = VN_CAST(nodep->nextp(), NodeModule)) {
         if (VN_IS(nodep, Class)) continue;  // Imped with ClassPackage
         // clang-format off
-        { EmitCImp cint; cint.mainInt(nodep); }
-        { EmitCImp slow; slow.mainImp(nodep, true); }
+        EmitCImp cint; cint.mainInt(nodep);
+        cint.mainImp(nodep, true);
         { EmitCImp fast; fast.mainImp(nodep, false); }
         // clang-format on
     }

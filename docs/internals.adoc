@@ -387,10 +387,8 @@ changed; if clear, checking those signals for changes may be skipped.
 
 === Compiler Version and C++11
 
-Verilator supports GCC 4.4.7 and newer.  GCC 4.4.7 does not support C++11,
-therefore C++11 is generally not required.  Exceptions may be made to
-require C++11 for features that are only practical with C++11,
-e.g. threads.
+Verilator requires C++11. Verilator does not require any newer versions,
+but is maintained to build successfully with C++14/C++17/C++20.
 
 === Indentation and Naming Style
 
@@ -411,8 +409,9 @@ style indentation; the `c-set-style` undoes that.)
 
 * Comment every member variable.
 
-Indentation is automatically maintained with "make clang-format" (using
-clang-format version 10.0.0).  For those manually formatting:
+Indentation is automatically maintained with "make format" using
+clang-format version 10.0.0, and yapf for python, and is automatically
+corrected in the CI actions.  For those manually formatting C++ code:
 
 * Use 4 spaces per level, and no tabs.
 
@@ -588,7 +587,7 @@ dealing with. For example a visitor might not implement separate `visit`
 methods for `AstIf` and `AstGenIf`, but just a single method for the base
 class:
 
-   void visit (AstNodeIf* nodep)
+   void visit(AstNodeIf* nodep)
 
 However that method might want to specify additional code if it is called
 for `AstGenIf`. Verilator does this by providing a `VN_IS` method for each
@@ -629,8 +628,6 @@ with e.g. "sudo cpan install Parallel::Forker".
 https://github.com/veripool/vcddiff
 
 * Cmake for build paths that use it.
-
-* Bit::Vector to test vgen.pl
 
 === Controlling the Test Driver
 
@@ -674,7 +671,7 @@ Set to 1 to indicate that the compilation or execution is intended to fail.
 For example the following would specify that compilation requires two
 defines and is expected to fail.
 
-   compile (
+   compile(
       verilator_flags2 => ["-DSMALL_CLOCK -DGATED_COMMENT"],
       fails => 1,
       );
@@ -700,7 +697,7 @@ Verilator problem.
 When enabling the long tests, some additional PERL modules are needed,
 which you can install using cpan.
 
-   cpan install Unix::Processors
+   cpan install Parallel::Forker
 
 There are some traps to avoid when running regression tests
 
@@ -732,20 +729,17 @@ test, run the following command.
 
 === Continuous Integration
 
-Verilator has a https://travis-ci.com/verilator/verilator[Travis CI environment]
-which automatically tests the master branch for test failures on new commits. It
-also runs a daily cron job to validate all of the tests against different OS and
-compiler versions.
+Verilator uses GitHub Actions which automatically tests the master branch
+for test failures on new commits. It also runs a daily cron job to validate
+all of the tests against different OS and compiler versions.
 
-Developers can connect Travis CI to their GitHub account so that the CI
-environment can check their branches too by doing the following:
+Developers can enable Actions on their GitHub repository so that the CI
+environment can check their branches too by enabling the build workflow:
 
-* Go to https://github.com/marketplace/travis-ci and follow the prompts
-
-* Only the Open Source (FREE) version of Travis CI is required
-
-* Under a Travis CI project click More options > Settings in order to set up a
-cron job on a particular branch
+* On GitHub, navigate to the main page of the repository.
+* Under your repository name, click Actions.
+* In the left sidebar, click the workflow you want to enable ("build").
+* Click Enable workflow.
 
 === Fuzzing
 
@@ -759,6 +753,15 @@ To get started, cd to "nodist/fuzzer/" and run "./all".  A sudo password
 may be required to setup the system for fuzzing.
 
 == Debugging
+
+=== Debug Levels
+
+The "UINFO" calls in the source indicate a debug level. Messages level 3
+and below are globally enabled with `--debug`. Higher levels may be
+controlled with `--debugi <level>`.  An individual source file levels may
+be controlled with `-debugi-<srcfile> <level>`.  For example `--debug
+--debugi 5 --debugi-V3Width 9` will use the debug binary at default debug
+level 5, with the V3Width.cpp file at level 9.
 
 === --debug
 
@@ -952,9 +955,9 @@ Then, when the watch fires, to break at every following change to that node:
 To print a node:
 
    pn nodep
-   # or: call nodep->dumpGdb()  # aliased to "pn" in src/.gdbinit
+   # or: call dumpGdb(nodep)  # aliased to "pn" in src/.gdbinit
    pnt nodep
-   # or: call nodep->dumpTreeGdb()  # aliased to "pnt" in src/.gdbinit
+   # or: call dumpTreeGdb(nodep)  # aliased to "pnt" in src/.gdbinit
 
 When GDB halts, it is useful to understand that the backtrace will commonly
 show the iterator functions between each invocation of `visit` in the
@@ -1021,7 +1024,7 @@ IEEE 1800-2017 33 Config:: Little/no tool support or industry use.
 
 == Distribution
 
-Copyright 2008-2020 by Wilson Snyder.  Verilator is free software; you can
+Copyright 2008-2021 by Wilson Snyder.  Verilator is free software; you can
 redistribute it and/or modify it under the terms of either the GNU Lesser
 General Public License Version 3 or the Perl Artistic License Version 2.0.
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0

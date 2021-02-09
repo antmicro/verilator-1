@@ -2,13 +2,219 @@ Revision history for Verilator
 
 The contributors that suggested a given feature are shown in []. Thanks!
 
-* Verilator 4.039 devel
+
+* Verilator 4.109 devel
+
+****  Fix TIMESCALE warnings on primitives (#2763). [Xuanqi]
+
+****  Fix $fread extra semicolon inside statements. [Leendert van Doorn]
+
+
+* Verilator 4.108 2021-01-10
+
+**    Many VPI changes for IEEE compatibility, which may alter behavior from previous releases.
+
+**    Support randomize() class method and rand (#2607). [Krzysztof Bieganski]
+
+***   Support $cast and new CASTCONST warning.
+
+***   Add --top option as alias of --top-module.
+
+***   Add LATCH and NOLATCH warnings (#1609) (#2740). [Julien Margetts]
+
+****  Remove Unix::Processors internal test dependency.
+
+****  Report UNUSED on parameters, localparam and genvars (#2627). [Charles Eric LaForest]
+
+****  Add error on real to non-real output pins (#2690). [Peter Monsson]
+
+****  Support package imports before parameters in interfaces (#2714). [James Hanlon]
+
+****  Support --sanitize in internal tests (#2705). [Yutetsu TAKATSUKASA]
+
+****  Fix passing parameter type instantiations by position number.
+
+****  Fix DPI open array handling issues.
+
+****  Fix error when dotted refers to missing module (#2095). [Alexander Grobman]
+
+****  Fix little endian packed array counting (#2499). [phantom-killua]
+
+****  Fix showing reference locations for BLKANDNBLK (#2170). [Yuri Victorovich]
+
+****  Fix genblk naming to match IEEE (#2686). [tinshark]
+
+****  Fix VPI memory word indexing (#2695). [Marlon James]
+
+****  Fix vpiLeftRange on little-endian memories (#2696). [Marlon James]
+
+****  Fix VPI module tree (#2704). [Todd Strader]
+
+****  Fix vpi_release_handle to be called implicitly per IEEE (#2706).
+
+****  Fix to allow inheriting 'VerilatedVcdFile' class. (#2720) [HyungKi Jeong]
+
+****  Fix $urandom_range maximum value (#2723). [Nandu Raj]
+
+****  Fix tracing empty sc module (#2729).
+
+****  Fix generate for unrolling to be signed (#2730). [yanx21]
+
+****  Fix to emit timescale in hierarchical blocks (#2735). [Yutetsu TAKATSUKASA]
+
+****  Fix to ignore coverage on real ports (#2741) (#2745). [Paul Wright]
+
+
+
+* Verilator 4.106 2020-12-02
+
+**    Change -sv option to select 1800-2017 instead of 1800-2005.
+
+***   Check for proper 'local' and 'protected' (#2228).
+
+***   Support $random and $urandom seeds.
+
+***   Support $monitor and $strobe.
+
+***   Support complex function arguments.
+
+***   Support 'super'.
+
+***   Support 'with item.index'.
+
+****  Fix the default GNU Make executable name on FreeBSD (#2553). [Yuri Victorovich]
+
+****  Fix trace signal names getting hashed (#2643).  [Barbara Gigerl]
+
+****  Fix unpacked array parameters near functions (#2639). [Anderson Ignacio da Silva]
+
+****  Fix access to non-overridden base class variable (#2654). [Tobias Rosenkranz]
+
+
+* Verilator 4.104 2020-11-14
+
+***   Support queue and associative array 'with' statements (#2616).
+
+***   Support queue slicing (#2326).
+
+***   Support associative array pattern assignments and defaults.
+
+***   Support static methods and typedefs in classes (#2615). [Krzysztof Bieganski]
+
+****  Report error on typedef referencing self (#2539). [Cody Piersall]
+
+****  With --debug, turn off address space layout randomization.
+
+****  Fix iteration over mutating list bug in VPI (#2588). [Kaleb Barrett]
+
+****  Fix cast width propagation (#2597). [flex-liu]
+
+****  Fix return from callValueCbs (#2589) (#2605). [Marlon James]
+
+****  Fix WIDTH warnings on comparisons with nullptr (#2602). [Rupert Swarbrick]
+
+****  Fix fault when $fgets, $sscanf, etc used with string (#2604). [Yutetsu TAKATSUKASA]
+
+****  Fix WIFEXITED missing from MinGW/MSYS2 (#2609). [Jean Berniolles]
+
+****  Fix queue poping wrong value when otherwise unused (#2512). [nanduraj1]
+
+****  Fix arrays of modport interfaces (#2614). [Thierry Tambe]
+
+****  Fix split_var internal error (#2640) (#2641). [Yutetsu TAKATSUKASA]
+
+
+* Verilator 4.102 2020-10-15
+
+****  Support const object new() assignments.
+
+****  Support # as a comment in -f files (#2497). [phantom-killua]
+
+****  Support 'this' (#2585). [Rafal Kapuscik]
+
+****  Support defines for FST tracing (#2592). [Markus Krause]
+
+****  Support |=> inside properties (#1292). [Peter Monsson]
+
+****  Fix timescale with --hierarchical (#2554). [Yutetsu TAKATSUKASA]
+
+****  Fix cmake build with --hierarchical (#2560). [Yutetsu TAKATSUKASA]
+
+****  Fix -G dropping public indication (#2561). [Andrew Goessling]
+
+****  Fix $urandom_range passed variable (#2563). [nanduraj1]
+
+****  Fix method calls to package class functions (#2565). [Peter Monsson]
+
+****  Fix class wide member display (#2567). [Nandu Raj P]
+
+****  Fix hierarchical references inside function (#2267) (#2572). [James Pallister]
+
+****  Fix flushCall for backward compatibility (#2580). [chenguokai]
+
+****  Fix preprocessor stringify of undefined macro. [Martin Whitaker]
+
+
+* Verilator 4.100 2020-09-07
+
+**    C++11 or newer compilers are now required.
+
+**    SystemC 2.3.0 or newer (SYSTEMC_VERSION >= 20111121) is now required.
+
+**    Support hierarchical Verilation (#2206). [Yutetsu TAKATSUKASA]
+
+****  Support (with limitations) class extern, class extends, virtual class.
+
+****  Support $urandom, $urandom_range without stability.
+
+****  Fix false DECLFILENAME on black-boxed modules (#2430). [Philipp Wagner]
+
+****  Fix naming of "id : begin" blocks.
+
+****  Fix class constructor error on assignments to const.
+
+****  Fix splitting eval functions with --output-split-cfuncs (#2368). [Geza Lore]
+
+****  Fix queues as class members (#2525). [nanduraj1]
+
+****  Add support for assume property. [Peter Monsson]
+
+****  Add support for |=> inside properties (#1292). [Peter Monsson]
+
+
+* Verilator 4.040 2020-08-15
+
+**    Version 4.040 is planned to be the final version that will
+      support pre-C++11 compilers. Please move to C++11 or newer compilers.
 
 ***   Fix arrayed interfaces, broke in 4.038 (#2468). [Josh Redford]
 
+****  Support $stable, $rose and $fell.  (#2148) (#2501) [Peter Monsson]
+
+****  Support simple function localparams (#2461). [James Hanlon]
+
+****  Miscellaneous parsing error changes towards UVM support.
+
+****  Fix arrayed interfaces (#2469).  [Josh Redford]
+
+****  Fix protect lib VCS warning. (#2479) [Julien Margetts]
+
 ****  Fix combining different-width parameters (#2484). [abirkmanis]
 
-****  Support $stable. [Peter Monsson]
+****  Fix protect-lib without sequential logic (#2492). [Yutetsu TAKATSUKASA]
+
+****  Fix V3Unknown from running with flat XML output (#2494). [James Hanlon]
+
+****  Fix non-32 bit conversion to float (#2495). [dsvf]
+
+****  Fix casting non-self-determined subexpressions (#2493). [phantom-killua]
+
+****  Fix SystemC net names (#2500). [Edgar E. Iglesias]
+
+****  Fix build with Bison 3.7 and newer (#2505). [Rupert Swarbrick]
+
+****  Fix slice of unpacked array (#2506) (#2507). [Yutetsu TAKATSUKASA]
+
 
 * Verilator 4.038 2020-07-11
 
@@ -3692,7 +3898,7 @@ of input ports exists for tracing.
 
 This uses outline mode in Emacs. See C-h m [M-x describe-mode].
 
-Copyright 2001-2020 by Wilson Snyder. This program is free software; you
+Copyright 2001-2021 by Wilson Snyder. This program is free software; you
 can redistribute it and/or modify it under the terms of either the GNU
 Lesser General Public License Version 3 or the Perl Artistic License
 Version 2.0.

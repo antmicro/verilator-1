@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -28,9 +28,9 @@
 //! Class for the different languages supported.
 //! A separate file, since used both in V3Options (globally) and FileLine 9per
 //! file).
-class V3LangCode {
+class V3LangCode final {
 public:
-    enum en {
+    enum en : uint8_t {
         L_ERROR,  // Must be first.
         L1364_1995,
         L1364_2001,
@@ -56,13 +56,13 @@ public:
     //
     enum en m_e;
     inline V3LangCode()
-        : m_e(L_ERROR) {}
+        : m_e{L_ERROR} {}
     // cppcheck-suppress noExplicitConstructor
     inline V3LangCode(en _e)
-        : m_e(_e) {}
+        : m_e{_e} {}
     explicit V3LangCode(const char* textp);
     explicit inline V3LangCode(int _e)
-        : m_e(static_cast<en>(_e)) {}
+        : m_e(static_cast<en>(_e)) {}  // Need () or GCC 4.8 false warning
     operator en() const { return m_e; }
 };
 

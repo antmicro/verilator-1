@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -38,25 +38,18 @@
 
 //######################################################################
 
-class ChangedState {
+class ChangedState final {
 public:
     // STATE
-    AstNodeModule* m_topModp;  // Top module
-    AstScope* m_scopetopp;  // Scope under TOPSCOPE
-    AstCFunc* m_chgFuncp;  // Change function we're building
-    AstCFunc* m_tlChgFuncp;  // Top level change function we're building
-    int m_numStmts;  // Number of statements added to m_chgFuncp
-    int m_funcNum;  // Number of change functions emitted
+    AstNodeModule* m_topModp = nullptr;  // Top module
+    AstScope* m_scopetopp = nullptr;  // Scope under TOPSCOPE
+    AstCFunc* m_chgFuncp = nullptr;  // Change function we're building
+    AstCFunc* m_tlChgFuncp = nullptr;  // Top level change function we're building
+    int m_numStmts = 0;  // Number of statements added to m_chgFuncp
+    int m_funcNum = 0;  // Number of change functions emitted
 
-    ChangedState() {
-        m_topModp = NULL;
-        m_chgFuncp = NULL;
-        m_scopetopp = NULL;
-        m_tlChgFuncp = NULL;
-        m_numStmts = 0;
-        m_funcNum = 0;
-    }
-    ~ChangedState() {}
+    ChangedState() = default;
+    ~ChangedState() = default;
 
     void maybeCreateChgFuncp() {
         // Don't create an extra function call if splitting is disabled
@@ -101,7 +94,7 @@ public:
 //######################################################################
 // Utility visitor to find elements to be compared
 
-class ChangedInsertVisitor : public AstNVisitor {
+class ChangedInsertVisitor final : public AstNVisitor {
 private:
     // STATE
     ChangedState* m_statep;  // Shared state across visitors
@@ -124,10 +117,9 @@ private:
                            "Unsupported: Can't detect more than "
                                << cvtToStr(DETECTARRAY_MAX_INDEXES)
                                << " array indexes (probably with UNOPTFLAT warning suppressed): "
-                               << m_vscp->prettyName() << endl
+                               << m_vscp->prettyName() << '\n'
                                << m_vscp->warnMore()
-                               << "... Could recompile with DETECTARRAY_MAX_INDEXES increased"
-                               << endl);
+                               << "... Could recompile with DETECTARRAY_MAX_INDEXES increased");
             return;
         }
         m_statep->maybeCreateChgFuncp();
@@ -142,34 +134,33 @@ private:
         m_statep->m_numStmts += visitor.count();
     }
 
-    virtual void visit(AstBasicDType* nodep) VL_OVERRIDE {  //
+    virtual void visit(AstBasicDType*) override {  //
         newChangeDet();
     }
-    virtual void visit(AstPackArrayDType* nodep) VL_OVERRIDE {  //
+    virtual void visit(AstPackArrayDType*) override {  //
         newChangeDet();
     }
-    virtual void visit(AstUnpackArrayDType* nodep) VL_OVERRIDE {
+    virtual void visit(AstUnpackArrayDType* nodep) override {
         for (int index = 0; index < nodep->elementsConst(); ++index) {
-            AstNode* origVEp = m_varEqnp;
-            AstNode* origNLEp = m_newLvEqnp;
-            AstNode* origNREp = m_newRvEqnp;
+            VL_RESTORER(m_varEqnp);
+            VL_RESTORER(m_newLvEqnp);
+            VL_RESTORER(m_newRvEqnp);
+            {
+                m_varEqnp = new AstArraySel(nodep->fileline(), m_varEqnp->cloneTree(true), index);
+                m_newLvEqnp
+                    = new AstArraySel(nodep->fileline(), m_newLvEqnp->cloneTree(true), index);
+                m_newRvEqnp
+                    = new AstArraySel(nodep->fileline(), m_newRvEqnp->cloneTree(true), index);
 
-            m_varEqnp = new AstArraySel(nodep->fileline(), m_varEqnp->cloneTree(true), index);
-            m_newLvEqnp = new AstArraySel(nodep->fileline(), m_newLvEqnp->cloneTree(true), index);
-            m_newRvEqnp = new AstArraySel(nodep->fileline(), m_newRvEqnp->cloneTree(true), index);
+                iterate(nodep->subDTypep()->skipRefp());
 
-            iterate(nodep->subDTypep()->skipRefp());
-
-            m_varEqnp->deleteTree();
-            m_newLvEqnp->deleteTree();
-            m_newRvEqnp->deleteTree();
-
-            m_varEqnp = origVEp;
-            m_newLvEqnp = origNLEp;
-            m_newRvEqnp = origNREp;
+                m_varEqnp->deleteTree();
+                m_newLvEqnp->deleteTree();
+                m_newRvEqnp->deleteTree();
+            }
         }
     }
-    virtual void visit(AstNodeUOrStructDType* nodep) VL_OVERRIDE {
+    virtual void visit(AstNodeUOrStructDType* nodep) override {
         if (nodep->packedUnsup()) {
             newChangeDet();
         } else {
@@ -179,7 +170,7 @@ private:
                                               << m_vscp->varp()->prettyNameQ());
         }
     }
-    virtual void visit(AstNode* nodep) VL_OVERRIDE {
+    virtual void visit(AstNode* nodep) override {
         iterateChildren(nodep);
         if (debug()) nodep->dumpTree(cout, "-DETECTARRAY-general-");
         m_vscp->v3warn(E_DETECTARRAY, "Unsupported: Can't detect changes on complex variable"
@@ -207,23 +198,23 @@ public:
             m_newvscp = new AstVarScope(m_vscp->fileline(), m_statep->m_scopetopp, newvarp);
             m_statep->m_scopetopp->addVarp(m_newvscp);
 
-            m_varEqnp = new AstVarRef(m_vscp->fileline(), m_vscp, false);
-            m_newLvEqnp = new AstVarRef(m_vscp->fileline(), m_newvscp, true);
-            m_newRvEqnp = new AstVarRef(m_vscp->fileline(), m_newvscp, false);
+            m_varEqnp = new AstVarRef(m_vscp->fileline(), m_vscp, VAccess::READ);
+            m_newLvEqnp = new AstVarRef(m_vscp->fileline(), m_newvscp, VAccess::WRITE);
+            m_newRvEqnp = new AstVarRef(m_vscp->fileline(), m_newvscp, VAccess::READ);
         }
         iterate(vscp->dtypep()->skipRefp());
         m_varEqnp->deleteTree();
         m_newLvEqnp->deleteTree();
         m_newRvEqnp->deleteTree();
     }
-    virtual ~ChangedInsertVisitor() {}
+    virtual ~ChangedInsertVisitor() override = default;
     VL_UNCOPYABLE(ChangedInsertVisitor);
 };
 
 //######################################################################
 // Changed state, as a visitor of each AstNode
 
-class ChangedVisitor : public AstNVisitor {
+class ChangedVisitor final : public AstNVisitor {
 private:
     // NODE STATE
     // Entire netlist:
@@ -242,13 +233,13 @@ private:
     }
 
     // VISITORS
-    virtual void visit(AstNodeModule* nodep) VL_OVERRIDE {
+    virtual void visit(AstNodeModule* nodep) override {
         UINFO(4, " MOD   " << nodep << endl);
         if (nodep->isTop()) m_statep->m_topModp = nodep;
         iterateChildren(nodep);
     }
 
-    virtual void visit(AstTopScope* nodep) VL_OVERRIDE {
+    virtual void visit(AstTopScope* nodep) override {
         UINFO(4, " TS " << nodep << endl);
         // Clearing
         AstNode::user1ClearTree();
@@ -267,27 +258,28 @@ private:
         // Each change detection function needs at least one AstChangeDet
         // to ensure that V3EmitC outputs the necessary code.
         m_statep->maybeCreateChgFuncp();
-        m_statep->m_chgFuncp->addStmtsp(new AstChangeDet(nodep->fileline(), NULL, NULL, false));
+        m_statep->m_chgFuncp->addStmtsp(
+            new AstChangeDet(nodep->fileline(), nullptr, nullptr, false));
 
         iterateChildren(nodep);
     }
-    virtual void visit(AstVarScope* nodep) VL_OVERRIDE {
+    virtual void visit(AstVarScope* nodep) override {
         if (nodep->isCircular()) {
             UINFO(8, "  CIRC " << nodep << endl);
             if (!nodep->user1SetOnce()) genChangeDet(nodep);
         }
     }
     //--------------------
-    virtual void visit(AstNodeMath*) VL_OVERRIDE {}  // Accelerate
-    virtual void visit(AstNode* nodep) VL_OVERRIDE { iterateChildren(nodep); }
+    virtual void visit(AstNodeMath*) override {}  // Accelerate
+    virtual void visit(AstNode* nodep) override { iterateChildren(nodep); }
 
 public:
     // CONSTRUCTORS
-    ChangedVisitor(AstNetlist* nodep, ChangedState* statep) {
-        m_statep = statep;
+    ChangedVisitor(AstNetlist* nodep, ChangedState* statep)
+        : m_statep{statep} {
         iterate(nodep);
     }
-    virtual ~ChangedVisitor() {}
+    virtual ~ChangedVisitor() override = default;
 };
 
 //######################################################################

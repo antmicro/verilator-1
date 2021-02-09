@@ -29,24 +29,17 @@ int sc_main(int argc, char* argv[]) {
     Vtop* top = new Vtop("top");
 
     // Initialize SC model
-#if (SYSTEMC_VERSION >= 20070314)
     sc_start(1, SC_NS);
-#else
-    sc_start(1);
-#endif
 
     // Simulate until $finish
     while (!Verilated::gotFinish()) {
-#if (SYSTEMC_VERSION >= 20070314)
+        // Simulate 1ns
         sc_start(1, SC_NS);
-#else
-        sc_start(1);
-#endif
     }
 
     // Final model cleanup
     top->final();
 
-    // Fin
+    // Return good completion status
     return 0;
 }

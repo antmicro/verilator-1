@@ -180,7 +180,7 @@ int mon_check_props() {
         if (value->children.size) {
             int size = 0;
             TestVpiHandle iter_h = vpi_iterate(vpiMemoryWord, h);
-            while (TestVpiHandle word_h = vpi_scan(iter_h.nofree())) {
+            while (TestVpiHandle word_h = vpi_scan(iter_h)) {
                 // check size and range
                 if (int status
                     = _mon_check_props(word_h, value->children.size, value->children.direction,
@@ -188,6 +188,7 @@ int mon_check_props() {
                     return status;
                 size++;
             }
+            iter_h.freed();  // IEEE 37.2.2 vpi_scan at end does a vpi_release_handle
             CHECK_RESULT(size, value->attributes.size);
         }
         value++;
@@ -206,7 +207,7 @@ int mon_check() {
 #ifdef IS_VPI
 
 static int mon_check_vpi() {
-    vpiHandle href = vpi_handle(vpiSysTfCall, 0);
+    TestVpiHandle href = vpi_handle(vpiSysTfCall, 0);
     s_vpi_value vpi_value;
 
     vpi_value.format = vpiIntVal;
@@ -224,8 +225,7 @@ static s_vpi_systf_data vpi_systf_data[] = {{vpiSysFunc, vpiIntFunc, (PLI_BYTE8*
 void vpi_compat_bootstrap(void) {
     p_vpi_systf_data systf_data_p;
     systf_data_p = &(vpi_systf_data[0]);
-    while (systf_data_p->type != 0)
-        vpi_register_systf(systf_data_p++);
+    while (systf_data_p->type != 0) vpi_register_systf(systf_data_p++);
 }
 
 // icarus entry

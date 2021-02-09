@@ -14,6 +14,7 @@
 
 //======================================================================
 
+// clang-format off
 #if defined(VERILATOR)
 # ifdef T_DPI_CONTEXT_NOOPT
 #  include "Vt_dpi_context_noopt__Dpi.h"
@@ -31,14 +32,15 @@
 #ifdef VERILATOR
 # include "verilated.h"
 #endif
+// clang-format on
 
 #ifdef NEED_EXTERNS
 extern "C" {
 
-    extern int dpic_line();
-    extern int dpic_save(int value);
-    extern int dpic_restore();
-    extern unsigned dpic_getcontext();
+extern int dpic_line();
+extern int dpic_save(int value);
+extern int dpic_restore();
+extern unsigned dpic_getcontext();
 }
 #endif
 
@@ -74,11 +76,14 @@ int dpic_line() {
         printf("%%Warning: svGetCallerInfo failed\n");
         return 0;
     }
+    if (svGetCallerInfo(nullptr, nullptr)) {}  // Check doesn't segflt
     return lineno;
 }
 
 extern int Dpic_Unique;
 int Dpic_Unique = 0;  // Address used for uniqueness
+extern int Dpic_Value;
+int Dpic_Value = 0;  // Address used for testing
 
 int dpic_save(int value) {
     svScope scope = svGetScope();
@@ -93,7 +98,23 @@ int dpic_save(int value) {
         int i;
     } vp;
 
-    vp.i = value; if (vp.i) { }
+    // Load the value here, and below, to test we can reinsert correctly
+    if (svPutUserData(scope, &Dpic_Unique, &Dpic_Value)) {
+        printf("%%Warning: svPutUserData failed (initial)\n");
+        return 0;
+    }
+    if (void* userp = svGetUserData(scope, &Dpic_Unique)) {
+        if (userp != &Dpic_Value) {
+            printf("%%Warning: svGetUserData failed (initial wrong data)\n");
+            return 0;
+        }
+    } else {
+        printf("%%Warning: svGetUserData failed (initial)\n");
+        return 0;
+    }
+
+    vp.i = value;
+    if (vp.i) {}
     if (svPutUserData(scope, &Dpic_Unique, vp.ptr)) {
         printf("%%Warning: svPutUserData failed\n");
         return 0;
@@ -124,7 +145,17 @@ int dpic_restore() {
 
 unsigned dpic_getcontext() {
     svScope scope = svGetScope();
-    printf("%%Info: svGetScope returned scope (%p) with name %s\n",
+    printf("%%Info: svGetScope returned scope (%p) with name %s\n",  //
            scope, svGetNameFromScope(scope));
     return (unsigned)(uintptr_t)scope;
+}
+
+void dpic_final() {
+    static int s_once = 0;
+    if (s_once++) return;
+    printf("%s:\n", __func__);
+#ifdef VERILATOR
+    // Cover VerilatedImp::userDump
+    Verilated::internalsDump();
+#endif
 }

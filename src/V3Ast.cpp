@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -58,19 +58,20 @@ std::ostream& operator<<(std::ostream& os, AstType rhs);
 //######################################################################
 // Creators
 
-void AstNode::init() {
+AstNode::AstNode(AstType t, FileLine* fl)
+    : m_type{t}
+    , m_fileline{fl} {
     editCountInc();
-    m_fileline = NULL;
-    m_nextp = NULL;
-    m_backp = NULL;
+    m_nextp = nullptr;
+    m_backp = nullptr;
     m_headtailp = this;  // When made, we're a list of only a single element
-    m_op1p = NULL;
-    m_op2p = NULL;
-    m_op3p = NULL;
-    m_op4p = NULL;
-    m_iterpp = NULL;
-    m_dtypep = NULL;
-    m_clonep = NULL;
+    m_op1p = nullptr;
+    m_op2p = nullptr;
+    m_op3p = nullptr;
+    m_op4p = nullptr;
+    m_iterpp = nullptr;
+    m_dtypep = nullptr;
+    m_clonep = nullptr;
     m_cloneCnt = 0;
     // Attributes
     m_didWidth = false;
@@ -126,9 +127,9 @@ string AstNode::encodeName(const string& namein) {
     }
     // Shorten names
     // TODO long term use VName in place of "string name"
-    VName vname(out);
-    out = vname.hashedName();
-    return out;
+    // Then we also won't need to save the table of hased values
+    VName vname{out};
+    return vname.hashedName();
 }
 
 string AstNode::encodeNumber(vlsint64_t num) {
@@ -160,7 +161,8 @@ string AstNode::dedotName(const string& namein) {
 string AstNode::vcdName(const string& namein) {
     // VCD tracing expects space to separate hierarchy
     // Dots are reserved for dots the user put in the name
-    string pretty = namein;
+    // We earlier hashed all symbols, dehash them so user sees real name
+    string pretty{VName::dehash(namein)};
     string::size_type pos;
     while ((pos = pretty.find("__DOT__")) != string::npos) pretty.replace(pos, 7, " ");
     while ((pos = pretty.find('.')) != string::npos) pretty.replace(pos, 1, " ");
@@ -275,8 +277,8 @@ AstNode* AstNode::addNext(AstNode* nodep, AstNode* newp) {
         // New tail needs the head
         AstNode* newtailp = newp->m_headtailp;
         AstNode* headp = oldtailp->m_headtailp;
-        oldtailp->m_headtailp = NULL;  // May be written again as new head
-        newp->m_headtailp = NULL;  // May be written again as new tail
+        oldtailp->m_headtailp = nullptr;  // May be written again as new head
+        newp->m_headtailp = nullptr;  // May be written again as new tail
         newtailp->m_headtailp = headp;
         headp->m_headtailp = newtailp;
         newp->editCountInc();
@@ -321,17 +323,17 @@ void AstNode::addNextHere(AstNode* newp) {
     //    tail (oldheadtailp && !oldnextp)   // this was tail of list, might also
     //                                     be head of one-node list
     //
-    newp->m_headtailp = NULL;  // Not at head any longer
-    addlastp->m_headtailp = NULL;  // Presume middle of list
+    newp->m_headtailp = nullptr;  // Not at head any longer
+    addlastp->m_headtailp = nullptr;  // Presume middle of list
     // newp might happen to be head/tail after all, if so will be set again below
     if (oldheadtailp) {  // else in middle of list, no change
         if (oldheadtailp == this) {  // this was one node
             this->m_headtailp = addlastp;  // Was head/tail, now a tail
-            addlastp->m_headtailp = oldheadtailp;  // Tail needs to remember head (or NULL)
+            addlastp->m_headtailp = oldheadtailp;  // Tail needs to remember head (or nullptr)
         } else if (!oldnextp) {  // this was tail
-            this->m_headtailp = NULL;  // No longer a tail
+            this->m_headtailp = nullptr;  // No longer a tail
             oldheadtailp->m_headtailp = addlastp;  // Head gets new tail
-            addlastp->m_headtailp = oldheadtailp;  // Tail needs to remember head (or NULL)
+            addlastp->m_headtailp = oldheadtailp;  // Tail needs to remember head (or nullptr)
         }  // else is head, and we're inserting into the middle, so no other change
     }
 
@@ -393,6 +395,7 @@ void AstNode::setOp4p(AstNode* newp) {
 
 void AstNode::addOp1p(AstNode* newp) {
     UASSERT(newp, "Null item passed to addOp1p");
+    UDEBUGONLY(UASSERT_OBJ(!newp->m_backp, newp, "Adding already linked node"););
     if (!m_op1p) {
         op1p(newp);
     } else {
@@ -402,6 +405,7 @@ void AstNode::addOp1p(AstNode* newp) {
 
 void AstNode::addOp2p(AstNode* newp) {
     UASSERT(newp, "Null item passed to addOp2p");
+    UDEBUGONLY(UASSERT_OBJ(!newp->m_backp, newp, "Adding already linked node"););
     if (!m_op2p) {
         op2p(newp);
     } else {
@@ -411,6 +415,7 @@ void AstNode::addOp2p(AstNode* newp) {
 
 void AstNode::addOp3p(AstNode* newp) {
     UASSERT(newp, "Null item passed to addOp3p");
+    UDEBUGONLY(UASSERT_OBJ(!newp->m_backp, newp, "Adding already linked node"););
     if (!m_op3p) {
         op3p(newp);
     } else {
@@ -420,6 +425,7 @@ void AstNode::addOp3p(AstNode* newp) {
 
 void AstNode::addOp4p(AstNode* newp) {
     UASSERT(newp, "Null item passed to addOp4p");
+    UDEBUGONLY(UASSERT_OBJ(!newp->m_backp, newp, "Adding already linked node"););
     if (!m_op4p) {
         op4p(newp);
     } else {
@@ -470,7 +476,7 @@ AstNode* AstNode::unlinkFrBackWithNext(AstNRelinker* linkerp) {
         }
     }
     if (backp->m_nextp == oldp) {
-        backp->m_nextp = NULL;
+        backp->m_nextp = nullptr;
         // Old list gets truncated
         // New list becomes a list upon itself
         // Most common case is unlinking a entire operand tree
@@ -486,21 +492,21 @@ AstNode* AstNode::unlinkFrBackWithNext(AstNRelinker* linkerp) {
         oldp->m_headtailp = oldtailp;
         oldp->m_headtailp->m_headtailp = oldp;
     } else if (backp->m_op1p == oldp) {
-        backp->m_op1p = NULL;
+        backp->m_op1p = nullptr;
     } else if (backp->m_op2p == oldp) {
-        backp->m_op2p = NULL;
+        backp->m_op2p = nullptr;
     } else if (backp->m_op3p == oldp) {
-        backp->m_op3p = NULL;
+        backp->m_op3p = nullptr;
     } else if (backp->m_op4p == oldp) {
-        backp->m_op4p = NULL;
+        backp->m_op4p = nullptr;
     } else {
         this->v3fatalSrc("Unlink of node with back not pointing to it.");
     }
     // Relink
-    oldp->m_backp = NULL;
+    oldp->m_backp = nullptr;
     // Iterator fixup
-    if (oldp->m_iterpp) *(oldp->m_iterpp) = NULL;
-    oldp->m_iterpp = NULL;
+    if (oldp->m_iterpp) *(oldp->m_iterpp) = nullptr;
+    oldp->m_iterpp = nullptr;
     oldp->debugTreeChange("-unlinkWNextOut: ", __LINE__, true);
     return oldp;
 }
@@ -561,10 +567,10 @@ AstNode* AstNode::unlinkFrBack(AstNRelinker* linkerp) {
     // Iterator fixup
     if (oldp->m_iterpp) *(oldp->m_iterpp) = oldp->m_nextp;
     // Relink
-    oldp->m_nextp = NULL;
-    oldp->m_backp = NULL;
+    oldp->m_nextp = nullptr;
+    oldp->m_backp = nullptr;
     oldp->m_headtailp = this;
-    oldp->m_iterpp = NULL;
+    oldp->m_iterpp = nullptr;
     oldp->debugTreeChange("-unlinkFrBkOut: ", __LINE__, true);
     return oldp;
 }
@@ -598,7 +604,7 @@ void AstNode::relink(AstNRelinker* linkerp) {
     }
     // Relink
     newp->m_backp = backp;
-    linkerp->m_backp = NULL;
+    linkerp->m_backp = nullptr;
     // Iterator fixup
     if (linkerp->m_iterpp) {
         // If we're iterating over a next() link, we need to follow links off the
@@ -610,7 +616,7 @@ void AstNode::relink(AstNRelinker* linkerp) {
         newp->m_iterpp = linkerp->m_iterpp;
     }
     // Empty the linker so not used twice accidentally
-    linkerp->m_backp = NULL;
+    linkerp->m_backp = nullptr;
     this->debugTreeChange("-relinkOut: ", __LINE__, true);
 }
 
@@ -633,8 +639,8 @@ void AstNode::relinkOneLink(AstNode*& pointpr,  // Ref to pointer that gets set 
         newlistlastp->m_nextp = pointpr;
         pointpr->m_backp = newlistlastp;
         // Head/tail
-        pointpr->m_headtailp = NULL;  // Old head
-        newlistlastp->m_headtailp = NULL;  // Old tail
+        pointpr->m_headtailp = nullptr;  // Old head
+        newlistlastp->m_headtailp = nullptr;  // Old tail
         newp->m_headtailp = oldlistlastp;  // Head points to tail
         oldlistlastp->m_headtailp = newp;  // Tail points to head
     }
@@ -668,7 +674,7 @@ AstNode* AstNode::cloneTreeIter() {
     if (this->m_op2p) newp->op2p(this->m_op2p->cloneTreeIterList());
     if (this->m_op3p) newp->op3p(this->m_op3p->cloneTreeIterList());
     if (this->m_op4p) newp->op4p(this->m_op4p->cloneTreeIterList());
-    newp->m_iterpp = NULL;
+    newp->m_iterpp = nullptr;
     newp->clonep(this);  // Save pointers to/from both to simplify relinking.
     this->clonep(newp);  // Save pointers to/from both to simplify relinking.
     return newp;
@@ -676,12 +682,12 @@ AstNode* AstNode::cloneTreeIter() {
 
 AstNode* AstNode::cloneTreeIterList() {
     // private: Clone list of nodes, set m_headtailp
-    AstNode* newheadp = NULL;
-    AstNode* newtailp = NULL;
-    // Audited to make sure this is never NULL
+    AstNode* newheadp = nullptr;
+    AstNode* newtailp = nullptr;
+    // Audited to make sure this is never nullptr
     for (AstNode* oldp = this; oldp; oldp = oldp->m_nextp) {
         AstNode* newp = oldp->cloneTreeIter();
-        newp->m_headtailp = NULL;
+        newp->m_headtailp = nullptr;
         newp->m_backp = newtailp;
         if (newtailp) newtailp->m_nextp = newp;
         if (!newheadp) newheadp = newp;
@@ -700,10 +706,10 @@ AstNode* AstNode::cloneTree(bool cloneNextLink) {
         newp = cloneTreeIterList();
     } else {
         newp = cloneTreeIter();
-        newp->m_nextp = NULL;
+        newp->m_nextp = nullptr;
         newp->m_headtailp = newp;
     }
-    newp->m_backp = NULL;
+    newp->m_backp = nullptr;
     newp->cloneRelinkTree();
     newp->debugTreeChange("-cloneOut: ", __LINE__, true);
     return newp;
@@ -739,7 +745,7 @@ void AstNode::deleteNode() {
 
 void AstNode::deleteTreeIter() {
     // private: Delete list of nodes. Publicly call deleteTree() instead.
-    // Audited to make sure this is never NULL
+    // Audited to make sure this is never nullptr
     for (AstNode *nodep = this, *nnextp; nodep; nodep = nnextp) {
         nnextp = nodep->m_nextp;
         // MUST be depth first!
@@ -747,8 +753,8 @@ void AstNode::deleteTreeIter() {
         if (nodep->m_op2p) nodep->m_op2p->deleteTreeIter();
         if (nodep->m_op3p) nodep->m_op3p->deleteTreeIter();
         if (nodep->m_op4p) nodep->m_op4p->deleteTreeIter();
-        nodep->m_nextp = NULL;
-        nodep->m_backp = NULL;
+        nodep->m_nextp = nullptr;
+        nodep->m_backp = nullptr;
         nodep->deleteNode();
     }
 }
@@ -831,11 +837,11 @@ void AstNode::iterateAndNext(AstNVisitor& v) {
         niterp->m_iterpp = &niterp;
         niterp->accept(v);
         // accept may do a replaceNode and change niterp on us...
-        // niterp maybe NULL, so need cast if printing
+        // niterp maybe nullptr, so need cast if printing
         // if (niterp != nodep) UINFO(1,"iterateAndNext edited "<<cvtToHex(nodep)
         //                             <<" now into "<<cvtToHex(niterp)<<endl);
         if (!niterp) return;  // Perhaps node deleted inside accept
-        niterp->m_iterpp = NULL;
+        niterp->m_iterpp = nullptr;
         if (VL_UNLIKELY(niterp != nodep)) {  // Edited node inside accept
             nodep = niterp;
         } else {  // Unchanged node, just continue loop
@@ -853,7 +859,7 @@ void AstNode::iterateListBackwards(AstNVisitor& v) {
         if (nodep->backp()->m_nextp == nodep) {
             nodep = nodep->backp();
         } else {
-            nodep = NULL;
+            nodep = nullptr;
         }  // else: backp points up the tree.
     }
 }
@@ -900,7 +906,7 @@ AstNode* AstNode::iterateSubtreeReturnEdits(AstNVisitor& v) {
     } else {
         // Use back to determine who's pointing at us (IE assume new node
         // grafts into same place as old one)
-        AstNode** nextnodepp = NULL;
+        AstNode** nextnodepp = nullptr;
         if (this->m_backp->m_op1p == this) {
             nextnodepp = &(this->m_backp->m_op1p);
         } else if (this->m_backp->m_op2p == this) {
@@ -974,9 +980,7 @@ std::ostream& operator<<(std::ostream& os, const V3Hash& rhs) {
 
 V3Hash::V3Hash(const string& name) {
     uint32_t val = 0;
-    for (string::const_iterator it = name.begin(); it != name.end(); ++it) {
-        val = val * 31 + *it;
-    }
+    for (const auto& c : name) val = val * 31 + c;
     setBoth(1, val);
 }
 
@@ -999,7 +1003,7 @@ void AstNode::checkTreeIter(AstNode* backp) {
 
 void AstNode::checkTreeIterList(AstNode* backp) {
     // private: Check a (possible) list of nodes, this is always the head of the list
-    // Audited to make sure this is never NULL
+    // Audited to make sure this is never nullptr
     AstNode* headp = this;
     AstNode* tailp = this;
     for (AstNode* nodep = headp; nodep; nodep = nodep->nextp()) {
@@ -1024,35 +1028,47 @@ void AstNode::checkTree() {
 }
 
 // cppcheck-suppress unusedFunction  // Debug only
-void AstNode::dumpGdb() {  // For GDB only  // LCOV_EXCL_LINE
-    dumpGdbHeader();  // LCOV_EXCL_LINE
+void AstNode::dumpGdb(const AstNode* nodep) {  // For GDB only  // LCOV_EXCL_LINE
+    if (!nodep) {
+        cout << "<nullptr>" << endl;
+        return;
+    }
+    nodep->dumpGdbHeader();
     cout << "  ";
-    dump(cout);
-    cout << endl;  // LCOV_EXCL_LINE
-}
+    nodep->dump(cout);
+    cout << endl;
+}  // LCOV_EXCL_STOP
 // cppcheck-suppress unusedFunction  // Debug only
-void AstNode::dumpGdbHeader() const {  // For GDB only  // LCOV_EXCL_LINE
-    dumpPtrs(cout);  // LCOV_EXCL_LINE
-    cout << "  Fileline = " << fileline() << endl;  // LCOV_EXCL_LINE
-}
+void AstNode::dumpGdbHeader() const {  // For GDB only  // LCOV_EXCL_START
+    dumpPtrs(cout);
+    cout << "  Fileline = " << fileline() << endl;
+}  // LCOV_EXCL_STOP
 // cppcheck-suppress unusedFunction  // Debug only
-void AstNode::dumpTreeGdb() {  // For GDB only  // LCOV_EXCL_LINE
-    dumpGdbHeader();  // LCOV_EXCL_LINE
-    dumpTree(cout);  // LCOV_EXCL_LINE
-}
+void AstNode::dumpTreeGdb(const AstNode* nodep) {  // For GDB only  // LCOV_EXCL_START
+    if (!nodep) {
+        cout << "<nullptr>" << endl;
+        return;
+    }
+    nodep->dumpGdbHeader();
+    nodep->dumpTree(cout);
+}  // LCOV_EXCL_STOP
 // cppcheck-suppress unusedFunction  // Debug only
-void AstNode::dumpTreeFileGdb(const char* filenamep) {  // For GDB only  // LCOV_EXCL_LINE
-    string filename
-        = filenamep ? filenamep : v3Global.debugFilename("debug.tree", 98);  // LCOV_EXCL_LINE
-    v3Global.rootp()->dumpTreeFile(filename);  // LCOV_EXCL_LINE
-}
+void AstNode::dumpTreeFileGdb(const AstNode* nodep,  // LCOV_EXCL_START
+                              const char* filenamep) {  // For GDB only
+    if (!nodep) {
+        cout << "<nullptr>" << endl;
+        return;
+    }
+    string filename = filenamep ? filenamep : v3Global.debugFilename("debug.tree", 98);
+    v3Global.rootp()->dumpTreeFile(filename);
+}  // LCOV_EXCL_STOP
 
 // cppcheck-suppress unusedFunction  // Debug only
 void AstNode::checkIter() const {
     if (m_iterpp) {
         dumpPtrs(cout);
         // Perhaps something forgot to clear m_iterpp?
-        this->v3fatalSrc("Iteration link should be NULL");
+        this->v3fatalSrc("Iteration link should be nullptr");
     }
 }
 
@@ -1083,14 +1099,14 @@ void AstNode::dumpPtrs(std::ostream& os) const {
 
 void AstNode::dumpTree(std::ostream& os, const string& indent, int maxDepth) const {
     static int s_debugFileline = v3Global.opt.debugSrcLevel("fileline");  // --debugi-fileline 9
-    os << indent << " " << this << endl;
+    os << indent << " " << this << '\n';
     if (debug() > 8) {
         os << indent << "     ";
         dumpPtrs(os);
     }
     if (s_debugFileline >= 9) { os << fileline()->warnContextSecondary(); }
     if (maxDepth == 1) {
-        if (op1p() || op2p() || op3p() || op4p()) { os << indent << "1: ...(maxDepth)" << endl; }
+        if (op1p() || op2p() || op3p() || op4p()) os << indent << "1: ...(maxDepth)\n";
     } else {
         for (const AstNode* nodep = op1p(); nodep; nodep = nodep->nextp()) {
             nodep->dumpTree(os, indent + "1:", maxDepth - 1);
@@ -1108,23 +1124,23 @@ void AstNode::dumpTree(std::ostream& os, const string& indent, int maxDepth) con
 }
 
 void AstNode::dumpTreeAndNext(std::ostream& os, const string& indent, int maxDepth) const {
-    // Audited to make sure this is never NULL
+    // Audited to make sure this is never nullptr
     for (const AstNode* nodep = this; nodep; nodep = nodep->nextp()) {
         nodep->dumpTree(os, indent, maxDepth);
     }
 }
 
-void AstNode::dumpTreeFile(const string& filename, bool append, bool doDump) {
+void AstNode::dumpTreeFile(const string& filename, bool append, bool doDump, bool doCheck) {
     // Not const function as calls checkTree
     if (doDump) {
         {  // Write log & close
             UINFO(2, "Dumping " << filename << endl);
-            const vl_unique_ptr<std::ofstream> logsp(V3File::new_ofstream(filename, append));
+            const std::unique_ptr<std::ofstream> logsp(V3File::new_ofstream(filename, append));
             if (logsp->fail()) v3fatal("Can't write " << filename);
             *logsp << "Verilator Tree Dump (format 0x3900) from <e" << std::dec << editCountLast();
-            *logsp << "> to <e" << std::dec << editCountGbl() << ">" << endl;
+            *logsp << "> to <e" << std::dec << editCountGbl() << ">\n";
             if (editCountGbl() == editCountLast() && !(v3Global.opt.dumpTree() >= 9)) {
-                *logsp << endl;
+                *logsp << '\n';
                 *logsp << "No changes since last dump!\n";
             } else {
                 dumpTree(*logsp);
@@ -1132,7 +1148,7 @@ void AstNode::dumpTreeFile(const string& filename, bool append, bool doDump) {
             }
         }
     }
-    if (v3Global.opt.debugCheck() || v3Global.opt.dumpTree()) {
+    if (doCheck && (v3Global.opt.debugCheck() || v3Global.opt.dumpTree())) {
         // Error check
         checkTree();
         // Broken isn't part of check tree because it can munge iterp's
@@ -1194,7 +1210,7 @@ void AstNode::v3errorEnd(std::ostringstream& str) const {
         std::ostringstream nsstr;
         nsstr << str.str();
         if (debug()) {
-            nsstr << endl;
+            nsstr << '\n';
             nsstr << "-node: ";
             const_cast<AstNode*>(this)->dump(nsstr);
             nsstr << endl;
@@ -1262,13 +1278,14 @@ AstBasicDType* AstNode::findInsertSameDType(AstBasicDType* nodep) {
 AstNodeDType* AstNode::findVoidDType() const {
     return v3Global.rootp()->typeTablep()->findVoidDType(fileline());
 }
+AstNodeDType* AstNode::findQueueIndexDType() const {
+    return v3Global.rootp()->typeTablep()->findQueueIndexDType(fileline());
+}
 
 //######################################################################
 // AstNVisitor
 
 void AstNVisitor::doDeletes() {
-    for (std::vector<AstNode*>::iterator it = m_deleteps.begin(); it != m_deleteps.end(); ++it) {
-        (*it)->deleteTree();
-    }
+    for (AstNode* nodep : m_deleteps) nodep->deleteTree();
     m_deleteps.clear();
 }

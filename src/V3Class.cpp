@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -29,13 +29,15 @@
 
 //######################################################################
 
-class ClassVisitor : public AstNVisitor {
+class ClassVisitor final : public AstNVisitor {
 private:
     // MEMBERS
     AstUser1InUse m_inuser1;
     string m_prefix;  // String prefix to add to name based on hier
-    AstScope* m_classScopep;  // Package moving scopes into
-    typedef std::vector<std::pair<AstNode*, AstScope*> > MoveVector;
+    AstScope* m_classScopep = nullptr;  // Package moving scopes into
+    AstScope* m_packageScopep = nullptr;  // Class package scope
+    AstNodeFTask* m_ftaskp = nullptr;  // Current task
+    typedef std::vector<std::pair<AstNode*, AstScope*>> MoveVector;
     MoveVector m_moves;
 
     // NODE STATE
@@ -44,7 +46,7 @@ private:
     // METHODS
     VL_DEBUG_FUNC;  // Declare debug()
 
-    virtual void visit(AstClass* nodep) VL_OVERRIDE {
+    virtual void visit(AstClass* nodep) override {
         if (nodep->user1SetOnce()) return;
         // Move this class
         nodep->name(m_prefix + nodep->name());
@@ -54,17 +56,17 @@ private:
         // Note origName is the same as the class origName so errors look correct
         AstClassPackage* packagep = new AstClassPackage(nodep->fileline(), nodep->origName());
         packagep->name(nodep->name() + "__Vclpkg");
-        nodep->packagep(packagep);
+        nodep->classOrPackagep(packagep);
         packagep->classp(nodep);
         v3Global.rootp()->addModulep(packagep);
         // Add package to hierarchy
         AstCell* cellp = new AstCell(packagep->fileline(), packagep->fileline(), packagep->name(),
-                                     packagep->name(), NULL, NULL, NULL);
+                                     packagep->name(), nullptr, nullptr, nullptr);
         cellp->modp(packagep);
         v3Global.rootp()->topModulep()->addStmtp(cellp);
         // Find class's scope
         // Alternative would be to move this and related to V3Scope
-        AstScope* classScopep = NULL;
+        AstScope* classScopep = nullptr;
         for (AstNode* itp = nodep->stmtsp(); itp; itp = itp->nextp()) {
             if ((classScopep = VN_CAST(itp, Scope))) break;
         }
@@ -75,33 +77,51 @@ private:
                                         classScopep->aboveScopep(), classScopep->aboveCellp());
         packagep->addStmtp(scopep);
         // Iterate
-        string prevPrefix = m_prefix;
+        VL_RESTORER(m_prefix);
+        VL_RESTORER(m_classScopep);
+        VL_RESTORER(m_packageScopep);
         {
             m_classScopep = classScopep;
+            m_packageScopep = scopep;
             m_prefix = nodep->name() + "__02e";  // .
             iterateChildren(nodep);
         }
-        m_prefix = prevPrefix;
-        m_classScopep = NULL;
     }
-    virtual void visit(AstPackage* nodep) VL_OVERRIDE {
-        string prevPrefix = m_prefix;
+    virtual void visit(AstNodeModule* nodep) override {
+        // Visit for NodeModules that are not AstClass (AstClass is-a AstNodeModule)
+        VL_RESTORER(m_prefix);
         {
             m_prefix = nodep->name() + "__03a__03a";  // ::
             iterateChildren(nodep);
         }
-        m_prefix = prevPrefix;
     }
 
-    virtual void visit(AstVar* nodep) VL_OVERRIDE {
+    virtual void visit(AstVar* nodep) override {
         iterateChildren(nodep);
         // Don't move now, or wouldn't keep interating the class
-        // TODO move class statics only
-        // if (m_classScopep) {
-        //    m_moves.push_back(make_pair(nodep, m_classScopep));
-        //}
+        // TODO move class statics too
+        if (m_packageScopep && m_ftaskp && m_ftaskp->lifetime().isStatic()) {
+            m_moves.push_back(make_pair(nodep, m_packageScopep));
+        }
     }
-    virtual void visit(AstCFunc* nodep) VL_OVERRIDE {
+
+    virtual void visit(AstVarScope* nodep) override {
+        iterateChildren(nodep);
+        nodep->varp()->user1p(nodep);
+    }
+
+    virtual void visit(AstNodeFTask* nodep) override {
+        VL_RESTORER(m_ftaskp);
+        {
+            m_ftaskp = nodep;
+            iterateChildren(nodep);
+            if (m_packageScopep && nodep->lifetime().isStatic()) {
+                m_moves.push_back(make_pair(nodep, m_packageScopep));
+            }
+        }
+    }
+
+    virtual void visit(AstCFunc* nodep) override {
         iterateChildren(nodep);
         // Don't move now, or wouldn't keep interating the class
         // TODO move function statics only
@@ -110,19 +130,21 @@ private:
         //}
     }
 
-    virtual void visit(AstNodeMath* nodep) VL_OVERRIDE {}  // Short circuit
-    virtual void visit(AstNodeStmt* nodep) VL_OVERRIDE {}  // Short circuit
-    virtual void visit(AstNode* nodep) VL_OVERRIDE { iterateChildren(nodep); }
+    virtual void visit(AstNodeMath* nodep) override {}  // Short circuit
+    virtual void visit(AstNodeStmt* nodep) override {}  // Short circuit
+    virtual void visit(AstNode* nodep) override { iterateChildren(nodep); }
 
 public:
     // CONSTRUCTORS
-    explicit ClassVisitor(AstNetlist* nodep)
-        : m_classScopep(NULL) {
-        iterate(nodep);
-    }
-    virtual ~ClassVisitor() {
-        for (MoveVector::iterator it = m_moves.begin(); it != m_moves.end(); ++it) {
-            it->second->addVarp(it->first->unlinkFrBack());
+    explicit ClassVisitor(AstNetlist* nodep) { iterate(nodep); }
+    virtual ~ClassVisitor() override {
+        for (auto moved : m_moves) {
+            if (VN_IS(moved.first, NodeFTask)) {
+                moved.second->addActivep(moved.first->unlinkFrBack());
+            } else if (VN_IS(moved.first, Var)) {
+                AstVarScope* scopep = VN_CAST(moved.first->user1p(), VarScope);
+                moved.second->addVarp(scopep->unlinkFrBack());
+            }
         }
     }
 };

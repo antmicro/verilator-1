@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -69,10 +69,10 @@ void VlcTop::writeCoverage(const string& filename) {
         return;
     }
 
-    os << "# SystemC::Coverage-3" << endl;
-    for (VlcPoints::ByName::const_iterator it = m_points.begin(); it != m_points.end(); ++it) {
-        const VlcPoint& point = m_points.pointNumber(it->second);
-        os << "C '" << point.name() << "' " << point.count() << endl;
+    os << "# SystemC::Coverage-3\n";
+    for (const auto& i : m_points) {
+        const VlcPoint& point = m_points.pointNumber(i.second);
+        os << "C '" << point.name() << "' " << point.count() << '\n';
     }
 }
 
@@ -107,17 +107,17 @@ void VlcTop::writeInfo(const string& filename) {
     //   end_of_record
 
     os << "TN:verilator_coverage\n";
-    for (VlcSources::NameMap::iterator sit = m_sources.begin(); sit != m_sources.end(); ++sit) {
-        VlcSource& source = sit->second;
-        os << "SF:" << source.name() << endl;
+    for (auto& si : m_sources) {
+        VlcSource& source = si.second;
+        os << "SF:" << source.name() << '\n';
         VlcSource::LinenoMap& lines = source.lines();
-        for (VlcSource::LinenoMap::iterator lit = lines.begin(); lit != lines.end(); ++lit) {
-            int lineno = lit->first;
-            VlcSource::ColumnMap& cmap = lit->second;
+        for (auto& li : lines) {
+            int lineno = li.first;
+            VlcSource::ColumnMap& cmap = li.second;
             bool first = true;
             vluint64_t min_count = 0;  // Minimum across all columns on line
-            for (VlcSource::ColumnMap::iterator cit = cmap.begin(); cit != cmap.end(); ++cit) {
-                VlcSourceCount& col = cit->second;
+            for (auto& ci : cmap) {
+                VlcSourceCount& col = ci.second;
                 if (first) {
                     min_count = col.count();
                     first = false;
@@ -134,7 +134,7 @@ void VlcTop::writeInfo(const string& filename) {
 //********************************************************************
 
 struct CmpComputrons {
-    inline bool operator()(const VlcTest* lhsp, const VlcTest* rhsp) const {
+    bool operator()(const VlcTest* lhsp, const VlcTest* rhsp) const {
         if (lhsp->computrons() != rhsp->computrons()) {
             return lhsp->computrons() < rhsp->computrons();
         }
@@ -148,17 +148,16 @@ void VlcTop::rank() {
 
     // Sort by computrons, so fast tests get selected first
     std::vector<VlcTest*> bytime;
-    for (VlcTests::ByName::const_iterator it = m_tests.begin(); it != m_tests.end(); ++it) {
-        VlcTest* testp = *it;
+    for (const auto& testp : m_tests) {
         if (testp->bucketsCovered()) {  // else no points, so can't help us
-            bytime.push_back(*it);
+            bytime.push_back(testp);
         }
     }
     sort(bytime.begin(), bytime.end(), CmpComputrons());  // Sort the vector
 
     VlcBuckets remaining;
-    for (VlcPoints::ByName::const_iterator it = m_points.begin(); it != m_points.end(); ++it) {
-        VlcPoint* pointp = &points().pointNumber(it->second);
+    for (const auto& i : m_points) {
+        VlcPoint* pointp = &points().pointNumber(i.second);
         // If any tests hit this point, then we'll need to cover it.
         if (pointp->testsCovering()) remaining.addData(pointp->pointNum(), 1);
     }
@@ -172,10 +171,9 @@ void VlcTop::rank() {
             UINFO(9, "Left on iter" << nextrank << ": ");  // LCOV_EXCL_LINE
             remaining.dump();  // LCOV_EXCL_LINE
         }
-        VlcTest* bestTestp = NULL;
+        VlcTest* bestTestp = nullptr;
         vluint64_t bestRemain = 0;
-        for (std::vector<VlcTest*>::iterator it = bytime.begin(); it != bytime.end(); ++it) {
-            VlcTest* testp = *it;
+        for (const auto& testp : bytime) {
             if (!testp->rank()) {
                 vluint64_t remain = testp->buckets().dataPopCount(remaining);
                 if (remain > bestRemain) {
@@ -198,8 +196,8 @@ void VlcTop::rank() {
 
 void VlcTop::annotateCalc() {
     // Calculate per-line information into filedata structure
-    for (VlcPoints::ByName::const_iterator it = m_points.begin(); it != m_points.end(); ++it) {
-        const VlcPoint& point = m_points.pointNumber(it->second);
+    for (const auto& i : m_points) {
+        const VlcPoint& point = m_points.pointNumber(i.second);
         string filename = point.filename();
         int lineno = point.lineno();
         if (!filename.empty() && lineno != 0) {
@@ -208,7 +206,7 @@ void VlcTop::annotateCalc() {
             unsigned thresh = (!threshStr.empty()) ? atoi(threshStr.c_str()) : opt.annotateMin();
             bool ok = (point.count() >= thresh);
             UINFO(9, "AnnoCalc count " << filename << ":" << lineno << ":" << point.column() << " "
-                                       << point.count() << " " << point.linescov() << endl);
+                                       << point.count() << " " << point.linescov() << '\n');
             // Base coverage
             source.incCount(lineno, point.column(), point.count(), ok);
             // Additional lines covered by this statement
@@ -244,15 +242,15 @@ void VlcTop::annotateCalcNeeded() {
     // coverage in all categories
     int totCases = 0;
     int totOk = 0;
-    for (VlcSources::NameMap::iterator sit = m_sources.begin(); sit != m_sources.end(); ++sit) {
-        VlcSource& source = sit->second;
+    for (auto& si : m_sources) {
+        VlcSource& source = si.second;
         // UINFO(1,"Source "<<source.name()<<endl);
         if (opt.annotateAll()) source.needed(true);
         VlcSource::LinenoMap& lines = source.lines();
-        for (VlcSource::LinenoMap::iterator lit = lines.begin(); lit != lines.end(); ++lit) {
-            VlcSource::ColumnMap& cmap = lit->second;
-            for (VlcSource::ColumnMap::iterator cit = cmap.begin(); cit != cmap.end(); ++cit) {
-                VlcSourceCount& col = cit->second;
+        for (auto& li : lines) {
+            VlcSource::ColumnMap& cmap = li.second;
+            for (auto& ci : cmap) {
+                VlcSourceCount& col = ci.second;
                 // UINFO(0,"Source "<<source.name()<<":"<<col.lineno()<<":"<<col.column()<<endl);
                 ++totCases;
                 if (col.ok()) {
@@ -265,15 +263,15 @@ void VlcTop::annotateCalcNeeded() {
     }
     float pct = totCases ? (100 * totOk / totCases) : 0;
     cout << "Total coverage (" << totOk << "/" << totCases << ") ";
-    cout << std::fixed << std::setw(3) << std::setprecision(2) << pct << "%" << endl;
-    if (totOk != totCases) cout << "See lines with '%00' in " << opt.annotateOut() << endl;
+    cout << std::fixed << std::setw(3) << std::setprecision(2) << pct << "%\n";
+    if (totOk != totCases) cout << "See lines with '%00' in " << opt.annotateOut() << '\n';
 }
 
 void VlcTop::annotateOutputFiles(const string& dirname) {
     // Create if uncreated, ignore errors
     V3Os::createDir(dirname);
-    for (VlcSources::NameMap::iterator sit = m_sources.begin(); sit != m_sources.end(); ++sit) {
-        VlcSource& source = sit->second;
+    for (auto& si : m_sources) {
+        VlcSource& source = si.second;
         if (!source.needed()) continue;
         string filename = source.name();
         string outfilename = dirname + "/" + V3Os::filenameNonDir(filename);
@@ -292,7 +290,7 @@ void VlcTop::annotateOutputFiles(const string& dirname) {
             return;
         }
 
-        os << "\t// verilator_coverage annotation" << endl;
+        os << "\t// verilator_coverage annotation\n";
 
         int lineno = 0;
         while (!is.eof()) {
@@ -302,15 +300,15 @@ void VlcTop::annotateOutputFiles(const string& dirname) {
             bool first = true;
 
             VlcSource::LinenoMap& lines = source.lines();
-            VlcSource::LinenoMap::iterator lit = lines.find(lineno);
+            const auto lit = lines.find(lineno);
             if (lit != lines.end()) {
                 VlcSource::ColumnMap& cmap = lit->second;
-                for (VlcSource::ColumnMap::iterator cit = cmap.begin(); cit != cmap.end(); ++cit) {
-                    VlcSourceCount& col = cit->second;
+                for (auto& ci : cmap) {
+                    VlcSourceCount& col = ci.second;
                     // UINFO(0,"Source
                     // "<<source.name()<<":"<<col.lineno()<<":"<<col.column()<<endl);
                     os << (col.ok() ? " " : "%") << std::setfill('0') << std::setw(6)
-                       << col.count() << "\t" << line << endl;
+                       << col.count() << "\t" << line << '\n';
                     if (first) {
                         first = false;
                         // Multiple columns on same line; print line just once
@@ -324,7 +322,7 @@ void VlcTop::annotateOutputFiles(const string& dirname) {
                 }
             }
 
-            if (first) os << "\t" << line << endl;
+            if (first) os << "\t" << line << '\n';
         }
     }
 }

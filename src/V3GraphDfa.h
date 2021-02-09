@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -58,11 +58,11 @@ class DfaEdge;
 ///                        |                 ^\----[epsilon]<-------/           |
 ///                        \->[epsilon]-----------------------------------------/
 
-class DfaGraph : public V3Graph {
+class DfaGraph final : public V3Graph {
 public:
     // CONSTRUCTORS
-    DfaGraph() {}
-    virtual ~DfaGraph() {}
+    DfaGraph() = default;
+    virtual ~DfaGraph() override = default;
     // METHODS
     /// Find start node
     DfaVertex* findStart();
@@ -77,7 +77,7 @@ public:
 //=============================================================================
 // Vertex
 
-class DfaVertex : public V3GraphVertex {
+class DfaVertex VL_NOT_FINAL : public V3GraphVertex {
     // Each DFA state is captured in this vertex.
     // Start and accepting are members, rather than the more intuitive
     // subclasses, as subclassing them would make it harder to inherit from here.
@@ -86,17 +86,19 @@ class DfaVertex : public V3GraphVertex {
 public:
     // CONSTRUCTORS
     explicit DfaVertex(DfaGraph* graphp, bool start = false, bool accepting = false)
-        : V3GraphVertex(graphp)
-        , m_start(start)
-        , m_accepting(accepting) {}
+        : V3GraphVertex{graphp}
+        , m_start{start}
+        , m_accepting{accepting} {}
     using V3GraphVertex::clone;  // We are overriding, not overloading clone(V3Graph*)
     virtual DfaVertex* clone(DfaGraph* graphp) {
         return new DfaVertex(graphp, start(), accepting());
     }
-    virtual ~DfaVertex() {}
+    virtual ~DfaVertex() override = default;
     // ACCESSORS
-    virtual string dotShape() const { return (accepting() ? "doublecircle" : ""); }
-    virtual string dotColor() const { return start() ? "blue" : (color() ? "red" : "black"); }
+    virtual string dotShape() const override { return (accepting() ? "doublecircle" : ""); }
+    virtual string dotColor() const override {
+        return start() ? "blue" : (color() ? "red" : "black");
+    }
     bool start() const { return m_start; }
     void start(bool flag) { m_start = flag; }
     bool accepting() const { return m_accepting; }
@@ -111,7 +113,7 @@ typedef VNUser DfaInput;
 //============================================================================
 // Edge types
 
-class DfaEdge : public V3GraphEdge {
+class DfaEdge final : public V3GraphEdge {
     DfaInput m_input;
     bool m_complement;  // Invert value when doing compare
 public:
@@ -119,23 +121,25 @@ public:
     static DfaInput NA() { return VNUser::fromInt(1); }  // as in not-applicable
     // CONSTRUCTORS
     DfaEdge(DfaGraph* graphp, DfaVertex* fromp, DfaVertex* top, const DfaInput& input)
-        : V3GraphEdge(graphp, fromp, top, 1)
+        : V3GraphEdge{graphp, fromp, top, 1}
         , m_input(input)
         , m_complement(false) {}
     DfaEdge(DfaGraph* graphp, DfaVertex* fromp, DfaVertex* top, const DfaEdge* copyfrom)
-        : V3GraphEdge(graphp, fromp, top, copyfrom->weight())
-        , m_input(copyfrom->input())
-        , m_complement(copyfrom->complement()) {}
-    virtual ~DfaEdge() {}
+        : V3GraphEdge{graphp, fromp, top, copyfrom->weight()}
+        , m_input{copyfrom->input()}
+        , m_complement{copyfrom->complement()} {}
+    virtual ~DfaEdge() override = default;
     // METHODS
-    virtual string dotColor() const { return (na() ? "yellow" : epsilon() ? "green" : "black"); }
-    virtual string dotLabel() const {
+    virtual string dotColor() const override {
+        return (na() ? "yellow" : epsilon() ? "green" : "black");
+    }
+    virtual string dotLabel() const override {
         return (na() ? ""
                      : epsilon() ? "e"
                                  : complement() ? ("not " + cvtToStr(input().toInt()))
                                                 : cvtToStr(input().toInt()));
     }
-    virtual string dotStyle() const { return (na() || cutable()) ? "dashed" : ""; }
+    virtual string dotStyle() const override { return (na() || cutable()) ? "dashed" : ""; }
     bool epsilon() const { return input().toInt() == EPSILON().toInt(); }
     bool na() const { return input().toInt() == NA().toInt(); }
     bool complement() const { return m_complement; }

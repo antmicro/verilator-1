@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -31,15 +31,15 @@
 
 typedef std::set<string> VlStringSet;
 
-class VlcOptions {
+class VlcOptions final {
     // MEMBERS (general options)
     // clang-format off
     string m_annotateOut;       // main switch: --annotate I<output_directory>
-    bool m_annotateAll;         // main switch: --annotate-all
-    int m_annotateMin;          // main switch: --annotate-min I<count>
+    bool m_annotateAll=false;         // main switch: --annotate-all
+    int m_annotateMin=10;          // main switch: --annotate-min I<count>
     VlStringSet m_readFiles;    // main switch: --read
-    bool m_rank;                // main switch: --rank
-    bool m_unlink;              // main switch: --unlink
+    bool m_rank=false;                // main switch: --rank
+    bool m_unlink=false;              // main switch: --unlink
     string m_writeFile;         // main switch: --write
     string m_writeInfoFile;     // main switch: --write-info
     // clang-format on
@@ -51,13 +51,8 @@ private:
 
 public:
     // CONSTRUCTORS
-    VlcOptions() {
-        m_annotateAll = false;
-        m_annotateMin = 10;
-        m_rank = false;
-        m_unlink = false;
-    }
-    ~VlcOptions() {}
+    VlcOptions() = default;
+    ~VlcOptions() = default;
 
     // METHODS
     void parseOptsList(int argc, char** argv);

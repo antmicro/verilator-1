@@ -7,7 +7,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -23,7 +23,7 @@
 
 class AstNode;
 
-class V3InstrCount {
+class V3InstrCount final {
 public:
     // Return the estimate count of instructions we'd incur while running
     // code in and under nodep.
@@ -38,7 +38,7 @@ public:
     // if we see the same node twice (across more than one call to count,
     // potentially) raises an error.
     // Optional osp is stream to dump critical path to.
-    static uint32_t count(AstNode* nodep, bool assertNoDups, std::ostream* osp = NULL);
+    static uint32_t count(AstNode* nodep, bool assertNoDups, std::ostream* osp = nullptr);
 };
 
 #endif  // guard

@@ -1,7 +1,7 @@
 // -*- mode: C++; c-file-style: "cc-mode" -*-
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you can
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you can
 // redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -66,7 +66,7 @@
 
 // Version check
 #if defined(SYSTEMC_VERSION) && (SYSTEMC_VERSION < 20111121)
-# warning "Verilator soon requires SystemC 2.3.*; see manual for deprecated other versions."
+# warning "Verilator requires SystemC 2.3.* or newer."
 #endif
 // clang-format on
 
@@ -86,7 +86,7 @@ class VerilatedFst;
 class VerilatedFstC;
 class VerilatedThread;
 class VerilatedSyms;
-template<typename T> class MonitoredValue;
+template <typename T> class MonitoredValue;
 
 class VerilatedThreadRegistry {
 private:
@@ -107,7 +107,6 @@ public:
 
 extern VerilatedThreadRegistry thread_registry;
 
-
 class VerilatedThreadPool {
 private:
     std::mutex m_mtx;
@@ -124,8 +123,7 @@ extern VerilatedThreadPool thread_pool;
 
 class VerilatedThread {
 public:
-    template<typename T>
-    struct Promise {
+    template <typename T> struct Promise {
         VerilatedThread& thread;
         T value;
 
@@ -141,6 +139,7 @@ public:
         VerilatedThread& m_thread;
         unsigned m_expected;
         unsigned m_counter;
+
     public:
         Join(VerilatedThread& thread, size_t expected)
             : m_thread(thread)
@@ -150,18 +149,14 @@ public:
         void joined() {
             std::unique_lock<std::mutex> lck(m_thread.m_mtx);
             m_counter++;
-            if (m_counter == m_expected) {
-                m_thread.m_cv.notify_all();
-            }
+            if (m_counter == m_expected) { m_thread.m_cv.notify_all(); }
         }
 
         void await() {
             std::unique_lock<std::mutex> lck(m_thread.m_mtx);
             m_thread.m_idle = true;
             thread_registry.idle(true);
-            while (!m_thread.should_exit() && m_counter < m_expected) {
-                m_thread.m_cv.wait(lck);
-            }
+            while (!m_thread.should_exit() && m_counter < m_expected) { m_thread.m_cv.wait(lck); }
             m_thread.m_idle = false;
             thread_registry.idle(false);
         }
@@ -180,34 +175,39 @@ private:
     std::mutex m_mtx;
     std::condition_variable m_cv;
 
-    template<typename T, std::size_t I = 0, typename... Ts>
+    template <typename T, std::size_t I = 0, typename... Ts>
     static inline typename std::enable_if<I == sizeof...(Ts), bool>::type
-    any_equal(std::tuple<Promise<Ts>...>&, const T&) { return false; }
+    any_equal(std::tuple<Promise<Ts>...>&, const T&) {
+        return false;
+    }
 
-    template<typename T, std::size_t I = 0, typename... Ts>
-    static inline typename std::enable_if<I < sizeof...(Ts), bool>::type
-    any_equal(std::tuple<Promise<Ts>...>& promises, const T& value) {
+    template <typename T, std::size_t I = 0, typename... Ts>
+        static inline typename std::enable_if < I<sizeof...(Ts), bool>::type
+        any_equal(std::tuple<Promise<Ts>...>& promises, const T& value) {
         return std::get<I>(promises).value == value || any_equal<T, I + 1, Ts...>(promises, value);
     }
 
-    template<std::size_t I = 0, typename... Ts>
+    template <std::size_t I = 0, typename... Ts>
     static inline typename std::enable_if<I == sizeof...(Ts), void>::type
     subscribe_all(std::tuple<MonitoredValue<Ts>&...>&, std::tuple<Promise<Ts>...>&, bool) {}
 
-    template<std::size_t I = 0, typename... Ts>
-    static inline typename std::enable_if<I < sizeof...(Ts), void>::type
-    subscribe_all(std::tuple<MonitoredValue<Ts>&...>& mon_vals, std::tuple<Promise<Ts>...>& promises, bool init) {
+    template <std::size_t I = 0, typename... Ts>
+        static inline typename std::enable_if
+        < I<sizeof...(Ts), void>::type subscribe_all(std::tuple<MonitoredValue<Ts>&...>& mon_vals,
+                                                     std::tuple<Promise<Ts>...>& promises,
+                                                     bool init) {
         std::get<I>(mon_vals).subscribe(std::get<I>(promises), init);
         subscribe_all<I + 1, Ts...>(mon_vals, promises, init);
     }
 
-    template<std::size_t I = 0, typename... Ts>
+    template <std::size_t I = 0, typename... Ts>
     static inline typename std::enable_if<I == sizeof...(Ts), void>::type
     unsubscribe_all(std::tuple<MonitoredValue<Ts>&...>&, std::tuple<Promise<Ts>...>&) {}
 
-    template<std::size_t I = 0, typename... Ts>
-    static inline typename std::enable_if<I < sizeof...(Ts), void>::type
-    unsubscribe_all(std::tuple<MonitoredValue<Ts>&...>& mon_vals, std::tuple<Promise<Ts>...>& promises) {
+    template <std::size_t I = 0, typename... Ts>
+        static inline typename std::enable_if < I<sizeof...(Ts), void>::type
+        unsubscribe_all(std::tuple<MonitoredValue<Ts>&...>& mon_vals,
+                        std::tuple<Promise<Ts>...>& promises) {
         std::get<I>(mon_vals).unsubscribe(std::get<I>(promises));
         unsubscribe_all<I + 1, Ts...>(mon_vals, promises);
     }
@@ -225,9 +225,7 @@ public:
 
     VerilatedThread(std::function<void(VerilatedThread*)> func, VerilatedThreadPool* pool);
 
-    bool should_exit() {
-        return m_should_exit;
-    }
+    bool should_exit() { return m_should_exit; }
 
     void should_exit(bool e) {
         std::unique_lock<std::mutex> lck_d(m_mtx);
@@ -235,9 +233,7 @@ public:
         m_cv.notify_all();
     }
 
-    bool ready() {
-        return m_ready;
-    }
+    bool ready() { return m_ready; }
 
     void ready(bool r) {
         std::unique_lock<std::mutex> lck(m_mtx);
@@ -249,9 +245,7 @@ public:
         std::unique_lock<std::mutex> lck(m_mtx);
 
         set_idle(true);
-        while(!m_ready && !m_should_exit) {
-            m_cv.wait(lck);
-        }
+        while (!m_ready && !m_should_exit) { m_cv.wait(lck); }
         set_idle(false);
     }
 
@@ -259,15 +253,11 @@ public:
         std::unique_lock<std::mutex> lck(m_mtx);
 
         thread_registry.idle(true);
-        while(m_ready && !m_should_exit && !m_idle) {
-            m_cv.wait(lck);
-        }
+        while (m_ready && !m_should_exit && !m_idle) { m_cv.wait(lck); }
         thread_registry.idle(false);
     }
 
-    bool idle() {
-        return m_idle;
-    }
+    bool idle() { return m_idle; }
 
     void idle(bool w) {
         std::unique_lock<std::mutex> lck(m_mtx);
@@ -279,9 +269,7 @@ public:
         m_func = func;
     }
 
-    void join() {
-        m_thr.join();
-    }
+    void join() { m_thr.join(); }
 
     void exit() {
         should_exit(true);
@@ -291,38 +279,30 @@ public:
 
     void kick();
 
-    template<typename... Ts>
-    void wait_for(std::tuple<MonitoredValue<Ts>&...> mon_vals) {
+    template <typename... Ts> void wait_for(std::tuple<MonitoredValue<Ts>&...> mon_vals) {
         std::tuple<Promise<Ts>...> promises(Promise<Ts>{*this, 0}...);
         std::unique_lock<std::mutex> lck(m_mtx);
         subscribe_all(mon_vals, promises, false);
         set_idle(true);
-        while (!should_exit() && !any_equal(promises, 1)) {
-            m_cv.wait(lck);
-        }
+        while (!should_exit() && !any_equal(promises, 1)) { m_cv.wait(lck); }
         set_idle(false);
         unsubscribe_all(mon_vals, promises);
     }
 
-    template<typename P>
-    void wait_until(P pred) {
+    template <typename P> void wait_until(P pred) {
         std::unique_lock<std::mutex> lck(m_mtx);
         set_idle(true);
-        while (!should_exit() && !pred()) {
-            m_cv.wait(lck);
-        }
+        while (!should_exit() && !pred()) { m_cv.wait(lck); }
         set_idle(false);
     }
 
-    template<typename P, typename... Ts>
+    template <typename P, typename... Ts>
     void wait_until(std::tuple<MonitoredValue<Ts>&...> mon_vals, P pred) {
         std::tuple<Promise<Ts>...> promises(Promise<Ts>{*this}...);
         std::unique_lock<std::mutex> lck(m_mtx);
         subscribe_all(mon_vals, promises, true);
         set_idle(true);
-        while (!should_exit() && !pred(promises)) {
-            m_cv.wait(lck);
-        }
+        while (!should_exit() && !pred(promises)) { m_cv.wait(lck); }
         set_idle(false);
         unsubscribe_all(mon_vals, promises);
     }
@@ -331,193 +311,170 @@ public:
 
     // debug only
     std::string m_name;
-    void name(std::string n) {
-        m_name = n;
-    }
+    void name(std::string n) { m_name = n; }
 
-    std::string name() {
-        return m_name;
-    }
-
+    std::string name() { return m_name; }
 };
 
 class MonitoredValueBase {
-    public:
-        virtual void release() {};
-        virtual void assign_no_notify(vluint64_t) {};
-        virtual vluint64_t value() const = 0;
+public:
+    virtual void release(){};
+    virtual void assign_no_notify(vluint64_t){};
+    virtual vluint64_t value() const = 0;
 };
 
-template<typename T>
-class MonitoredValue : public MonitoredValueBase {
-    public:
+template <typename T> class MonitoredValue : public MonitoredValueBase {
+public:
+    MonitoredValue()
+        : m_value()
+        , m_mtx() {}
 
-        MonitoredValue(): m_value(), m_mtx() {
-        }
+    template <class U>
+    MonitoredValue(U v)
+        : m_mtx() {
+        std::unique_lock<std::mutex> lck(m_mtx);
+        m_value = (T)v;
+    }
 
-        template <class U>
-        MonitoredValue(U v): m_mtx() {
-            std::unique_lock<std::mutex> lck(m_mtx);
-            m_value = (T)v;
-        }
+    MonitoredValue(const MonitoredValue& o) {
+        std::unique_lock<std::mutex> lck(m_mtx);
+        m_value = (T)o;
+    }
 
-        MonitoredValue(const MonitoredValue& o) {
-            std::unique_lock<std::mutex> lck(m_mtx);
-            m_value = (T)o;
-        }
+    operator T() const { return m_value; }
 
-        operator T() const {
-            return m_value;
-        }
+    MonitoredValue& operator=(const MonitoredValue& v) {
+        std::unique_lock<std::mutex> lck(m_mtx);
+        // Assign just the m_value
+        m_value = (T)v;
+        written();
+        return *this;
+    }
 
-        MonitoredValue& operator=(const MonitoredValue& v) {
-            std::unique_lock<std::mutex> lck(m_mtx);
-            // Assign just the m_value
-            m_value = (T)v;
-            written();
-            return *this;
-        }
+    MonitoredValue& operator&=(const MonitoredValue& v) {
+        std::unique_lock<std::mutex> lck(m_mtx);
+        m_value &= (T)v;
+        written();
+        return *this;
+    }
+    MonitoredValue& operator|=(const MonitoredValue& v) {
+        std::unique_lock<std::mutex> lck(m_mtx);
+        m_value |= (T)v;
+        written();
+        return *this;
+    }
+    MonitoredValue& operator^=(const MonitoredValue& v) {
+        std::unique_lock<std::mutex> lck(m_mtx);
+        m_value ^= (T)v;
+        written();
+        return *this;
+    }
+    MonitoredValue& operator+=(const MonitoredValue& v) {
+        std::unique_lock<std::mutex> lck(m_mtx);
+        m_value += (T)v;
+        written();
+        return *this;
+    }
+    MonitoredValue& operator-=(const MonitoredValue& v) {
+        std::unique_lock<std::mutex> lck(m_mtx);
+        m_value -= (T)v;
+        written();
+        return *this;
+    }
+    MonitoredValue& operator*=(const MonitoredValue& v) {
+        std::unique_lock<std::mutex> lck(m_mtx);
+        m_value *= (T)v;
+        written();
+        return *this;
+    }
 
-        MonitoredValue& operator&=(const MonitoredValue& v) {
-            std::unique_lock<std::mutex> lck(m_mtx);
-            m_value &= (T)v;
-            written();
-            return *this;
-        }
-        MonitoredValue& operator|=(const MonitoredValue& v) {
-            std::unique_lock<std::mutex> lck(m_mtx);
-            m_value |= (T)v;
-            written();
-            return *this;
-        }
-        MonitoredValue& operator^=(const MonitoredValue& v) {
-            std::unique_lock<std::mutex> lck(m_mtx);
-            m_value ^= (T)v;
-            written();
-            return *this;
-        }
-        MonitoredValue& operator+=(const MonitoredValue& v) {
-            std::unique_lock<std::mutex> lck(m_mtx);
-            m_value += (T)v;
-            written();
-            return *this;
-        }
-        MonitoredValue& operator-=(const MonitoredValue& v) {
-            std::unique_lock<std::mutex> lck(m_mtx);
-            m_value -= (T)v;
-            written();
-            return *this;
-        }
-        MonitoredValue& operator*=(const MonitoredValue& v) {
-            std::unique_lock<std::mutex> lck(m_mtx);
-            m_value *= (T)v;
-            written();
-            return *this;
-        }
+    MonitoredValue& operator>>=(int s) {
+        std::unique_lock<std::mutex> lck(m_mtx);
+        m_value >>= s;
+        written();
+        return *this;
+    }
 
-        MonitoredValue& operator>>=(int s) {
-            std::unique_lock<std::mutex> lck(m_mtx);
-            m_value >>= s;
-            written();
-            return *this;
-        }
+    MonitoredValue& operator--() {
+        std::unique_lock<std::mutex> lck(m_mtx);
+        --m_value;
+        written();
+        return *this;
+    }
+    MonitoredValue operator--(int) {
+        std::unique_lock<std::mutex> lck(m_mtx);
+        MonitoredValue v(m_value--);
+        written();
+        return v;
+    }
+    MonitoredValue& operator++() {
+        std::unique_lock<std::mutex> lck(m_mtx);
+        ++m_value;
+        written();
+        return *this;
+    }
+    MonitoredValue operator++(int) {
+        std::unique_lock<std::mutex> lck(m_mtx);
+        MonitoredValue v(m_value++);
+        written();
+        return v;
+    }
 
-        MonitoredValue& operator--() {
-            std::unique_lock<std::mutex> lck(m_mtx);
-            --m_value;
-            written();
-            return *this;
-        }
-        MonitoredValue operator--(int) {
-            std::unique_lock<std::mutex> lck(m_mtx);
-            MonitoredValue v(m_value--);
-            written();
-            return v;
-        }
-        MonitoredValue& operator++() {
-            std::unique_lock<std::mutex> lck(m_mtx);
-            ++m_value;
-            written();
-            return *this;
-        }
-        MonitoredValue operator++(int) {
-            std::unique_lock<std::mutex> lck(m_mtx);
-            MonitoredValue v(m_value++);
-            written();
-            return v;
-        }
+    template <class U> bool operator==(const U& b) {
+        std::unique_lock<std::mutex> lck(m_mtx);
+        return m_value == b;
+    }
+    template <class U> bool operator>(const U& b) {
+        std::unique_lock<std::mutex> lck(m_mtx);
+        return m_value > b;
+    }
+    template <class U> bool operator>=(const U& b) {
+        std::unique_lock<std::mutex> lck(m_mtx);
+        return m_value >= b;
+    }
+    template <class U> bool operator<(const U& b) {
+        std::unique_lock<std::mutex> lck(m_mtx);
+        return m_value < b;
+    }
+    template <class U> bool operator<=(const U& b) {
+        std::unique_lock<std::mutex> lck(m_mtx);
+        return m_value <= b;
+    }
 
-        template <class U>
-        bool operator==(const U &b) {
-            std::unique_lock<std::mutex> lck(m_mtx);
-            return m_value == b;
-        }
-        template <class U>
-        bool operator>(const U &b) {
-            std::unique_lock<std::mutex> lck(m_mtx);
-            return m_value > b;
-        }
-        template <class U>
-        bool operator>=(const U &b) {
-            std::unique_lock<std::mutex> lck(m_mtx);
-            return m_value >= b;
-        }
-        template <class U>
-        bool operator<(const U &b) {
-            std::unique_lock<std::mutex> lck(m_mtx);
-            return m_value < b;
-        }
-        template <class U>
-        bool operator<=(const U &b) {
-            std::unique_lock<std::mutex> lck(m_mtx);
-            return m_value <= b;
-        }
+    void assign_no_notify(vluint64_t v) { m_value = (T)v; }
 
-        void assign_no_notify(vluint64_t v) {
-            m_value = (T)v;
-        }
+    void assign_no_lock(T v) {
+        m_value = v;
+        written();
+    }
 
-        void assign_no_lock(T v) {
-            m_value = v;
-            written();
-        }
+    void subscribe(VerilatedThread::Promise<T>& promise, bool init) {
+        std::unique_lock<std::mutex> lck(m_mtx);
+        promises.push_back(&promise);
+        if (init) promise.value = m_value;
+    }
 
-        void subscribe(VerilatedThread::Promise<T>& promise, bool init) {
-            std::unique_lock<std::mutex> lck(m_mtx);
-            promises.push_back(&promise);
-            if (init) promise.value = m_value;
-        }
+    void unsubscribe(VerilatedThread::Promise<T>& promise) {
+        std::unique_lock<std::mutex> lck(m_mtx);
+        auto it = std::find(promises.begin(), promises.end(), &promise);
+        if (it != promises.end()) { promises.erase(it); }
+    }
 
-        void unsubscribe(VerilatedThread::Promise<T>& promise) {
-            std::unique_lock<std::mutex> lck(m_mtx);
-            auto it = std::find(promises.begin(), promises.end(), &promise);
-            if (it != promises.end()) {
-                promises.erase(it);
-            }
-        }
+    std::mutex& mtx() { return m_mtx; }
 
-        std::mutex& mtx() {
-            return m_mtx;
-        }
+    virtual vluint64_t value() const { return m_value; }
 
-        virtual vluint64_t value() const {
-            return m_value;
-        }
+private:
+    std::atomic<T> m_value;
 
-    private:
-        std::atomic<T> m_value;
+    mutable std::mutex m_mtx;
 
-        mutable std::mutex m_mtx;
+    std::vector<VerilatedThread::Promise<T>*> promises;
 
-        std::vector<VerilatedThread::Promise<T>*> promises;
-
-        void written() {
-            for (auto& promise : promises) {
-                promise->set(m_value);
-            }
-        }
+    void written() {
+        for (auto& promise : promises) { promise->set(m_value); }
+    }
 };
-
 
 // clang-format off
 //                   P          // Packed data of bit type (C/S/I/Q/W)
@@ -548,51 +505,56 @@ typedef WDataV* WDataOutP;  ///< Array output from a function
 typedef const WDataV* WDataInPV;  ///< Array input to a function
 typedef WDataV* WDataOutPV;  ///< Array output from a function
 
+class VerilatedEvalMsgQueue;
+class VerilatedScopeNameMap;
+class VerilatedTimedQueue;
+class VerilatedVar;
+class VerilatedVarNameMap;
+class VerilatedVcd;
+class VerilatedVcdC;
+class VerilatedVcdSc;
+class VerilatedFst;
+class VerilatedFstC;
+class VerilatedThread;
+
+extern std::vector<VerilatedThread*> verilated_threads;
+
 class VerilatedNBACtrl {
-    private:
-        std::map<MonitoredValueBase*, vluint64_t> data;
-        // For continuous assignments
-        std::map<MonitoredValueBase*, std::function<vluint64_t()>> edata;
-        std::mutex mtx;
+private:
+    std::map<MonitoredValueBase*, vluint64_t> data;
+    // For continuous assignments
+    std::map<MonitoredValueBase*, std::function<vluint64_t()>> edata;
+    std::mutex mtx;
 
-    public:
+public:
+    vluint64_t get_scheduled(MonitoredValueBase* var) {
+        auto it = data.find(var);
+        if (it != data.end()) { return it->second; }
+        return var->value();
+    }
 
-        vluint64_t get_scheduled(MonitoredValueBase* var) {
-            auto it = data.find(var);
-            if (it != data.end()) {
-                return it->second;
-            }
-            return var->value();
-        }
+    void schedule(MonitoredValueBase* var, vluint64_t val) {
+        std::unique_lock<std::mutex> lck(mtx);
 
-        void schedule(MonitoredValueBase* var, vluint64_t val) {
-            std::unique_lock<std::mutex> lck(mtx);
+        data[var] = val;
+    }
 
-            data[var] = val;
-        }
+    void schedule(MonitoredValueBase* var, std::function<vluint64_t()> expr) { edata[var] = expr; }
 
-        void schedule(MonitoredValueBase* var, std::function<vluint64_t()> expr) {
-            edata[var] = expr;
-        }
+    void assign() {
+        std::unique_lock<std::mutex> lck(mtx);
 
-        void assign() {
-            std::unique_lock<std::mutex> lck(mtx);
+        for (auto const& v : data) { v.first->assign_no_notify(v.second); }
+        data.clear();
 
-            for (auto const& v : data) {
-                v.first->assign_no_notify(v.second);
-            }
-            data.clear();
-
-            for (auto const& v : edata) {
-                v.first->assign_no_notify(v.second());
-            }
-            edata.clear();
-        }
+        for (auto const& v : edata) { v.first->assign_no_notify(v.second()); }
+        edata.clear();
+    }
 };
 
 extern VerilatedNBACtrl verilated_nba_ctrl;
 
-enum VerilatedVarType {
+enum VerilatedVarType : vluint8_t {
     VLVT_UNKNOWN = 0,
     VLVT_PTR,  // Pointer to something
     VLVT_UINT8,  // AKA CData
@@ -627,12 +589,12 @@ extern vluint32_t VL_THREAD_ID() VL_MT_SAFE;
 #define VL_LOCK_SPINS 50000  /// Number of times to spin for a mutex before relaxing
 
 /// Mutex, wrapped to allow -fthread_safety checks
-class VL_CAPABILITY("mutex") VerilatedMutex {
+class VL_CAPABILITY("mutex") VerilatedMutex final {
 private:
     std::mutex m_mutex;  // Mutex
 public:
-    VerilatedMutex() {}
-    ~VerilatedMutex() {}
+    VerilatedMutex() = default;
+    ~VerilatedMutex() = default;
     const VerilatedMutex& operator!() const { return *this; }  // For -fthread_safety
     /// Acquire/lock mutex
     void lock() VL_ACQUIRE() {
@@ -653,7 +615,7 @@ public:
 };
 
 /// Lock guard for mutex (ala std::unique_lock), wrapped to allow -fthread_safety checks
-class VL_SCOPED_CAPABILITY VerilatedLockGuard {
+class VL_SCOPED_CAPABILITY VerilatedLockGuard final {
     VL_UNCOPYABLE(VerilatedLockGuard);
 
 private:
@@ -661,7 +623,7 @@ private:
 
 public:
     explicit VerilatedLockGuard(VerilatedMutex& mutexr) VL_ACQUIRE(mutexr)
-        : m_mutexr(mutexr) {
+        : m_mutexr(mutexr) {  // Need () or GCC 4.8 false warning
         m_mutexr.lock();
     }
     ~VerilatedLockGuard() VL_RELEASE() { m_mutexr.unlock(); }
@@ -672,19 +634,19 @@ public:
 #else  // !VL_THREADED
 
 /// Empty non-threaded mutex to avoid #ifdefs in consuming code
-class VerilatedMutex {
+class VerilatedMutex final {
 public:
     void lock() {}
     void unlock() {}
 };
 
 /// Empty non-threaded lock guard to avoid #ifdefs in consuming code
-class VerilatedLockGuard {
+class VerilatedLockGuard final {
     VL_UNCOPYABLE(VerilatedLockGuard);
 
 public:
     explicit VerilatedLockGuard(VerilatedMutex&) {}
-    ~VerilatedLockGuard() {}
+    ~VerilatedLockGuard() = default;
     void lock() {}
     void unlock() {}
 };
@@ -692,7 +654,7 @@ public:
 #endif  // VL_THREADED
 
 /// Remember the calling thread at construction time, and make sure later calls use same thread
-class VerilatedAssertOneThread {
+class VerilatedAssertOneThread final {
     // MEMBERS
     // XXX should not matter for this multi threaded implementation
 #if 0
@@ -703,7 +665,7 @@ public:
     /// The constructor establishes the thread id for all later calls.
     /// If necessary, a different class could be made that inits it otherwise.
     VerilatedAssertOneThread()
-        : m_threadid(VL_THREAD_ID()) {}
+        : m_threadid{VL_THREAD_ID()} {}
     ~VerilatedAssertOneThread() { check(); }
     // METHODS
     /// Check that the current thread ID is the same as the construction thread ID
@@ -731,7 +693,7 @@ public:
 
 class VerilatedScope;
 
-class VerilatedModule {
+class VerilatedModule VL_NOT_FINAL {
     VL_UNCOPYABLE(VerilatedModule);
 
 private:
@@ -770,7 +732,8 @@ public:
 #define VL_CELL(instname, type)  ///< Declare a cell, ala SP_CELL
 
 /// Declare a module, ala SC_MODULE
-#define VL_MODULE(modname) class modname : public VerilatedModule
+#define VL_MODULE(modname) class modname VL_NOT_FINAL : public VerilatedModule
+// Not class final in VL_MODULE, as users might be abstracting our models (--hierarchical)
 
 /// Constructor, ala SC_CTOR
 #define VL_CTOR(modname) modname(const char* __VCname = "")
@@ -799,7 +762,7 @@ public:
 //===========================================================================
 /// Verilator symbol table base class
 
-class VerilatedSyms {
+class VerilatedSyms VL_NOT_FINAL {
 public:  // But for internal use only
 #ifdef VL_THREADED
     VerilatedEvalMsgQueue* __Vm_evalMsgQp;
@@ -813,26 +776,26 @@ public:  // But for internal use only
 /// Verilator global class information class
 /// This class is initialized by main thread only. Reading post-init is thread safe.
 
-class VerilatedScope {
+class VerilatedScope final {
 public:
-    typedef enum {
+    typedef enum : vluint8_t {
         SCOPE_MODULE,
         SCOPE_OTHER
     } Type;  // Type of a scope, currently module is only interesting
 private:
     // Fastpath:
-    VerilatedSyms* m_symsp;  ///< Symbol table
-    void** m_callbacksp;  ///< Callback table pointer (Fastpath)
-    int m_funcnumMax;  ///< Maxium function number stored (Fastpath)
+    VerilatedSyms* m_symsp = nullptr;  ///< Symbol table
+    void** m_callbacksp = nullptr;  ///< Callback table pointer (Fastpath)
+    int m_funcnumMax = 0;  ///< Maxium function number stored (Fastpath)
     // 4 bytes padding (on -m64), for rent.
-    VerilatedVarNameMap* m_varsp;  ///< Variable map
-    const char* m_namep;  ///< Scope name (Slowpath)
-    const char* m_identifierp;  ///< Identifier of scope (with escapes removed)
-    vlsint8_t m_timeunit;  ///< Timeunit in negative power-of-10
-    Type m_type;  ///< Type of the scope
+    VerilatedVarNameMap* m_varsp = nullptr;  ///< Variable map
+    const char* m_namep = nullptr;  ///< Scope name (Slowpath)
+    const char* m_identifierp = nullptr;  ///< Identifier of scope (with escapes removed)
+    vlsint8_t m_timeunit = 0;  ///< Timeunit in negative power-of-10
+    Type m_type = SCOPE_OTHER;  ///< Type of the scope
 
 public:  // But internals only - called from VerilatedModule's
-    VerilatedScope();
+    VerilatedScope() = default;
     ~VerilatedScope();
     void configure(VerilatedSyms* symsp, const char* prefixp, const char* suffixp,
                    const char* identifier, vlsint8_t timeunit, const Type& type) VL_MT_UNSAFE;
@@ -861,18 +824,19 @@ public:  // But internals only - called from VerilatedModule's
     Type type() const { return m_type; }
 };
 
-class VerilatedHierarchy {
+class VerilatedHierarchy final {
 public:
     static void add(VerilatedScope* fromp, VerilatedScope* top);
+    static void remove(VerilatedScope* fromp, VerilatedScope* top);
 };
 
 //===========================================================================
 /// Verilator global static information class
 
-class Verilated {
+class Verilated final {
     // MEMBERS
     // Slow path variables
-    static VerilatedMutex m_mutex;  ///< Mutex for s_s/s_ns members, when VL_THREADED
+    static VerilatedMutex s_mutex;  ///< Mutex for s_s/s_ns members, when VL_THREADED
 
     static struct Serialized {  // All these members serialized/deserialized
         // Fast path
@@ -888,48 +852,50 @@ class Verilated {
         int s_errorLimit;  ///< Stop on error number
         int s_randReset;  ///< Random reset: 0=all 0s, 1=all 1s, 2=random
         int s_randSeed;  ///< Random seed: 0=random
+        int s_randSeedEpoch;  ///< Number incrementing on each reseed, 0=illegal
         Serialized();
-        ~Serialized() {}
+        ~Serialized() = default;
     } s_s;
 
     static struct NonSerialized {  // Non-serialized information
         // These are reloaded from on command-line settings, so do not need to persist
         // Fast path
-        vluint64_t s_profThreadsStart;  ///< +prof+threads starting time
-        vluint32_t s_profThreadsWindow;  ///< +prof+threads window size
+        vluint64_t s_profThreadsStart = 1;  ///< +prof+threads starting time
+        vluint32_t s_profThreadsWindow = 2;  ///< +prof+threads window size
         // Slow path
         const char* s_profThreadsFilenamep;  ///< +prof+threads filename
-        NonSerialized();
-        ~NonSerialized();
+        void setup();
+        void teardown();
     } s_ns;
 
     // no need to be save-restored (serialized) the
     // assumption is that the restore is allowed to pass different arguments
     static struct CommandArgValues {
         VerilatedMutex m_argMutex;  ///< Mutex for s_args members, when VL_THREADED
-        int argc;
-        const char** argv;
-        CommandArgValues()
-            : argc(0)
-            , argv(NULL) {}
-        ~CommandArgValues() {}
+        int argc = 0;
+        const char** argv = nullptr;
+        CommandArgValues() = default;
+        ~CommandArgValues() = default;
     } s_args;
 
     // Not covered by mutex, as per-thread
     static VL_THREAD_LOCAL struct ThreadLocal {
 #ifdef VL_THREADED
-        vluint32_t t_mtaskId;  ///< Current mtask# executing on this thread
-        vluint32_t t_endOfEvalReqd;  ///< Messages may be pending, thread needs endOf-eval calls
+        vluint32_t t_mtaskId = 0;  ///< Current mtask# executing on this thread
+        vluint32_t t_endOfEvalReqd
+            = 0;  ///< Messages may be pending, thread needs endOf-eval calls
 #endif
-        const VerilatedScope* t_dpiScopep;  ///< DPI context scope
-        const char* t_dpiFilename;  ///< DPI context filename
-        int t_dpiLineno;  ///< DPI context line number
+        const VerilatedScope* t_dpiScopep = nullptr;  ///< DPI context scope
+        const char* t_dpiFilename = nullptr;  ///< DPI context filename
+        int t_dpiLineno = 0;  ///< DPI context line number
 
-        ThreadLocal();
-        ~ThreadLocal();
+        ThreadLocal() = default;
+        ~ThreadLocal() = default;
     } t_s;
 
 private:
+    friend struct VerilatedInitializer;
+
     // CONSTRUCTORS
     VL_UNCOPYABLE(Verilated);
 
@@ -945,6 +911,9 @@ public:
     static int randReset() VL_MT_SAFE { return s_s.s_randReset; }  ///< Return randReset value
     static void randSeed(int val) VL_MT_SAFE;
     static int randSeed() VL_MT_SAFE { return s_s.s_randSeed; }  ///< Return randSeed value
+    static vluint32_t randSeedEpoch() VL_MT_SAFE { return s_s.s_randSeedEpoch; }
+    /// Random seed extended to 64 bits, and defaulted if user seed==0
+    static vluint64_t randSeedDefault64() VL_MT_SAFE;
 
     /// Enable debug of internal verilated code
     static void debug(int level) VL_MT_SAFE;
@@ -955,7 +924,7 @@ public:
     static inline int debug() VL_MT_SAFE { return s_s.s_debug; }
 #else
     /// Return constant 0 debug level, so C++'s optimizer rips up
-    static inline int debug() VL_PURE { return 0; }
+    static constexpr int debug() VL_PURE { return 0; }
 #endif
     /// Enable calculation of unused signals
     static void calcUnusedSigs(bool flag) VL_MT_SAFE;
@@ -1003,6 +972,7 @@ public:
     static void addFlushCb(VoidPCb cb, void* datap) VL_MT_SAFE;
     static void removeFlushCb(VoidPCb cb, void* datap) VL_MT_SAFE;
     static void runFlushCallbacks() VL_MT_SAFE;
+    static void flushCall() VL_MT_SAFE { runFlushCallbacks(); }  // Deprecated
     /// Callbacks to run prior to termination
     static void addExitCb(VoidPCb cb, void* datap) VL_MT_SAFE;
     static void removeExitCb(VoidPCb cb, void* datap) VL_MT_SAFE;
@@ -1065,21 +1035,22 @@ public:
         t_s.t_dpiFilename = filenamep;
         t_s.t_dpiLineno = lineno;
     }
-    static void dpiClearContext() VL_MT_SAFE { t_s.t_dpiScopep = NULL; }
-    static bool dpiInContext() VL_MT_SAFE { return t_s.t_dpiScopep != NULL; }
+    static void dpiClearContext() VL_MT_SAFE { t_s.t_dpiScopep = nullptr; }
+    static bool dpiInContext() VL_MT_SAFE { return t_s.t_dpiScopep != nullptr; }
     static const char* dpiFilenamep() VL_MT_SAFE { return t_s.t_dpiFilename; }
     static int dpiLineno() VL_MT_SAFE { return t_s.t_dpiLineno; }
     static int exportFuncNum(const char* namep) VL_MT_SAFE;
 
-    static size_t serialized1Size() VL_PURE { return sizeof(s_s); }
-    static void* serialized1Ptr() VL_MT_UNSAFE { return &s_s; }  // Unsafe, for Serialize only
+    static constexpr size_t serialized1Size() VL_PURE { return sizeof(s_s); }
+    static constexpr void* serialized1Ptr() VL_MT_UNSAFE { return &s_s; }  // For Serialize only
     static size_t serialized2Size() VL_PURE;
     static void* serialized2Ptr() VL_MT_UNSAFE;
 
     // Internal: Time Queue
     static bool timedQEmpty(VerilatedSyms* symsp) VL_MT_SAFE;
     static vluint64_t timedQEarliestTime(VerilatedSyms* symsp) VL_MT_SAFE;
-    static void timedQPush(VerilatedSyms* symsp, vluint64_t time, VerilatedThread* thread) VL_MT_SAFE;
+    static void timedQPush(VerilatedSyms* symsp, vluint64_t time,
+                           VerilatedThread* thread) VL_MT_SAFE;
     static void timedQActivate(VerilatedSyms* symsp, vluint64_t time) VL_MT_SAFE;
     static void timedQWait(VerilatedSyms* symsp, std::unique_lock<std::mutex>& lck) VL_MT_SAFE;
 #ifdef VL_THREADED
@@ -1155,9 +1126,20 @@ extern void VL_PRINTF_MT(const char* formatp, ...) VL_ATTR_PRINTF(1) VL_MT_SAFE;
 /// Print a debug message from internals with standard prefix, with printf style format
 extern void VL_DBG_MSGF(const char* formatp, ...) VL_ATTR_PRINTF(1) VL_MT_SAFE;
 
-extern IData VL_RANDOM_I(int obits);  ///< Randomize a signal
-extern QData VL_RANDOM_Q(int obits);  ///< Randomize a signal
+extern vluint64_t vl_rand64() VL_MT_SAFE;
+inline IData VL_RANDOM_I(int obits) VL_MT_SAFE { return vl_rand64() & VL_MASK_I(obits); }
+inline QData VL_RANDOM_Q(int obits) VL_MT_SAFE { return vl_rand64() & VL_MASK_Q(obits); }
 extern WDataOutP VL_RANDOM_W(int obits, WDataOutP outwp);  ///< Randomize a signal
+extern IData VL_RANDOM_SEEDED_II(int obits, IData seed) VL_MT_SAFE;
+inline IData VL_URANDOM_RANGE_I(IData hi, IData lo) {
+    vluint64_t rnd = vl_rand64();
+    if (VL_LIKELY(hi > lo)) {
+        // Modulus isn't very fast but it's common that hi-low is power-of-two
+        return (rnd % (hi - lo + 1)) + lo;
+    } else {
+        return (rnd % (lo - hi + 1)) + hi;
+    }
+}
 
 /// Init time only, so slow is fine
 extern IData VL_RAND_RESET_I(int obits);  ///< Random reset a signal
@@ -1258,7 +1240,7 @@ static inline void* VL_CVT_Q_VP(QData lhs) VL_PURE {
 }
 /// Return QData from void*
 static inline QData VL_CVT_VP_Q(void* fp) VL_PURE {
-    union { void* fp; vluint64_t q; } u;
+    union { const void* fp; vluint64_t q; } u;
     u.q = 0;
     u.fp = fp;
     return u.q;
@@ -1277,9 +1259,27 @@ static inline QData VL_CVT_Q_D(double lhs) VL_PURE {
 }
 // clang-format on
 
-/// Return double from QData (numeric)
-static inline double VL_ITOR_D_I(IData lhs) VL_PURE {
-    return static_cast<double>(static_cast<vlsint32_t>(lhs));
+/// Return double from lhs (numeric) unsigned
+double VL_ITOR_D_W(int lbits, WDataInP lwp) VL_PURE;
+static inline double VL_ITOR_D_I(int, IData lhs) VL_PURE {
+    return static_cast<double>(static_cast<vluint32_t>(lhs));
+}
+static inline double VL_ITOR_D_Q(int, QData lhs) VL_PURE {
+    return static_cast<double>(static_cast<vluint64_t>(lhs));
+}
+/// Return double from lhs (numeric) signed
+double VL_ISTOR_D_W(int lbits, WDataInP lwp) VL_PURE;
+static inline double VL_ISTOR_D_I(int lbits, IDataV lhs) VL_PURE {
+    if (lbits == 32) return static_cast<double>(static_cast<vlsint32_t>(lhs));
+    WDataV lwp[VL_WQ_WORDS_E];
+    VL_SET_WI(lwp, lhs);
+    return VL_ISTOR_D_W(lbits, lwp);
+}
+static inline double VL_ISTOR_D_Q(int lbits, QDataV lhs) VL_PURE {
+    if (lbits == 64) return static_cast<double>(static_cast<vlsint64_t>(lhs));
+    WDataV lwp[VL_WQ_WORDS_E];
+    VL_SET_WQ(lwp, lhs);
+    return VL_ISTOR_D_W(lbits, lwp);
 }
 /// Return QData from double (numeric)
 static inline IData VL_RTOI_I_D(double lhs) VL_PURE {
@@ -1332,13 +1332,8 @@ extern int VL_TIME_STR_CONVERT(const char* strp) VL_PURE;
 
 /// Return current simulation time
 #if defined(SYSTEMC_VERSION)
-# if SYSTEMC_VERSION > 20011000
 // Already defined: extern sc_time sc_time_stamp();
 inline vluint64_t vl_time_stamp64() { return sc_time_stamp().value(); }
-# else  // Before SystemC changed to integral time representation
-// Already defined: extern double sc_time_stamp();
-inline vluint64_t vl_time_stamp64() { return static_cast<vluint64_t>(sc_time_stamp()); }
-# endif
 #else  // Non-SystemC
 # ifdef VL_TIME_STAMP64
 extern vluint64_t vl_time_stamp64();
@@ -1859,12 +1854,6 @@ static inline WDataOutP VL_XOR_W(int words, WDataOutP owp, WDataInP lwp, WDataIn
     for (int i = 0; (i < words); ++i) owp[i] = (lwp[i] ^ rwp[i]);
     return owp;
 }
-// EMIT_RULE: VL_XNOR:  oclean=dirty; obits=lbits; lbits==rbits;
-static inline WDataOutP VL_XNOR_W(int words, WDataOutP owp, WDataInP lwp,
-                                  WDataInP rwp) VL_MT_SAFE {
-    for (int i = 0; (i < words); ++i) owp[i] = (lwp[i] ^ ~rwp[i]);
-    return owp;
-}
 // EMIT_RULE: VL_NOT:  oclean=dirty; obits=lbits;
 static inline WDataOutP VL_NOT_W(int words, WDataOutP owp, WDataInP lwp) VL_MT_SAFE {
     for (int i = 0; i < words; ++i) owp[i] = ~(lwp[i]);
@@ -1971,6 +1960,7 @@ static inline int _VL_CMPS_W(int lbits, WDataInP lwp, WDataInP rwp) VL_MT_SAFE {
 //=========================================================================
 // Math
 
+// Output NOT clean
 static inline WDataOutP VL_NEGATE_W(int words, WDataOutP owp, WDataInP lwp) VL_MT_SAFE {
     EData carry = 1;
     for (int i = 0; i < words; ++i) {

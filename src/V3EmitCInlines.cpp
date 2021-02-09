@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -26,7 +26,7 @@
 
 //######################################################################
 
-class EmitCInlines : EmitCBaseVisitor {
+class EmitCInlines final : EmitCBaseVisitor {
     // STATE
 
     // METHODS
@@ -35,25 +35,24 @@ class EmitCInlines : EmitCBaseVisitor {
     }
 
     // VISITORS
-    virtual void visit(AstClass* nodep) VL_OVERRIDE {
+    virtual void visit(AstClass* nodep) override {
         checkHeavy(nodep);
-        v3Global.needC11(true);
         iterateChildren(nodep);
     }
-    virtual void visit(AstCNew* nodep) VL_OVERRIDE {
+    virtual void visit(AstCNew* nodep) override {
         checkHeavy(nodep);
         if (v3Global.opt.savable())
             v3warn(E_UNSUPPORTED, "Unsupported: --savable with dynamic new");
         iterateChildren(nodep);
     }
-    virtual void visit(AstDumpCtl* nodep) VL_OVERRIDE {
+    virtual void visit(AstDumpCtl* nodep) override {
         checkHeavy(nodep);
         if (v3Global.opt.trace()) v3Global.needTraceDumper(true);
         iterateChildren(nodep);
     }
 
     //---------------------------------------
-    virtual void visit(AstNode* nodep) VL_OVERRIDE {
+    virtual void visit(AstNode* nodep) override {
         checkHeavy(nodep);
         iterateChildren(nodep);
     }

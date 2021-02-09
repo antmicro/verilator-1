@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -32,49 +32,45 @@
 #include "V3Ast.h"
 
 #include <map>
-#include VL_INCLUDE_UNORDERED_MAP
+#include <unordered_map>
 
 //######################################################################
 // Coverage state, as a visitor of each AstNode
 
-class CoverageVisitor : public AstNVisitor {
+class CoverageVisitor final : public AstNVisitor {
 private:
     // TYPES
-    typedef vl_unordered_map<string, int> VarNameMap;
+    typedef std::unordered_map<string, int> VarNameMap;
     typedef std::set<int> LinenoSet;
-    typedef vl_unordered_map<int, LinenoSet> HandleLines;
+    typedef std::unordered_map<int, LinenoSet> HandleLines;
 
     struct ToggleEnt {
         string m_comment;  // Comment for coverage dump
         AstNode* m_varRefp;  // How to get to this element
         AstNode* m_chgRefp;  // How to get to this element
         ToggleEnt(const string& comment, AstNode* vp, AstNode* cp)
-            : m_comment(comment)
-            , m_varRefp(vp)
-            , m_chgRefp(cp) {}
-        ~ToggleEnt() {}
+            : m_comment{comment}
+            , m_varRefp{vp}
+            , m_chgRefp{cp} {}
+        ~ToggleEnt() = default;
         void cleanup() {
-            VL_DO_CLEAR(m_varRefp->deleteTree(), m_varRefp = NULL);
-            VL_DO_CLEAR(m_chgRefp->deleteTree(), m_chgRefp = NULL);
+            VL_DO_CLEAR(m_varRefp->deleteTree(), m_varRefp = nullptr);
+            VL_DO_CLEAR(m_chgRefp->deleteTree(), m_chgRefp = nullptr);
         }
     };
 
     struct CheckState {  // State save-restored on each new coverage scope/block
-        bool m_on;  // Should this block get covered?
-        bool m_inModOff;  // In module with no coverage
-        int m_handle;  // Opaque handle for index into line tracking
-        const AstNode* m_nodep;  // Node establishing this state
-        CheckState()
-            : m_on(false)
-            , m_inModOff(false)
-            , m_handle(0)
-            , m_nodep(NULL) {}
-        bool lineCoverageOn(const AstNode* nodep) {
+        bool m_on = false;  // Should this block get covered?
+        bool m_inModOff = false;  // In module with no coverage
+        int m_handle = 0;  // Opaque handle for index into line tracking
+        const AstNode* m_nodep = nullptr;  // Node establishing this state
+        CheckState() = default;
+        bool lineCoverageOn(const AstNode* nodep) const {
             return m_on && !m_inModOff && nodep->fileline()->coverageOn()
                    && v3Global.opt.coverageLine();
         }
     };
-    int m_nextHandle;
+    int m_nextHandle = 0;
 
     // NODE STATE
     // Entire netlist:
@@ -83,8 +79,8 @@ private:
 
     // STATE
     CheckState m_state;  // State save-restored on each new coverage scope/block
-    AstNodeModule* m_modp;  // Current module to add statement to
-    bool m_inToggleOff;  // In function/task etc
+    AstNodeModule* m_modp = nullptr;  // Current module to add statement to
+    bool m_inToggleOff = false;  // In function/task etc
     VarNameMap m_varnames;  // Uniquification of inserted variable names
     string m_beginHier;  // AstBegin hier name for user coverage points
     HandleLines m_handleLines;  // All line numbers for a given m_stateHandle
@@ -106,7 +102,7 @@ private:
         }
         // We allow this, though tracing doesn't
         // if (nodep->arrayp(1)) return "Unsupported: Multi-dimensional array";
-        return NULL;
+        return nullptr;
     }
 
     AstCoverInc* newCoverInc(FileLine* fl, const string& hier, const string& page_prefix,
@@ -134,8 +130,8 @@ private:
             m_modp->addStmtp(varp);
             UINFO(5, "New coverage trace: " << varp << endl);
             AstAssign* assp = new AstAssign(
-                incp->fileline(), new AstVarRef(incp->fileline(), varp, true),
-                new AstAdd(incp->fileline(), new AstVarRef(incp->fileline(), varp, false),
+                incp->fileline(), new AstVarRef(incp->fileline(), varp, VAccess::WRITE),
+                new AstAdd(incp->fileline(), new AstVarRef(incp->fileline(), varp, VAccess::READ),
                            new AstConst(incp->fileline(), AstConst::WidthedValue(), 32, 1)));
             incp->addNext(assp);
         }
@@ -144,9 +140,9 @@ private:
     string traceNameForLine(AstNode* nodep, const string& type) {
         string name = "vlCoverageLineTrace_" + nodep->fileline()->filebasenameNoExt() + "__"
                       + cvtToStr(nodep->fileline()->lineno()) + "_" + type;
-        VarNameMap::iterator it = m_varnames.find(name);
+        const auto it = m_varnames.find(name);
         if (it == m_varnames.end()) {
-            m_varnames.insert(make_pair(name, 1));
+            m_varnames.emplace(name, 1);
         } else {
             int suffix = (it->second)++;
             name += "_" + cvtToStr(suffix);
@@ -192,15 +188,15 @@ private:
         const LinenoSet& lines = m_handleLines[state.m_handle];
         int first = 0;
         int last = 0;
-        for (LinenoSet::iterator it = lines.begin(); it != lines.end(); ++it) {
+        for (int linen : lines) {
             if (!first) {
-                first = last = *it;
-            } else if (*it == last + 1) {
+                first = last = linen;
+            } else if (linen == last + 1) {
                 ++last;
             } else {
                 if (!out.empty()) out += ",";
                 out += linesFirstLast(first, last);
-                first = last = *it;
+                first = last = linen;
             }
         }
         if (first) {
@@ -212,9 +208,10 @@ private:
     }
 
     // VISITORS - BOTH
-    virtual void visit(AstNodeModule* nodep) VL_OVERRIDE {
+    virtual void visit(AstNodeModule* nodep) override {
         AstNodeModule* origModp = m_modp;
-        CheckState lastState = m_state;
+        VL_RESTORER(m_modp);
+        VL_RESTORER(m_state);
         {
             createHandle(nodep);
             m_modp = nodep;
@@ -227,18 +224,16 @@ private:
             }
             iterateChildren(nodep);
         }
-        m_modp = origModp;
-        m_state = lastState;
     }
 
-    virtual void visit(AstNodeProcedure* nodep) VL_OVERRIDE { iterateProcedure(nodep); }
-    virtual void visit(AstWhile* nodep) VL_OVERRIDE { iterateProcedure(nodep); }
-    virtual void visit(AstNodeFTask* nodep) VL_OVERRIDE {
+    virtual void visit(AstNodeProcedure* nodep) override { iterateProcedure(nodep); }
+    virtual void visit(AstWhile* nodep) override { iterateProcedure(nodep); }
+    virtual void visit(AstNodeFTask* nodep) override {
         if (!nodep->dpiImport()) iterateProcedure(nodep);
     }
     void iterateProcedure(AstNode* nodep) {
-        CheckState lastState = m_state;
-        bool oldtog = m_inToggleOff;
+        VL_RESTORER(m_state);
+        VL_RESTORER(m_inToggleOff);
         {
             m_inToggleOff = true;
             createHandle(nodep);
@@ -259,12 +254,10 @@ private:
                 }
             }
         }
-        m_state = lastState;
-        m_inToggleOff = oldtog;
     }
 
     // VISITORS - TOGGLE COVERAGE
-    virtual void visit(AstVar* nodep) VL_OVERRIDE {
+    virtual void visit(AstVar* nodep) override {
         iterateChildren(nodep);
         if (m_modp && !m_inToggleOff && !m_state.m_inModOff && nodep->fileline()->coverageOn()
             && v3Global.opt.coverageToggle()) {
@@ -295,8 +288,9 @@ private:
                 // This is necessarily an O(n^2) expansion, which is why
                 // we limit coverage to signals with < 256 bits.
 
-                ToggleEnt newvec(string(""), new AstVarRef(nodep->fileline(), nodep, false),
-                                 new AstVarRef(nodep->fileline(), chgVarp, true));
+                ToggleEnt newvec(string(""),
+                                 new AstVarRef(nodep->fileline(), nodep, VAccess::READ),
+                                 new AstVarRef(nodep->fileline(), chgVarp, VAccess::WRITE));
                 toggleVarRecurse(nodep->dtypeSkipRefp(), 0, newvec, nodep, chgVarp);
                 newvec.cleanup();
             }
@@ -316,9 +310,9 @@ private:
                           const ToggleEnt& above, AstVar* varp, AstVar* chgVarp) {  // Constant
         if (const AstBasicDType* bdtypep = VN_CAST(dtypep, BasicDType)) {
             if (bdtypep->isRanged()) {
-                for (int index_docs = bdtypep->lsb(); index_docs < bdtypep->msb() + 1;
-                     index_docs++) {
-                    int index_code = index_docs - bdtypep->lsb();
+                for (int index_docs = bdtypep->lo(); index_docs < bdtypep->hi() + 1;
+                     ++index_docs) {
+                    int index_code = index_docs - bdtypep->lo();
                     ToggleEnt newent(above.m_comment + string("[") + cvtToStr(index_docs) + "]",
                                      new AstSel(varp->fileline(), above.m_varRefp->cloneTree(true),
                                                 index_code, 1),
@@ -331,8 +325,8 @@ private:
                 toggleVarBottom(above, varp);
             }
         } else if (AstUnpackArrayDType* adtypep = VN_CAST(dtypep, UnpackArrayDType)) {
-            for (int index_docs = adtypep->lsb(); index_docs <= adtypep->msb(); ++index_docs) {
-                int index_code = index_docs - adtypep->lsb();
+            for (int index_docs = adtypep->lo(); index_docs <= adtypep->hi(); ++index_docs) {
+                int index_code = index_docs - adtypep->lo();
                 ToggleEnt newent(above.m_comment + string("[") + cvtToStr(index_docs) + "]",
                                  new AstArraySel(varp->fileline(),
                                                  above.m_varRefp->cloneTree(true), index_code),
@@ -343,9 +337,9 @@ private:
                 newent.cleanup();
             }
         } else if (AstPackArrayDType* adtypep = VN_CAST(dtypep, PackArrayDType)) {
-            for (int index_docs = adtypep->lsb(); index_docs <= adtypep->msb(); ++index_docs) {
+            for (int index_docs = adtypep->lo(); index_docs <= adtypep->hi(); ++index_docs) {
                 AstNodeDType* subtypep = adtypep->subDTypep()->skipRefp();
-                int index_code = index_docs - adtypep->lsb();
+                int index_code = index_docs - adtypep->lo();
                 ToggleEnt newent(above.m_comment + string("[") + cvtToStr(index_docs) + "]",
                                  new AstSel(varp->fileline(), above.m_varRefp->cloneTree(true),
                                             index_code * subtypep->width(), subtypep->width()),
@@ -387,7 +381,7 @@ private:
 
     // VISITORS - LINE COVERAGE
     // Note not AstNodeIf; other types don't get covered
-    virtual void visit(AstIf* nodep) VL_OVERRIDE {
+    virtual void visit(AstIf* nodep) override {
         UINFO(4, " IF: " << nodep << endl);
         if (m_state.m_on) {
             // An else-if.  When we iterate the if, use "elsif" marking
@@ -463,12 +457,12 @@ private:
         }
         UINFO(9, " done HANDLE " << m_state.m_handle << " for " << nodep << endl);
     }
-    virtual void visit(AstCaseItem* nodep) VL_OVERRIDE {
+    virtual void visit(AstCaseItem* nodep) override {
         // We don't add an explicit "default" coverage if not provided,
         // as we already have a warning when there is no default.
         UINFO(4, " CASEI: " << nodep << endl);
         if (m_state.lineCoverageOn(nodep)) {
-            CheckState lastState = m_state;
+            VL_RESTORER(m_state);
             {
                 createHandle(nodep);
                 iterateAndNextNull(nodep->bodysp());
@@ -480,12 +474,11 @@ private:
                                                  traceNameForLine(nodep, "case")));
                 }
             }
-            m_state = lastState;
         }
     }
-    virtual void visit(AstCover* nodep) VL_OVERRIDE {
+    virtual void visit(AstCover* nodep) override {
         UINFO(4, " COVER: " << nodep << endl);
-        CheckState lastState = m_state;
+        VL_RESTORER(m_state);
         {
             m_state.m_on = true;  // Always do cover blocks, even if there's a $stop
             createHandle(nodep);
@@ -498,13 +491,12 @@ private:
                                              m_beginHier + "_vlCoverageUserTrace"));
             }
         }
-        m_state = lastState;
     }
-    virtual void visit(AstStop* nodep) VL_OVERRIDE {
+    virtual void visit(AstStop* nodep) override {
         UINFO(4, "  STOP: " << nodep << endl);
         m_state.m_on = false;
     }
-    virtual void visit(AstPragma* nodep) VL_OVERRIDE {
+    virtual void visit(AstPragma* nodep) override {
         if (nodep->pragType() == AstPragmaType::COVERAGE_BLOCK_OFF) {
             // Skip all NEXT nodes under this block, and skip this if/case branch
             UINFO(4, "  OFF: h" << m_state.m_handle << " " << nodep << endl);
@@ -515,14 +507,14 @@ private:
             lineTrack(nodep);
         }
     }
-    virtual void visit(AstBegin* nodep) VL_OVERRIDE {
+    virtual void visit(AstBegin* nodep) override {
         // Record the hierarchy of any named begins, so we can apply to user
         // coverage points.  This is because there may be cov points inside
         // generate blocks; each point should get separate consideration.
         // (Currently ignored for line coverage, since any generate iteration
         // covers the code in that line.)
-        string oldHier = m_beginHier;
-        bool oldtog = m_inToggleOff;
+        VL_RESTORER(m_beginHier);
+        VL_RESTORER(m_inToggleOff);
         {
             m_inToggleOff = true;
             if (nodep->name() != "") {
@@ -531,27 +523,18 @@ private:
             iterateChildren(nodep);
             lineTrack(nodep);
         }
-        m_beginHier = oldHier;
-        m_inToggleOff = oldtog;
     }
 
     // VISITORS - BOTH
-    virtual void visit(AstNode* nodep) VL_OVERRIDE {
+    virtual void visit(AstNode* nodep) override {
         iterateChildren(nodep);
         lineTrack(nodep);
     }
 
 public:
     // CONSTRUCTORS
-    explicit CoverageVisitor(AstNetlist* rootp) {
-        // Operate on all modules
-        m_nextHandle = 0;
-        m_modp = NULL;
-        m_beginHier = "";
-        m_inToggleOff = false;
-        iterateChildren(rootp);
-    }
-    virtual ~CoverageVisitor() {}
+    explicit CoverageVisitor(AstNetlist* rootp) { iterateChildren(rootp); }
+    virtual ~CoverageVisitor() override = default;
 };
 
 //######################################################################

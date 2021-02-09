@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2005-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2005-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -30,7 +30,7 @@
 // Algorithms - find starting node
 
 DfaVertex* DfaGraph::findStart() {
-    DfaVertex* startp = NULL;
+    DfaVertex* startp = nullptr;
     for (V3GraphVertex* vertexp = this->verticesBeginp(); vertexp;
          vertexp = vertexp->verticesNextp()) {
         if (DfaVertex* vvertexp = dynamic_cast<DfaVertex*>(vertexp)) {
@@ -51,7 +51,7 @@ DfaVertex* DfaGraph::findStart() {
 // Algorithms - convert NFA to a DFA
 // Uses the Subset Construction Algorithm
 
-class GraphNfaToDfa : GraphAlg<> {
+class GraphNfaToDfa final : GraphAlg<> {
     // We have two types of nodes in one graph, NFA and DFA nodes.
     // Edges from NFA to NFA come from the user, and indicate input or epsilon transitions
     // Edges from DFA to NFA indicate the NFA from which that DFA was formed.
@@ -73,8 +73,8 @@ private:
 
     // METHODS
     DfaGraph* graphp() { return static_cast<DfaGraph*>(m_graphp); }
-    bool nfaState(V3GraphVertex* vertexp) { return vertexp->color() == 0; }
-    // bool dfaState(V3GraphVertex* vertexp) { return vertexp->color()==1; }
+    static bool nfaState(V3GraphVertex* vertexp) { return vertexp->color() == 0; }
+    // static bool dfaState(V3GraphVertex* vertexp) { return vertexp->color()==1; }
 
     void nextStep() { m_step++; }
 
@@ -83,7 +83,7 @@ private:
         return (nfaState(vertexp) && !(vertexp->user() == m_step));
     }
 
-    DfaVertex* newDfaVertex(DfaVertex* nfaTemplatep = NULL) {
+    DfaVertex* newDfaVertex(DfaVertex* nfaTemplatep = nullptr) {
         DfaVertex* vertexp = new DfaVertex(graphp());
         vertexp->color(1);  // Mark as dfa
         if (nfaTemplatep && nfaTemplatep->start()) vertexp->start(true);
@@ -133,11 +133,7 @@ private:
     uint32_t hashDfaOrigins(const DfaStates& nfasWithInput) {
         // Find the NFA states this dfa came from,
         uint32_t hash = 0;
-        for (DfaStates::const_iterator nfaIt = nfasWithInput.begin(); nfaIt != nfasWithInput.end();
-             ++nfaIt) {
-            DfaVertex* nfaStatep = *nfaIt;
-            hash ^= hashVertex(nfaStatep);
-        }
+        for (DfaVertex* nfaStatep : nfasWithInput) hash ^= hashVertex(nfaStatep);
         return hash;
     }
 
@@ -147,9 +143,7 @@ private:
         nextStep();
         // Mark all input vertexes
         int num1s = 0;
-        for (DfaStates::const_iterator nfaIt = nfasWithInput.begin(); nfaIt != nfasWithInput.end();
-             ++nfaIt) {
-            DfaVertex* nfaStatep = *nfaIt;
+        for (DfaVertex* nfaStatep : nfasWithInput) {
             nfaStatep->user(m_step);
             num1s++;
         }
@@ -173,7 +167,7 @@ private:
     void insertDfaOrigins(DfaVertex* dfaStatep) {
         // Record the NFA states this dfa came from
         uint32_t hash = hashDfaOrigins(dfaStatep);
-        m_hashMap.insert(make_pair(hash, dfaStatep));
+        m_hashMap.emplace(hash, dfaStatep);
     }
 
     DfaVertex* findDfaOrigins(const DfaStates& nfasWithInput) {
@@ -182,7 +176,7 @@ private:
         // not depend on order of edges
         uint32_t hash = hashDfaOrigins(nfasWithInput);
 
-        std::pair<HashMap::iterator, HashMap::iterator> eqrange = m_hashMap.equal_range(hash);
+        const auto eqrange = m_hashMap.equal_range(hash);
         for (HashMap::iterator it = eqrange.first; it != eqrange.second; ++it) {
             DfaVertex* testp = it->second;
             if (compareDfaOrigins(nfasWithInput, testp)) {
@@ -190,7 +184,7 @@ private:
                 return testp;  // Identical
             }
         }
-        return NULL;  // No match
+        return nullptr;  // No match
     }
 
     void findNfasWithInput(DfaVertex* dfaStatep, const DfaInput& input, DfaStates& nfasWithInput) {
@@ -300,7 +294,7 @@ private:
             UINFO(9, "  On dfaState " << dfaStatep << endl);
 
             // From this dfaState, what corresponding nfaStates have what inputs?
-            std::set<int> inputs;
+            std::unordered_set<int> inputs;
             // Foreach NFA state (this DFA state was formed from)
             for (V3GraphEdge* dfaEdgep = dfaStatep->outBeginp(); dfaEdgep;
                  dfaEdgep = dfaEdgep->outNextp()) {
@@ -323,9 +317,8 @@ private:
             }
 
             // Foreach input state (NFA inputs of this DFA state)
-            for (std::set<int>::const_iterator inIt = inputs.begin(); inIt != inputs.end();
-                 ++inIt) {
-                DfaInput input = *inIt;
+            for (int inIt : inputs) {
+                DfaInput input = inIt;
                 UINFO(9, "    ===" << ++i << "=======================\n");
                 UINFO(9, "    On input " << cvtToHex(input.toNodep()) << endl);
 
@@ -371,11 +364,11 @@ private:
 
 public:
     GraphNfaToDfa(V3Graph* graphp, V3EdgeFuncP edgeFuncp)
-        : GraphAlg<>(graphp, edgeFuncp) {
+        : GraphAlg<>{graphp, edgeFuncp} {
         m_step = 0;
         main();
     }
-    ~GraphNfaToDfa() {}
+    ~GraphNfaToDfa() = default;
 };
 
 void DfaGraph::nfaToDfa() { GraphNfaToDfa(this, &V3GraphEdge::followAlwaysTrue); }
@@ -386,7 +379,7 @@ void DfaGraph::nfaToDfa() { GraphNfaToDfa(this, &V3GraphEdge::followAlwaysTrue);
 //
 // Scan the DFA, cleaning up trailing states.
 
-class DfaGraphReduce : GraphAlg<> {
+class DfaGraphReduce final : GraphAlg<> {
 private:
     // METHODS
 #ifdef VL_CPPCHECK
@@ -500,7 +493,7 @@ private:
 
 public:
     DfaGraphReduce(V3Graph* graphp, V3EdgeFuncP edgeFuncp)
-        : GraphAlg<>(graphp, edgeFuncp) {
+        : GraphAlg<>{graphp, edgeFuncp} {
         if (debug() >= 6) m_graphp->dumpDotFilePrefixed("opt_in");
         optimize_accepting_out();
         if (debug() >= 6) m_graphp->dumpDotFilePrefixed("opt_acc");
@@ -509,7 +502,7 @@ public:
         optimize_no_outbound();
         if (debug() >= 6) m_graphp->dumpDotFilePrefixed("opt_noout");
     }
-    ~DfaGraphReduce() {}
+    ~DfaGraphReduce() = default;
 };
 
 void DfaGraph::dfaReduce() { DfaGraphReduce(this, &V3GraphEdge::followAlwaysTrue); }
@@ -534,7 +527,7 @@ void DfaGraph::dfaReduce() { DfaGraphReduce(this, &V3GraphEdge::followAlwaysTrue
 // The user's old accept is now the new accept.  This is important as
 // we want the virtual type of it to be intact.
 
-class DfaGraphComplement : GraphAlg<> {
+class DfaGraphComplement final : GraphAlg<> {
 private:
     // MEMBERS
     DfaVertex* m_tempNewerReject;
@@ -545,7 +538,7 @@ private:
 
     void add_complement_edges() {
         // Find accepting vertex
-        DfaVertex* acceptp = NULL;
+        DfaVertex* acceptp = nullptr;
         for (V3GraphVertex* vertexp = m_graphp->verticesBeginp(); vertexp;
              vertexp = vertexp->verticesNextp()) {
             if (DfaVertex* vvertexp = dynamic_cast<DfaVertex*>(vertexp)) {
@@ -592,7 +585,7 @@ private:
 
 public:
     DfaGraphComplement(V3Graph* dfagraphp, V3EdgeFuncP edgeFuncp)
-        : GraphAlg<>(dfagraphp, edgeFuncp) {
+        : GraphAlg<>{dfagraphp, edgeFuncp} {
         if (debug() >= 6) m_graphp->dumpDotFilePrefixed("comp_in");
 
         // Vertex::m_user begin: 1 indicates new edge, no more processing
@@ -602,10 +595,10 @@ public:
         add_complement_edges();
         if (debug() >= 6) m_graphp->dumpDotFilePrefixed("comp_preswap");
 
-        VL_DO_CLEAR(m_tempNewerReject->unlinkDelete(graphp()), m_tempNewerReject = NULL);
+        VL_DO_CLEAR(m_tempNewerReject->unlinkDelete(graphp()), m_tempNewerReject = nullptr);
         if (debug() >= 6) m_graphp->dumpDotFilePrefixed("comp_out");
     }
-    ~DfaGraphComplement() {}
+    ~DfaGraphComplement() = default;
     VL_UNCOPYABLE(DfaGraphComplement);
 };
 

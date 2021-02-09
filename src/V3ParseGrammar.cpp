@@ -6,13 +6,15 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
 // SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 //
 //*************************************************************************
+
+#define YYDEBUG 1  // Nicer errors
 
 #include "V3Ast.h"  // This must be before V3ParseBison.cpp, as we don't want #defines to conflict
 
@@ -32,7 +34,7 @@ int V3ParseImp::bisonParse() {
 
 const char* V3ParseImp::tokenName(int token) {
 #if YYDEBUG || YYERROR_VERBOSE
-    static const char** nameTablep = NULL;
+    static const char** nameTablep = nullptr;
     if (!nameTablep) {
         int size;
         for (size = 0; yytname[size]; ++size) {}
@@ -59,7 +61,7 @@ const char* V3ParseImp::tokenName(int token) {
 
 void V3ParseImp::parserClear() {
     // Clear up any dynamic memory V3Parser required
-    VARDTYPE(NULL);
+    VARDTYPE(nullptr);
 }
 
 //======================================================================
@@ -67,8 +69,8 @@ void V3ParseImp::parserClear() {
 
 AstNode* V3ParseGrammar::argWrapList(AstNode* nodep) {
     // Convert list of expressions to list of arguments
-    if (!nodep) return NULL;
-    AstNode* outp = NULL;
+    if (!nodep) return nullptr;
+    AstNode* outp = nullptr;
     AstBegin* tempp = new AstBegin(nodep->fileline(), "[EditWrapper]", nodep);
     while (nodep) {
         AstNode* nextp = nodep->nextp();
@@ -83,7 +85,7 @@ AstNode* V3ParseGrammar::argWrapList(AstNode* nodep) {
 
 AstNode* V3ParseGrammar::createSupplyExpr(FileLine* fileline, const string& name, int value) {
     return new AstAssignW(
-        fileline, new AstVarRef(fileline, name, true),
+        fileline, new AstVarRef(fileline, name, VAccess::WRITE),
         new AstConst(fileline, AstConst::StringToParse(), (value ? "'1" : "'0")));
 }
 
@@ -93,14 +95,15 @@ AstRange* V3ParseGrammar::scrubRange(AstNodeRange* nrangep) {
         nextp = VN_CAST(nodep->nextp(), NodeRange);
         if (!VN_IS(nodep, Range)) {
             nodep->v3error(
-                "Unsupported or syntax error: Unsized range in cell or other declaration");
+                "Unsupported or syntax error: Unsized range in instance or other declaration");
             nodep->unlinkFrBack();
             VL_DO_DANGLING(nodep->deleteTree(), nodep);
         }
     }
     if (nrangep && nrangep->nextp()) {
         // Not supported by at least 2 of big 3
-        nrangep->nextp()->v3warn(E_UNSUPPORTED, "Unsupported: Multidimensional cells/interfaces.");
+        nrangep->nextp()->v3warn(E_UNSUPPORTED,
+                                 "Unsupported: Multidimensional instances/interfaces.");
         nrangep->nextp()->unlinkFrBackWithNext()->deleteTree();
     }
     return VN_CAST(nrangep, Range);
@@ -152,7 +155,7 @@ AstVar* V3ParseGrammar::createVariable(FileLine* fileline, const string& name,
     if (GRAMMARP->m_varIO == VDirection::NONE && GRAMMARP->m_varDecl == AstVarType::PORT) {
         // Just a port list with variable name (not v2k format); AstPort already created
         if (dtypep) fileline->v3warn(E_UNSUPPORTED, "Unsupported: Ranges ignored in port-lists");
-        return NULL;
+        return nullptr;
     }
     if (GRAMMARP->m_varDecl == AstVarType::WREAL) {
         // dtypep might not be null, might be implicit LOGIC before we knew better

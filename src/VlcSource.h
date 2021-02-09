@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -26,23 +26,20 @@
 //********************************************************************
 // VlcColumnCount - count at specific source file, line and column
 
-class VlcSourceCount {
+class VlcSourceCount final {
 private:
     // MEMBERS
     int m_lineno;  ///< Line number
     int m_column;  ///< Column number
-    vluint64_t m_count;  ///< Count
-    bool m_ok;  ///< Coverage is above threshold
+    vluint64_t m_count = 0;  ///< Count
+    bool m_ok = false;  ///< Coverage is above threshold
 
 public:
     // CONSTRUCTORS
-    VlcSourceCount(int lineno, int column) {
-        m_lineno = lineno;
-        m_column = column;
-        m_count = 0;
-        m_ok = false;
-    }
-    ~VlcSourceCount() {}
+    VlcSourceCount(int lineno, int column)
+        : m_lineno{lineno}
+        , m_column{column} {}
+    ~VlcSourceCount() = default;
 
     // ACCESSORS
     int lineno() const { return m_lineno; }
@@ -60,7 +57,7 @@ public:
 //********************************************************************
 // VlcSource - source file to annotate
 
-class VlcSource {
+class VlcSource final {
 public:
     // TYPES
     typedef std::map<int, VlcSourceCount> ColumnMap;  // Map of {column}
@@ -69,16 +66,14 @@ public:
 private:
     // MEMBERS
     string m_name;  //< Name of the source file
-    bool m_needed;  //< Need to annotate; has low coverage
+    bool m_needed = false;  //< Need to annotate; has low coverage
     LinenoMap m_lines;  //< Map of each annotated line
 
 public:
     // CONSTRUCTORS
-    explicit VlcSource(const string& name) {
-        m_name = name;
-        m_needed = false;
-    }
-    ~VlcSource() {}
+    explicit VlcSource(const string& name)
+        : m_name{name} {}
+    ~VlcSource() = default;
 
     // ACCESSORS
     const string& name() const { return m_name; }
@@ -103,10 +98,10 @@ public:
 //********************************************************************
 // VlcSources - Container of all source files
 
-class VlcSources {
+class VlcSources final {
 public:
     // TYPES
-    typedef std::map<string, VlcSource> NameMap;
+    typedef std::map<const string, VlcSource> NameMap;
 
 private:
     // MEMBERS
@@ -119,8 +114,8 @@ public:
     NameMap::iterator end() { return m_sources.end(); }
 
     // CONSTRUCTORS
-    VlcSources() {}
-    ~VlcSources() {}
+    VlcSources() = default;
+    ~VlcSources() = default;
 
     // METHODS
     VlcSource& findNewSource(const string& name) {

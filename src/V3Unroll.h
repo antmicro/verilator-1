@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -28,7 +28,7 @@
 
 class UnrollVisitor;
 
-class UnrollStateful {
+class UnrollStateful final {
     // MEMBERS
     UnrollVisitor* m_unrollerp;
     VL_UNCOPYABLE(UnrollStateful);
@@ -44,7 +44,7 @@ public:
 
 //============================================================================
 
-class V3Unroll {
+class V3Unroll final {
 public:
     static void unrollAll(AstNetlist* nodep);
 };

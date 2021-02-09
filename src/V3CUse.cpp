@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -32,16 +32,16 @@
 #include "V3Ast.h"
 #include "V3EmitCBase.h"
 
-#include VL_INCLUDE_UNORDERED_MAP
+#include <unordered_map>
 
 //######################################################################
 
-class CUseState {
+class CUseState final {
 private:
     // MEMBERS
     AstNodeModule* m_modInsertp;  // Current module to insert AstCUse under
     typedef std::pair<VUseType, string> UseString;
-    std::map<UseString, AstCUse*> m_didUse;  // What we already used
+    std::map<const UseString, AstCUse*> m_didUse;  // What we already used
 
     // NODE STATE
     // Entire netlist:
@@ -67,38 +67,37 @@ public:
 
     // CONSTRUCTORS
     explicit CUseState(AstNodeModule* nodep)
-        : m_modInsertp(nodep) {}
-    virtual ~CUseState() {}
+        : m_modInsertp{nodep} {}
+    virtual ~CUseState() = default;
     VL_UNCOPYABLE(CUseState);
 };
 
 // Visit within a module all nodes and data types they reference, finding
 // any classes so we can make sure they are defined when Verilated code
 // compiles
-class CUseDTypeVisitor : public AstNVisitor {
+class CUseDTypeVisitor final : public AstNVisitor {
     // MEMBERS
     CUseState& m_stater;  // State for inserter
-    bool m_impOnly;  // In details needed only for implementation
+    bool m_impOnly = false;  // In details needed only for implementation
     // METHODS
-    virtual void visit(AstClassRefDType* nodep) VL_OVERRIDE {
+    virtual void visit(AstClassRefDType* nodep) override {
         if (nodep->user2SetOnce()) return;  // Process once
         if (!m_impOnly) m_stater.newUse(nodep, VUseType::INT_FWD_CLASS, nodep->classp()->name());
         // No class.h, it's inside the class package's h file
-        m_stater.newUse(nodep, VUseType::IMP_INCLUDE, nodep->classp()->packagep()->name());
+        m_stater.newUse(nodep, VUseType::IMP_INCLUDE, nodep->classp()->classOrPackagep()->name());
         // Need to include extends() when we implement, but no need for pointers to know
-        bool oldImpOnly = m_impOnly;
+        VL_RESTORER(m_impOnly);
         {
             m_impOnly = true;
             iterateChildren(nodep->classp());  // This also gets all extend classes
         }
-        m_impOnly = oldImpOnly;
     }
-    virtual void visit(AstNodeDType* nodep) VL_OVERRIDE {
+    virtual void visit(AstNodeDType* nodep) override {
         if (nodep->user2SetOnce()) return;  // Process once
         if (nodep->virtRefDTypep()) iterate(nodep->virtRefDTypep());
         if (nodep->virtRefDType2p()) iterate(nodep->virtRefDType2p());
     }
-    virtual void visit(AstNode* nodep) VL_OVERRIDE {
+    virtual void visit(AstNode* nodep) override {
         if (nodep->user2SetOnce()) return;  // Process once
         if (nodep->dtypep() && !nodep->dtypep()->user2()) iterate(nodep->dtypep());
         iterateChildren(nodep);
@@ -107,15 +106,14 @@ class CUseDTypeVisitor : public AstNVisitor {
 public:
     // CONSTRUCTORS
     explicit CUseDTypeVisitor(AstNodeModule* nodep, CUseState& stater)
-        : m_stater(stater)
-        , m_impOnly(false) {
+        : m_stater(stater) {  // Need () or GCC 4.8 false warning
         iterate(nodep);
     }
-    virtual ~CUseDTypeVisitor() {}
+    virtual ~CUseDTypeVisitor() override = default;
     VL_UNCOPYABLE(CUseDTypeVisitor);
 };
 
-class CUseVisitor : public AstNVisitor {
+class CUseVisitor final : public AstNVisitor {
     // MEMBERS
     CUseState m_state;  // Inserter state
 
@@ -132,7 +130,7 @@ class CUseVisitor : public AstNVisitor {
         }
     }
     void makeVlToString(AstClass* nodep) {
-        AstCFunc* funcp = new AstCFunc(nodep->fileline(), "VL_TO_STRING", NULL, "std::string");
+        AstCFunc* funcp = new AstCFunc(nodep->fileline(), "VL_TO_STRING", nullptr, "std::string");
         funcp->argTypes("const VlClassRef<" + EmitCBaseVisitor::prefixNameProtect(nodep)
                         + ">& obj");
         funcp->isMethod(false);
@@ -145,34 +143,44 @@ class CUseVisitor : public AstNVisitor {
         nodep->addStmtp(funcp);
     }
     void makeToString(AstClass* nodep) {
-        AstCFunc* funcp = new AstCFunc(nodep->fileline(), "to_string", NULL, "std::string");
+        AstCFunc* funcp = new AstCFunc(nodep->fileline(), "to_string", nullptr, "std::string");
         funcp->isConst(true);
         funcp->isStatic(false);
         funcp->protect(false);
         AstNode* exprp = new AstCMath(nodep->fileline(),
-                                      "std::string(\"`{\") + to_string_middle() + \"}\"", 0);
+                                      R"(std::string("'{") + to_string_middle() + "}")", 0);
         exprp->dtypeSetString();
         funcp->addStmtsp(new AstCReturn(nodep->fileline(), exprp));
         nodep->addStmtp(funcp);
     }
     void makeToStringMiddle(AstClass* nodep) {
-        AstCFunc* funcp = new AstCFunc(nodep->fileline(), "to_string_middle", NULL, "std::string");
+        AstCFunc* funcp
+            = new AstCFunc(nodep->fileline(), "to_string_middle", nullptr, "std::string");
         funcp->isConst(true);
         funcp->isStatic(false);
         funcp->protect(false);
         funcp->addStmtsp(new AstCStmt(nodep->fileline(), "std::string out;\n"));
         std::string comma;
         for (AstNode* itemp = nodep->membersp(); itemp; itemp = itemp->nextp()) {
-            if (VN_IS(itemp, Var)) {
-                string stmt = "out += \"";
-                stmt += comma;
-                comma = ", ";
-                stmt += itemp->origNameProtect();
-                stmt += ":\" + VL_TO_STRING(";
-                stmt += itemp->nameProtect();
-                stmt += ");\n";
-                nodep->user1(true);  // So what we extend dumps this
-                funcp->addStmtsp(new AstCStmt(nodep->fileline(), stmt));
+            if (auto* varp = VN_CAST(itemp, Var)) {
+                if (!varp->isParam()) {
+                    string stmt = "out += \"";
+                    stmt += comma;
+                    comma = ", ";
+                    stmt += itemp->origNameProtect();
+                    stmt += ":\" + ";
+                    if (itemp->isWide()) {
+                        stmt += "VL_TO_STRING_W(";
+                        stmt += cvtToStr(itemp->widthWords());
+                        stmt += ", ";
+                    } else {
+                        stmt += "VL_TO_STRING(";
+                    }
+                    stmt += itemp->nameProtect();
+                    stmt += ");\n";
+                    nodep->user1(true);  // So what we extend dumps this
+                    funcp->addStmtsp(new AstCStmt(nodep->fileline(), stmt));
+                }
             }
         }
         if (nodep->extendsp() && nodep->extendsp()->classp()->user1()) {
@@ -189,7 +197,7 @@ class CUseVisitor : public AstNVisitor {
     }
 
     // VISITORS
-    virtual void visit(AstNodeModule* nodep) VL_OVERRIDE {
+    virtual void visit(AstNodeModule* nodep) override {
         if (v3Global.opt.trace()) {
             AstCUse* usep
                 = m_state.newUse(nodep, VUseType::INT_FWD_CLASS, v3Global.opt.traceClassBase());
@@ -203,15 +211,15 @@ class CUseVisitor : public AstNVisitor {
             makeToStringMiddle(classp);
         }
     }
-    virtual void visit(AstNode*) VL_OVERRIDE {}  // All in AstNodeModule
+    virtual void visit(AstNode*) override {}  // All in AstNodeModule
 
 public:
     // CONSTRUCTORS
     explicit CUseVisitor(AstNodeModule* nodep)
-        : m_state(nodep) {
+        : m_state{nodep} {
         iterate(nodep);
     }
-    virtual ~CUseVisitor() {}
+    virtual ~CUseVisitor() override = default;
     VL_UNCOPYABLE(CUseVisitor);
 };
 

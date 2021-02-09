@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -130,7 +130,7 @@ void VlcOptions::showVersion(bool verbose) {
     if (!verbose) return;
 
     cout << endl;
-    cout << "Copyright 2003-2020 by Wilson Snyder.  Verilator is free software; you can\n";
+    cout << "Copyright 2003-2021 by Wilson Snyder.  Verilator is free software; you can\n";
     cout << "redistribute it and/or modify the Verilator internals under the terms of\n";
     cout << "either the GNU Lesser General Public License Version 3 or the Perl Artistic\n";
     cout << "License Version 2.0.\n";
@@ -154,10 +154,7 @@ int main(int argc, char** argv, char** /*env*/) {
 
     {
         const VlStringSet& readFiles = top.opt.readFiles();
-        for (VlStringSet::const_iterator it = readFiles.begin(); it != readFiles.end(); ++it) {
-            string filename = *it;
-            top.readCoverage(filename);
-        }
+        for (const auto& filename : readFiles) top.readCoverage(filename);
     }
 
     if (debug() >= 9) {
@@ -179,10 +176,7 @@ int main(int argc, char** argv, char** /*env*/) {
         V3Error::abortIfWarnings();
         if (top.opt.unlink()) {
             const VlStringSet& readFiles = top.opt.readFiles();
-            for (VlStringSet::const_iterator it = readFiles.begin(); it != readFiles.end(); ++it) {
-                string filename = *it;
-                unlink(filename.c_str());
-            }
+            for (const auto& filename : readFiles) { unlink(filename.c_str()); }
         }
     }
 

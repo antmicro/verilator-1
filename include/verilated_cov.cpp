@@ -3,7 +3,7 @@
 //
 // THIS MODULE IS PUBLICLY LICENSED
 //
-// Copyright 2001-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2001-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -29,7 +29,7 @@
 // VerilatedCovImpBase
 /// Implementation base class for constants
 
-struct VerilatedCovImpBase {
+struct VerilatedCovImpBase VL_NOT_FINAL {
     // TYPES
     enum { MAX_KEYS = 33 };  /// Maximum user arguments + filename+lineno
     enum { KEY_UNDEF = 0 };  /// Magic key # for unspecified values
@@ -39,7 +39,7 @@ struct VerilatedCovImpBase {
 // VerilatedCovImpItem
 /// Implementation class for a VerilatedCov item
 
-class VerilatedCovImpItem : VerilatedCovImpBase {
+class VerilatedCovImpItem VL_NOT_FINAL : VerilatedCovImpBase {
 public:  // But only local to this file
     // MEMBERS
     int m_keys[MAX_KEYS];  ///< Key
@@ -52,7 +52,7 @@ public:  // But only local to this file
             m_vals[i] = 0;
         }
     }
-    virtual ~VerilatedCovImpItem() {}
+    virtual ~VerilatedCovImpItem() = default;
     virtual vluint64_t count() const = 0;
     virtual void zero() const = 0;
 };
@@ -63,22 +63,22 @@ public:  // But only local to this file
 /// This isn't in the header file for auto-magic conversion because it
 /// inlines to too much code and makes compilation too slow.
 
-template <class T> class VerilatedCoverItemSpec : public VerilatedCovImpItem {
+template <class T> class VerilatedCoverItemSpec final : public VerilatedCovImpItem {
 private:
     // MEMBERS
     T* m_countp;  ///< Count value
 public:
     // METHODS
     // cppcheck-suppress truncLongCastReturn
-    virtual vluint64_t count() const VL_OVERRIDE { return *m_countp; }
-    virtual void zero() const VL_OVERRIDE { *m_countp = 0; }
+    virtual vluint64_t count() const override { return *m_countp; }
+    virtual void zero() const override { *m_countp = 0; }
     // CONSTRUCTORS
     // cppcheck-suppress noExplicitConstructor
     explicit VerilatedCoverItemSpec(T* countp)
-        : m_countp(countp) {
+        : m_countp{countp} {
         *m_countp = 0;
     }
-    virtual ~VerilatedCoverItemSpec() VL_OVERRIDE {}
+    virtual ~VerilatedCoverItemSpec() override = default;
 };
 
 //=============================================================================
@@ -87,10 +87,10 @@ public:
 /// All value and keys are indexed into a unique number.  Thus we can greatly reduce
 /// the storage requirements for otherwise identical keys.
 
-class VerilatedCovImp : VerilatedCovImpBase {
+class VerilatedCovImp final : VerilatedCovImpBase {
 private:
     // TYPES
-    typedef std::map<std::string, int> ValueIndexMap;
+    typedef std::map<const std::string, int> ValueIndexMap;
     typedef std::map<int, std::string> IndexValueMap;
     typedef std::deque<VerilatedCovImpItem*> ItemList;
 
@@ -99,17 +99,14 @@ private:
     ValueIndexMap m_valueIndexes VL_GUARDED_BY(m_mutex);  ///< Unique arbitrary value for values
     IndexValueMap m_indexValues VL_GUARDED_BY(m_mutex);  ///< Unique arbitrary value for keys
     ItemList m_items VL_GUARDED_BY(m_mutex);  ///< List of all items
+    int m_nextIndex VL_GUARDED_BY(m_mutex) = (KEY_UNDEF + 1);  ///< Next insert value
 
-    VerilatedCovImpItem* m_insertp VL_GUARDED_BY(m_mutex);  ///< Item about to insert
-    const char* m_insertFilenamep VL_GUARDED_BY(m_mutex);  ///< Filename about to insert
-    int m_insertLineno VL_GUARDED_BY(m_mutex);  ///< Line number about to insert
+    VerilatedCovImpItem* m_insertp VL_GUARDED_BY(m_mutex) = nullptr;  ///< Item about to insert
+    const char* m_insertFilenamep VL_GUARDED_BY(m_mutex) = nullptr;  ///< Filename about to insert
+    int m_insertLineno VL_GUARDED_BY(m_mutex) = 0;  ///< Line number about to insert
 
     // CONSTRUCTORS
-    VerilatedCovImp() {
-        m_insertp = NULL;
-        m_insertFilenamep = NULL;
-        m_insertLineno = 0;
-    }
+    VerilatedCovImp() = default;
     VL_UNCOPYABLE(VerilatedCovImp);
 
 public:
@@ -122,14 +119,13 @@ public:
 private:
     // PRIVATE METHODS
     int valueIndex(const std::string& value) VL_REQUIRES(m_mutex) {
-        static int nextIndex = KEY_UNDEF + 1;
-        ValueIndexMap::iterator iter = m_valueIndexes.find(value);
+        const auto iter = m_valueIndexes.find(value);
         if (iter != m_valueIndexes.end()) return iter->second;
-        nextIndex++;
-        assert(nextIndex > 0);  // Didn't rollover
-        m_valueIndexes.insert(std::make_pair(value, nextIndex));
-        m_indexValues.insert(std::make_pair(nextIndex, value));
-        return nextIndex;
+        m_nextIndex++;
+        assert(m_nextIndex > 0);  // Didn't rollover
+        m_valueIndexes.emplace(value, m_nextIndex);
+        m_indexValues.emplace(m_nextIndex, value);
+        return m_nextIndex;
     }
     static std::string dequote(const std::string& text) VL_PURE {
         // Quote any special characters
@@ -235,13 +231,11 @@ private:
 #undef SELF_CHECK
     }
     void clearGuts() VL_REQUIRES(m_mutex) {
-        for (ItemList::const_iterator it = m_items.begin(); it != m_items.end(); ++it) {
-            VerilatedCovImpItem* itemp = *(it);
-            VL_DO_DANGLING(delete itemp, itemp);
-        }
+        for (const auto& itemp : m_items) VL_DO_DANGLING(delete itemp, itemp);
         m_items.clear();
         m_indexValues.clear();
         m_valueIndexes.clear();
+        m_nextIndex = KEY_UNDEF + 1;
     }
 
 public:
@@ -256,8 +250,7 @@ public:
         const VerilatedLockGuard lock(m_mutex);
         if (matchp && matchp[0]) {
             ItemList newlist;
-            for (ItemList::iterator it = m_items.begin(); it != m_items.end(); ++it) {
-                VerilatedCovImpItem* itemp = *(it);
+            for (const auto& itemp : m_items) {
                 if (!itemMatchesString(itemp, matchp)) {
                     VL_DO_DANGLING(delete itemp, itemp);
                 } else {
@@ -270,9 +263,7 @@ public:
     void zero() VL_EXCLUDES(m_mutex) {
         Verilated::quiesce();
         const VerilatedLockGuard lock(m_mutex);
-        for (ItemList::const_iterator it = m_items.begin(); it != m_items.end(); ++it) {
-            (*it)->zero();
-        }
+        for (const auto& itemp : m_items) itemp->zero();
     }
 
     // We assume there's always call to i/f/p in that order
@@ -340,7 +331,7 @@ public:
         }
         m_items.push_back(m_insertp);
         // Prepare for next
-        m_insertp = NULL;
+        m_insertp = nullptr;
     }
 
     void write(const char* filename) VL_EXCLUDES(m_mutex) {
@@ -360,10 +351,9 @@ public:
         os << "# SystemC::Coverage-3\n";
 
         // Build list of events; totalize if collapsing hierarchy
-        typedef std::map<std::string, std::pair<std::string, vluint64_t> > EventMap;
+        typedef std::map<const std::string, std::pair<std::string, vluint64_t>> EventMap;
         EventMap eventCounts;
-        for (ItemList::iterator it = m_items.begin(); it != m_items.end(); ++it) {
-            VerilatedCovImpItem* itemp = *(it);
+        for (const auto& itemp : m_items) {
             std::string name;
             std::string hier;
             bool per_instance = false;
@@ -394,23 +384,23 @@ public:
             // inefficient)
 
             // Find or insert the named event
-            EventMap::iterator cit = eventCounts.find(name);
+            const auto cit = eventCounts.find(name);
             if (cit != eventCounts.end()) {
                 const std::string& oldhier = cit->second.first;
                 cit->second.second += itemp->count();
                 cit->second.first = combineHier(oldhier, hier);
             } else {
-                eventCounts.insert(std::make_pair(name, make_pair(hier, itemp->count())));
+                eventCounts.emplace(name, make_pair(hier, itemp->count()));
             }
         }
 
         // Output body
-        for (EventMap::const_iterator it = eventCounts.begin(); it != eventCounts.end(); ++it) {
+        for (const auto& i : eventCounts) {
             os << "C '" << std::dec;
-            os << it->first;
-            if (!it->second.first.empty()) os << keyValueFormatter(VL_CIK_HIER, it->second.first);
-            os << "' " << it->second.second;
-            os << std::endl;
+            os << i.first;
+            if (!i.second.first.empty()) os << keyValueFormatter(VL_CIK_HIER, i.second.first);
+            os << "' " << i.second.second;
+            os << '\n';
         }
     }
 };
@@ -445,15 +435,15 @@ void VerilatedCov::_insertp(A(0), A(1), A(2), A(3), A(4), A(5), A(6), A(7), A(8)
                             A(21), A(22), A(23), A(24), A(25), A(26), A(27), A(28),
                             A(29)) VL_MT_SAFE {
     const char* keyps[VerilatedCovImpBase::MAX_KEYS]
-        = {NULL,  NULL,  NULL,  // filename,lineno,page
-           key0,  key1,  key2,  key3,  key4,  key5,  key6,  key7,  key8,  key9,
-           key10, key11, key12, key13, key14, key15, key16, key17, key18, key19,
-           key20, key21, key22, key23, key24, key25, key26, key27, key28, key29};
+        = {nullptr, nullptr, nullptr,  // filename,lineno,page
+           key0,    key1,    key2,    key3,  key4,  key5,  key6,  key7,  key8,  key9,
+           key10,   key11,   key12,   key13, key14, key15, key16, key17, key18, key19,
+           key20,   key21,   key22,   key23, key24, key25, key26, key27, key28, key29};
     const char* valps[VerilatedCovImpBase::MAX_KEYS]
-        = {NULL,   NULL,   NULL,  // filename,lineno,page
-           valp0,  valp1,  valp2,  valp3,  valp4,  valp5,  valp6,  valp7,  valp8,  valp9,
-           valp10, valp11, valp12, valp13, valp14, valp15, valp16, valp17, valp18, valp19,
-           valp20, valp21, valp22, valp23, valp24, valp25, valp26, valp27, valp28, valp29};
+        = {nullptr, nullptr, nullptr,  // filename,lineno,page
+           valp0,   valp1,   valp2,   valp3,  valp4,  valp5,  valp6,  valp7,  valp8,  valp9,
+           valp10,  valp11,  valp12,  valp13, valp14, valp15, valp16, valp17, valp18, valp19,
+           valp20,  valp21,  valp22,  valp23, valp24, valp25, valp26, valp27, valp28, valp29};
     VerilatedCovImp::imp().insertp(keyps, valps);
 }
 

@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -34,7 +34,7 @@
 // Levelizing class functions
 
 struct CmpLevel {
-    inline bool operator()(const AstNodeModule* lhsp, const AstNodeModule* rhsp) const {
+    bool operator()(const AstNodeModule* lhsp, const AstNodeModule* rhsp) const {
         return lhsp->level() < rhsp->level();
     }
 };
@@ -61,8 +61,7 @@ void V3LinkLevel::modSortByLevel() {
                                        << "... Suggest see manual; fix the duplicates, or use "
                                           "--top-module to select top."
                                        << V3Error::warnContextNone());
-            for (ModVec::const_iterator it = tops.begin(); it != tops.end(); ++it) {
-                AstNode* alsop = *it;
+            for (AstNode* alsop : tops) {
                 std::cout << secp->warnMore() << "... Top module " << alsop->prettyNameQ() << endl
                           << alsop->warnContextSecondary();
             }
@@ -74,29 +73,25 @@ void V3LinkLevel::modSortByLevel() {
     // Reorder the netlist's modules to have modules in level sorted order
     stable_sort(mods.begin(), mods.end(), CmpLevel());  // Sort the vector
     UINFO(9, "modSortByLevel() sorted\n");  // Comment required for gcc4.6.3 / bug666
-    for (ModVec::const_iterator it = mods.begin(); it != mods.end(); ++it) {
-        AstNodeModule* nodep = *it;
+    for (AstNodeModule* nodep : mods) {
         nodep->clearIter();  // Because we didn't iterate to find the node
         // pointers, may have a stale m_iterp() needing cleanup
         nodep->unlinkFrBack();
     }
     UASSERT_OBJ(!v3Global.rootp()->modulesp(), v3Global.rootp(), "Unlink didn't work");
-    for (ModVec::const_iterator it = mods.begin(); it != mods.end(); ++it) {
-        AstNodeModule* nodep = *it;
-        v3Global.rootp()->addModulep(nodep);
-    }
+    for (AstNodeModule* nodep : mods) v3Global.rootp()->addModulep(nodep);
     UINFO(9, "modSortByLevel() done\n");  // Comment required for gcc4.6.3 / bug666
     V3Global::dumpCheckGlobalTree("cells", false, v3Global.opt.dumpTreeLevel(__FILE__) >= 3);
 }
 
 void V3LinkLevel::timescaling(const ModVec& mods) {
     // Timescale determination
-    AstNodeModule* modTimedp = NULL;
+    AstNodeModule* modTimedp = nullptr;
     VTimescale unit(VTimescale::NONE);
     // Use highest level module as default unit - already sorted in proper order
-    for (ModVec::const_iterator it = mods.begin(); it != mods.end(); ++it) {
-        if (!modTimedp && !(*it)->timeunit().isNone()) {
-            modTimedp = *it;
+    for (const auto& modp : mods) {
+        if (!modTimedp && !modp->timeunit().isNone()) {
+            modTimedp = modp;
             unit = modTimedp->timeunit();
             break;
         }
@@ -105,14 +100,14 @@ void V3LinkLevel::timescaling(const ModVec& mods) {
     if (unit.isNone()) unit = VTimescale(VTimescale::TS_DEFAULT);
     v3Global.rootp()->timeunit(unit);
 
-    for (ModVec::const_iterator it = mods.begin(); it != mods.end(); ++it) {
-        AstNodeModule* nodep = *it;
+    for (AstNodeModule* nodep : mods) {
         if (nodep->timeunit().isNone()) {
-            if (modTimedp && !VN_IS(nodep, Iface)
+            if (modTimedp && !VN_IS(nodep, Iface) && !VN_IS(nodep, Primitive)
                 && !(VN_IS(nodep, Package) && VN_CAST(nodep, Package)->isDollarUnit())) {
                 nodep->v3warn(TIMESCALEMOD,
                               "Timescale missing on this module as other modules have "
                               "it (IEEE 1800-2017 3.14.2.2)\n"
+                                  << nodep->warnContextPrimary() << '\n'
                                   << modTimedp->warnOther()
                                   << "... Location of module with timescale\n"
                                   << modTimedp->warnContextSecondary());
@@ -120,6 +115,8 @@ void V3LinkLevel::timescaling(const ModVec& mods) {
             nodep->timeunit(unit);
         }
     }
+
+    v3Global.rootp()->timescaleSpecified(modTimedp);  // true if some module specifies timescale
 
     if (v3Global.rootp()->timeprecision().isNone()) {
         v3Global.rootp()->timeprecisionMerge(v3Global.rootp()->fileline(),
@@ -160,7 +157,7 @@ void V3LinkLevel::wrapTop(AstNetlist* rootp) {
             AstCell* cellp = new AstCell(modp->fileline(), modp->fileline(),
                                          // Could add __03a__03a="::" to prevent conflict
                                          // with module names/"v"
-                                         modp->name(), modp->name(), NULL, NULL, NULL);
+                                         modp->name(), modp->name(), nullptr, nullptr, nullptr);
             cellp->modp(modp);
             newmodp->addStmtp(cellp);
         }
@@ -174,7 +171,7 @@ void V3LinkLevel::wrapTopCell(AstNetlist* rootp) {
     UASSERT_OBJ(newmodp && newmodp->isTop(), rootp, "No TOP module found to insert under");
 
     // Find all duplicate signal names (if multitop)
-    typedef vl_unordered_set<std::string> NameSet;
+    typedef std::unordered_set<std::string> NameSet;
     NameSet ioNames;
     NameSet dupNames;
     // For all modules, skipping over new top
@@ -203,7 +200,7 @@ void V3LinkLevel::wrapTopCell(AstNetlist* rootp) {
         AstCell* cellp = new AstCell(
             newmodp->fileline(), newmodp->fileline(),
             (!v3Global.opt.l2Name().empty() ? v3Global.opt.l2Name() : oldmodp->name()),
-            oldmodp->name(), NULL, NULL, NULL);
+            oldmodp->name(), nullptr, nullptr, nullptr);
         cellp->modp(oldmodp);
         newmodp->addStmtp(cellp);
 
@@ -239,9 +236,10 @@ void V3LinkLevel::wrapTopCell(AstNetlist* rootp) {
                         varp->trace(false);
                     }
 
-                    AstPin* pinp
-                        = new AstPin(oldvarp->fileline(), 0, varp->name(),
-                                     new AstVarRef(varp->fileline(), varp, oldvarp->isWritable()));
+                    AstPin* pinp = new AstPin(
+                        oldvarp->fileline(), 0, varp->name(),
+                        new AstVarRef(varp->fileline(), varp,
+                                      oldvarp->isWritable() ? VAccess::WRITE : VAccess::READ));
                     // Skip length and width comp; we know it's a direct assignment
                     pinp->modVarp(oldvarp);
                     cellp->addPinsp(pinp);

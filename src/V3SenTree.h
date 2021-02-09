@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -25,13 +25,13 @@
 #include "V3Ast.h"
 #include "V3Hashed.h"
 
-#include VL_INCLUDE_UNORDERED_SET
+#include <unordered_set>
 
 //######################################################################
 // Collect SenTrees under the entire scope
 // And provide functions to find/add a new one
 
-class SenTreeSet {
+class SenTreeSet final {
     // Hash table of sensitive blocks.
 private:
     // TYPES
@@ -48,19 +48,19 @@ private:
     };
 
     // MEMBERS
-    typedef vl_unordered_set<AstSenTree*, HashSenTree, EqSenTree> Set;
+    typedef std::unordered_set<AstSenTree*, HashSenTree, EqSenTree> Set;
     Set m_trees;  // Set of sensitive blocks, for folding.
 
 public:
     // CONSTRUCTORS
-    SenTreeSet() {}
+    SenTreeSet() = default;
 
     // METHODS
     void add(AstSenTree* nodep) { m_trees.insert(nodep); }
 
     AstSenTree* find(AstSenTree* likep) {
-        AstSenTree* resultp = NULL;
-        Set::iterator it = m_trees.find(likep);
+        AstSenTree* resultp = nullptr;
+        const auto it = m_trees.find(likep);
         if (it != m_trees.end()) resultp = *it;
         return resultp;
     }
@@ -71,18 +71,17 @@ private:
     VL_UNCOPYABLE(SenTreeSet);
 };
 
-class SenTreeFinder {
+class SenTreeFinder final {
 private:
     // STATE
-    AstTopScope* m_topScopep;  // Top scope to add global SenTrees to
+    AstTopScope* m_topScopep = nullptr;  // Top scope to add global SenTrees to
     SenTreeSet m_trees;  // Set of global SenTrees
 
     VL_UNCOPYABLE(SenTreeFinder);
 
 public:
     // CONSTRUCTORS
-    SenTreeFinder()
-        : m_topScopep(NULL) {}
+    SenTreeFinder() = default;
 
     // METHODS
     AstSenTree* getSenTree(AstSenTree* senTreep) {

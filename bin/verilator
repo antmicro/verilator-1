@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 ######################################################################
 #
-# Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+# Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 # can redistribute it and/or modify it under the terms of either the GNU
 # Lesser General Public License Version 3 or the Perl Artistic License
 # Version 2.0.
@@ -76,7 +76,8 @@ if ($opt_gdbbt && !gdb_works()) {
 my @quoted_sw = map {sh_escape($_)} @Opt_Verilator_Sw;
 if ($opt_gdb) {
     # Generic GDB interactive
-    run (($ENV{VERILATOR_GDB}||"gdb")
+    run (aslr_off()
+         .($ENV{VERILATOR_GDB}||"gdb")
          ." ".verilator_bin()
          # Note, uncomment to set breakpoints before running:
          #  ." -ex 'break main'"
@@ -91,16 +92,22 @@ if ($opt_gdb) {
          ." -ex 'bt'");
 } elsif ($opt_rr) {
     # Record with rr
-    run ("rr record ".verilator_bin()
+    run (aslr_off()
+         ."rr record ".verilator_bin()
          ." ".join(' ', @quoted_sw));
 } elsif ($opt_gdbbt && $Debug) {
     # Run under GDB to get gdbbt
-    run ("gdb"
+    run (aslr_off()
+         ."gdb"
          ." ".verilator_bin()
          ." --batch --quiet --return-child-result"
          ." -ex \"run ".join(' ', @quoted_sw)."\""
          ." -ex 'set width 0'"
          ." -ex 'bt' -ex 'quit'");
+} elsif ($Debug) {
+    # Debug
+    run(aslr_off()
+        .verilator_bin()." ".join(' ',@quoted_sw));
 } else {
     # Normal, non gdb
     run(verilator_bin()." ".join(' ',@quoted_sw));
@@ -163,6 +170,15 @@ sub gdb_works {
            ." -ex 'quit'");
     my $status = $?;
     return $status==0;
+}
+
+sub aslr_off {
+    my $ok = `setarch --addr-no-randomize echo ok 2>/dev/null` || "";
+    if ($ok =~ /ok/) {
+        return "setarch --addr-no-randomize ";
+    } else {
+        return "";
+    }
 }
 
 sub run {
@@ -327,6 +343,7 @@ arguments.
     --generate-key              Create random key for --protect-key
     --getenv <var>              Get environment variable with defaults
     --help                      Display this help
+    --hierarchical              Enable hierarchical Verilation
      -I<dir>                    Directory to search for includes
      -j <jobs>                  Parallelism for --build
     --gate-stmts <value>        Tune gate optimizer depth
@@ -392,6 +409,7 @@ arguments.
     --threads-max-mtasks <mtasks>  Tune maximum mtask partitioning
     --timescale <timescale>     Sets default timescale
     --timescale-override <timescale>  Overrides all timescales
+    --top <topname>             Alias of --top-module
     --top-module <topname>      Name of top level input module
     --trace                     Enable waveform creation
     --trace-coverage            Enable tracing of coverage
@@ -951,6 +969,12 @@ immediately. This can be useful in makefiles. See also -V, and the various
 
 Displays this message and program version and exits.
 
+=item --hierarchical
+
+Enable hierarchical Verilation otherwise /*verilator hier_block*/ metacomment
+is ignored.
+See L</"HIERARCHICAL VERILATION">.
+
 =item -II<dir>
 
 See -y.
@@ -1237,8 +1261,8 @@ With -E, show comments in preprocessor output.
 =item --prefix I<topname>
 
 Specifies the name of the top level class and makefile.  Defaults to V
-prepended to the name of the --top-module switch, or V prepended to the
-first Verilog filename passed on the command line.
+prepended to the name of the --top switch, or V prepended to the first
+Verilog filename passed on the command line.
 
 =item --prof-cfuncs
 
@@ -1438,7 +1462,7 @@ future version of Verilator no longer always packs unpacked structures.
 =item -sv
 
 Specifies SystemVerilog language features should be enabled; equivalent to
-"--language 1800-2005".  This option is selected by default, it exists for
+"--language 1800-2017".  This option is selected by default, it exists for
 compatibility with other simulators.
 
 =item  +systemverilogext+I<ext>
@@ -1499,6 +1523,8 @@ The time precision must be consistent with SystemC's
 sc_set_time_resolution, or the C++ code instantiating the Verilated module.
 As 1fs is the finest time precision it may be desirable to always use a
 precision of 1fs.
+
+=item --top I<topname>
 
 =item --top-module I<topname>
 
@@ -1613,8 +1639,8 @@ into Verilator.  (Similar to perl -V.)  See also --getenv.
 =item -v I<filename>
 
 Read the filename as a Verilog library.  Any modules in the file may be
-used to resolve cell instantiations in the top level module, else ignored.
-Note -v is fairly standard across Verilog tools.
+used to resolve instances in the top level module, else ignored.  Note -v
+is fairly standard across Verilog tools.
 
 =item --no-verilate
 
@@ -1691,7 +1717,7 @@ than using this option.
 
 Disable all lint related warning messages, and all style warnings.  This is
 equivalent to "-Wno-ALWCOMBORDER -Wno-BSSPACE -Wno-CASEINCOMPLETE
--Wno-CASEOVERLAP -Wno-CASEX -Wno-CASEWITHX -Wno-CMPCONST -Wno-COLONPLUS
+-Wno-CASEOVERLAP -Wno-CASEX -Wno-CASTCONST -Wno-CASEWITHX -Wno-CMPCONST -Wno-COLONPLUS
 -Wno-ENDLABEL -Wno-IMPLICIT -Wno-LITENDIAN -Wno-PINCONNECTEMPTY
 -Wno-PINMISSING -Wno-SYNCASYNCNET -Wno-UNDRIVEN -Wno-UNSIGNED -Wno-UNUSED
 -Wno-WIDTH" plus the list shown for Wno-style.
@@ -1723,7 +1749,7 @@ Enables the specified warning message.
 Enable all lint related warning messages (note by default they are already
 enabled), but do not affect style messages.  This is equivalent to
 "-Wwarn-ALWCOMBORDER -Wwarn-BSSPACE -Wwarn-CASEINCOMPLETE
--Wwarn-CASEOVERLAP -Wwarn-CASEX -Wwarn-CASEWITHX -Wwarn-CMPCONST
+-Wwarn-CASEOVERLAP -Wwarn-CASEX -Wwarn-CASTCONST -Wwarn-CASEWITHX -Wwarn-CMPCONST
 -Wwarn-COLONPLUS -Wwarn-ENDLABEL -Wwarn-IMPLICIT -Wwarn-LITENDIAN
 -Wwarn-PINMISSING -Wwarn-REALCVT -Wwarn-UNSIGNED -Wwarn-WIDTH".
 
@@ -1973,14 +1999,15 @@ section below for descriptions of some of the files that were created.
 
 (Verilator included a default compile rule and link rule, since we used
 --exe and passed a .cpp file on the Verilator command line.  Verilator also
-then used C<make> to build a final executable.  You can also write your own
-compile rules, and run make yourself as we'll show in the SYSTEMC section.)
+then used C<make> to build a final executable, since we used --build.  You
+can also write your own compile rules, and run make yourself as we'll show
+in the SYSTEMC section.
 
-And now we run it
+And now we run it:
 
     obj_dir/Vour
 
-And we get as output
+And we get as output:
 
     Hello World
     - our.v:2: Verilog $finish
@@ -2010,7 +2037,7 @@ This is an example similar to the above, but using SystemC.
       #include "Vour.h"
       int sc_main(int argc, char** argv) {
           Verilated::commandArgs(argc, argv);
-          sc_clock clk ("clk", 10, 0.5, 3, true);
+          sc_clock clk("clk", 10, SC_NS, 0.5, 3, SC_NS, true);
           Vour* top;
           top = new Vour("top");
           top->clk(clk);
@@ -2208,10 +2235,13 @@ For --make gmake, it creates:
 
     {prefix}.mk                         // Make include file for compiling
     {prefix}_classes.mk                 // Make include file with class names
+    {prefix}_hier.mk                    // Make file for hierarchy blocks
+    {prefix}_hierMkArgs.f               // Arguments for hierarchical Verilation.
 
 For --make cmake, it creates:
 
     {prefix}.cmake                      // CMake include script for compiling
+    {prefix}_hierCMakeArgs.f            // Arguments for hierarchical Verilation.
 
 For -cc and -sc mode, it also creates:
 
@@ -2222,6 +2252,13 @@ For -cc and -sc mode, it also creates:
     {prefix}{each_verilog_module}.cpp   // Lower level internal C++ files
     {prefix}{each_verilog_module}.h     // Lower level internal header files
     {prefix}{each_verilog_module}{__n}.cpp   // Additional lower C++ files (--output-split)
+
+For --hierarchy mode, it creates:
+    {prefix}__hierVer.d                 // Make dependencies of the top module in the
+                                           hierarchical Verilation
+    {prefix}__hier.dir/                 // Directory to store .dot, .vpp, .tree of the
+                                           top module in the hierarchical Verilation
+    V{hier_block}/                      // Directory to Verilate each hierarchy block
 
 In certain debug and other modes, it also creates:
 
@@ -2508,6 +2545,27 @@ Scope can also be set from within a DPI imported C function that has been
 called from Verilog by querying the scope of that function. See the
 sections on DPI Context Functions and DPI Header Isolation below and the
 comments within the svdpi.h header for more information.
+
+=head2 DPI Imports that access signals
+
+If a DPI import accesses a signal through the VPI Verilator will not be
+able to know what variables are accessed and may schedule the code
+inappropriately.  Ideally pass the values as inputs/outputs so the VPI is
+not required.  Alternatively a workaround is to use a non-inlined task as a
+wrapper:
+
+    logic din;
+
+    // This DPI function will read "din"
+    import "DPI-C" context function void dpi_that_accesses_din();
+
+    always @ (...)
+       dpi_din_args(din);
+
+    task dpi_din_args(input din);
+       /* verilator no_inline_task */
+       dpi_that_accesses_din();
+    endtask
 
 =head2 DPI Display Functions
 
@@ -2830,6 +2888,71 @@ here, use DIRECTORY or PREFIX.
 
 =back
 
+=head1 HIERARCHICAL VERILATION
+
+Large designs may take long (e.g. 10+ minutes) and huge memory (e.g. 100+GB)
+to Verilate. One workaround is hierarchical Verilation, it is to Verilate
+each moderate size of building blocks and finally combine the building blocks.
+The building block will be called "hierarchy block" later.
+
+The current hierarchical Verilation is based on protect-lib. Each hierarchy
+block is Verilated to protect-lib. User modules of the hierarchy blocks will see
+a tiny wrapper generated by protect-lib instead of the actual design.
+
+=head2 Usage
+
+All user need to do is mark moderate size of module as hierarchy block and pass
+--hierarchical option to verilator command.
+There are two ways to mark a module:
+
+  a) Write /* verilator hier_block */ metacomment in HDL code
+      See L</"LANGUAGE EXTENSIONS"> for more detail.
+  b) add hier_block line in the configuration file.
+     See C<hier_block> in L</"CONFIGURATION FILES"> for example.
+
+You don't have to take care of hierarchical blocks when compiling
+Verilated C++ code. You can compile as usual.
+    make -C obj_dir -f Vtop_module_name.mk
+
+See also "Overlapping Verilation and compilation" to get executable quickly.
+
+=head2 Limitations
+
+Because hierarchy blocks are Verilated to protect-lib, they have some
+ limitations such as:
+
+   The block cannot be accessed using dot (.) from upper module.
+   Signals in the block cannot be traced.
+   Modport cannot be used at the hirarchical block boundary.
+
+On the other hand, the following usage is supported.
+
+    - Nested hierarchy block. A hierarchy block may instantiate other
+      hierarchy blocks.
+    - Parameterized hierarchy block. Parameters of a hierarchy block can be
+      overridden using #(.param_name(value)) construct.
+
+The simulation speed may not be as fast as flat Verilation, in which
+all modules are globally scheduled.
+
+=head2 Overlapping Verilation and compilation
+
+Verilator needs to run N + 2 times in hierarchical Verilation, where N is
+the number of hierarchy blocks.
+1 of 2 is for the top module which refers wrappers of all other hierarchy
+blocks.
+The other 1 of 2 is the initial run that searches modules marked with
+/*verilator hier_block*/ metacomment and creates a plan and write in
+(prefix)_hier.mk.
+This initial run internally invokes other N + 1 runs, so you don't have
+to care about these N + 1 times of run.
+
+If -j <jobs> option is specified, Verilation for hierarchy blocks
+runs in parallel.
+
+If --build option is also specified, C++ compilation also runs as soon as
+a hierarchy block is Verilated. C++ compilation and Verilation for
+other hierarchy blocks run simultaneously.
 
 =head1 MULTITHREADING
 
@@ -3002,8 +3125,8 @@ Enable/disable waveform tracing for all future signals declared in the
 specified filename (or wildcard with '*' or '?', or all files if omitted)
 and range of line numbers (or all lines if omitted).
 
-For tracing_off, cells below any module in the files/ranges specified will
-also not be traced.
+For tracing_off, instances below any module in the files/ranges specified
+will also not be traced.
 
 =item clock_enable -module "<modulename>" -var "<signame>"
 
@@ -3048,6 +3171,12 @@ these synthesis directives are discovered, Verilator will either
 formally prove the directive to be true, or failing that, will insert
 the appropriate code to detect failing cases at simulation runtime and
 print an "Assertion failed" error message.
+
+=item hier_block -module "<modulename>"
+
+Specifies that the module is a unit of hierarchical Verilation.
+Note that the setting is ignored unless --hierachical option is specified.
+See L</"HIERARCHICAL VERILATION"> for more information.
 
 =item inline -module "<modulename>"
 
@@ -3397,6 +3526,17 @@ Specifies that following lines of code should have coverage re-enabled (if
 appropriate --coverage flags are passed) after being disabled earlier with
 /*verilator coverage_off*/.
 
+=item /*verilator hier_block*/
+
+Specifies that the module is a unit of hierarchical Verilation.
+This metacomment must be between
+ "module module_name(...);" and "endmodule".
+The module will not be inlined nor uniquified for each instance in
+hierarchical Verilation.
+Note that the metacomment is ignored unless --hierachical option is specified.
+
+See L</"HIERARCHICAL VERILATION"> for more information.
+
 =item /*verilator inline_module*/
 
 Specifies the module the comment appears in may be inlined into any modules
@@ -3591,10 +3731,11 @@ for more information.
 
 =item /*verilator sc_clock*/
 
-Deprecated.  Used after an input declaration to indicate the signal
-should be declared in SystemC as a sc_clock instead of a bool.  This was
-needed in SystemC 1.1 and 1.2 only; versions 2.0 and later do not require
-clock pins to be sc_clocks and this is no longer needed.
+Deprecated and ignored.  Previously used after an input declaration to
+indicate the signal should be declared in SystemC as a sc_clock instead of
+a bool.  This was needed in SystemC 1.1 and 1.2 only; versions 2.0 and
+later do not require clock pins to be sc_clocks and this is no longer
+needed and is ignored.
 
 =item /*verilator sc_bv*/
 
@@ -3657,13 +3798,13 @@ for use by downstream applications.
 =item /*verilator tracing_off*/
 
 Disable waveform tracing for all future signals that are declared in this
-module, or cells below this module.  Often this is placed just after a
-primitive's module statement, so that the entire module and cells below it
-are not traced.
+module, or instances below this module.  Often this is placed just after a
+primitive's module statement, so that the entire module and instances below
+it are not traced.
 
 =item /*verilator tracing_on*/
 
-Re-enable waveform tracing for all future signals or cells that are
+Re-enable waveform tracing for all future signals or instances that are
 declared.
 
 =back
@@ -3717,8 +3858,8 @@ for example a[2].b is acceptable, while a[x].b is generally not.
 
 References into generated and arrayed instances use the instance names
 specified in the Verilog standard; arrayed instances are named
-{cellName}[{instanceNumber}] in Verilog, which becomes
-{cellname}__BRA__{instanceNumber}__KET__ inside the generated C++ code.
+{instanceName}[{instanceNumber}] in Verilog, which becomes
+{instanceName}__BRA__{instanceNumber}__KET__ inside the generated C++ code.
 
 =head2 Latches
 
@@ -3975,9 +4116,10 @@ is ignored, only a single trace file may be active at once.
 $dumpall/$dumpportsall, $dumpon/$dumpportson, $dumpoff/$dumpportsoff, and
 $dumplimit/$dumpportlimit are currently ignored.
 
-=item $finish, $stop
+=item $exit, $finish, $stop
 
-The rarely used optional parameter to $finish and $stop is ignored.
+The rarely used optional parameter to $finish and $stop is ignored. $exit
+is aliased to $finish.
 
 =item $fopen, $fclose, $fdisplay, $ferror, $feof, $fflush, $fgetc, $fgets,
 $fscanf, $fwrite, $fscanf, $sscanf
@@ -3989,16 +4131,12 @@ $setup, $setuphold, $skew, $timeskew, $width
 
 All specify blocks and timing checks are ignored.
 
-=item $monitor, $strobe
+=item $random, $urandom, $urandom_range
 
-Monitor and strobe are not supported, convert to always_comb $display or
-similar.
-
-=item $random
-
-$random does not support the optional argument to set the seed.  Use the
-srand function in C to accomplish this, and note there is only one random
-number generator (not one per module).
+Use +verilator+seed argument to set the seed if there is no $random or
+$urandom optional argument to set the seed.  There is one random seed per C
+thread, not per module for $random, nor per object for random stability of
+$urandom/$urandom_range.
 
 =item $readmemb, $readmemh
 
@@ -4099,17 +4237,7 @@ default as a code style warning.
 =item BLKANDNBLK
 
 BLKANDNBLK is an error that a variable comes from a mix of blocking and
-non-blocking assignments.  Generally, this is caused by a register driven
-by both combo logic and a flop:
-
-      always @ (posedge clk)  foo[0] <= ...
-      always @* foo[1] = ...
-
-Simply use a different register for the flop:
-
-      always @ (posedge clk)  foo_flopped[0] <= ...
-      always @* foo[0] = foo_flopped[0];
-      always @* foo[1] = ...
+non-blocking assignments.
 
 This is not illegal in SystemVerilog, but a violation of good coding
 practice. Verilator reports this as an error, because ignoring this warning
@@ -4119,6 +4247,24 @@ It is generally safe to disable this error (with a "// verilator lint_off
 BLKANDNBLK" metacomment or the -Wno-BLKANDNBLK option) when one of the
 assignments is inside a public task, or when the blocking and non-blocking
 assignments have non-overlapping bits and structure members.
+
+Generally, this is caused by a register driven by both combo logic and a
+flop:
+
+      logic [1:0] foo;
+      always @ (posedge clk)  foo[0] <= ...
+      always @* foo[1] = ...
+
+Simply use a different register for the flop:
+
+      logic [1:0] foo;
+      always @ (posedge clk)  foo_flopped[0] <= ...
+      always @* foo[0] = foo_flopped[0];
+      always @* foo[1] = ...
+
+Or, this may also avoid the error:
+
+      logic [1:0] foo /*verilator split_var*/;
 
 =item BLKSEQ
 
@@ -4192,15 +4338,6 @@ not overlap.
 Ignoring this warning will only suppress the lint check, it will simulate
 correctly.
 
-=item CASEX
-
-Warns that it is simply better style to use casez, and C<?> in place of
-C<x>'s.  See
-L<http://www.sunburst-design.com/papers/CummingsSNUG1999Boston_FullParallelCase_rev1_1.pdf>
-
-Ignoring this warning will only suppress the lint check, it will simulate
-correctly.
-
 =item CASEWITHX
 
 Warns that a case statement contains a constant with a C<x>.  Verilator is
@@ -4210,6 +4347,25 @@ instead intended is to use a casez with C<?>.
 
 Ignoring this warning will only suppress the lint check, it will simulate
 correctly.
+
+=item CASEX
+
+Warns that it is simply better style to use casez, and C<?> in place of
+C<x>'s.  See
+L<http://www.sunburst-design.com/papers/CummingsSNUG1999Boston_FullParallelCase_rev1_1.pdf>
+
+Ignoring this warning will only suppress the lint check, it will simulate
+correctly.
+
+=item CASTCONST
+
+Warns that a dynamic cast ($cast) is unnecessary as the $cast will always
+succeed or fail.  If it will always fail, the $cast is useless. If it will
+always succeed a static cast may be preferred.
+
+Ignoring this warning will only suppress the lint check, it will simulate
+correctly.  On other simulators, not fixing CASTCONST may result in
+decreased performance.
 
 =item CDCRSTLOGIC
 
@@ -4348,6 +4504,10 @@ Deprecated and no longer used as a warning.  Used to indicate that the
 specified signal was is generated inside the model, and also being used as
 a clock.
 
+=item HIERBLOCK
+
+Warns that the top module is marked as a hierarchy block
+by hier_block metacomment, which is not legal.  This setting on the top module will be ignored.
 =item IFDEPTH
 
 Warns that if/if else statements have exceeded the depth specified with
@@ -4384,9 +4544,9 @@ top module statement is processed.
 Warns that a wire is being implicitly declared (it is a single bit wide
 output from a sub-module.)  While legal in Verilog, implicit declarations
 only work for single bit wide signals (not buses), do not allow using a
-signal before it is implicitly declared by a cell, and can lead to dangling
-nets.  A better option is the /*AUTOWIRE*/ feature of Verilog-Mode for
-Emacs, available from L<https://www.veripool.org/verilog-mode>
+signal before it is implicitly declared by an instance, and can lead to
+dangling nets.  A better option is the /*AUTOWIRE*/ feature of Verilog-Mode
+for Emacs, available from L<https://www.veripool.org/verilog-mode>
 
 Ignoring this warning will only suppress the lint check, it will simulate
 correctly.
@@ -4452,6 +4612,16 @@ exposed is acceptable.
 Ignoring this warning will only suppress the lint check, it will simulate
 correctly.
 
+=item LATCH
+
+Warns that a signal is not assigned in all control paths of a combinational
+always block, resulting in the inference of a latch. For intentional
+latches, consider using the always_latch (SystemVerilog) keyword instead.
+The warning may be disabled with a lint_off pragma around the always block.
+
+Ignoring this warning will only suppress the lint check, it will simulate
+correctly.
+
 =item LITENDIAN
 
 Warns that a packed vector is declared with little endian bit numbering
@@ -4459,10 +4629,10 @@ Warns that a packed vector is declared with little endian bit numbering
 and little numbering is now thus often due to simple oversight instead of
 intent.
 
-Also warns that a cell is declared with little endian range (i.e. [0:7] or
-[7]) and is connected to a N-wide signal. Based on IEEE the bits will
-likely be backwards from what you expect (i.e. cell [0] will connect to
-signal bit [N-1] not bit [0]).
+Also warns that an instance is declared with little endian range
+(i.e. [0:7] or [7]) and is connected to a N-wide signal. Based on IEEE the
+bits will likely be backwards from what you expect (i.e. instance [0] will
+connect to signal bit [N-1] not bit [0]).
 
 Ignoring this warning will only suppress the lint check, it will simulate
 correctly.
@@ -4494,18 +4664,18 @@ instantiated by any other module, and both modules were put on the command
 line (not in a library). Three likely cases:
 
 1. A single module is intended to be the top. This warning then occurs
-because some low level cell is being read in, but is not really needed as
-part of the design.  The best solution for this situation is to ensure that
-only the top module is put on the command line without any flags, and all
-remaining library files are read in as libraries with -v, or are
+because some low level instance is being read in, but is not really needed
+as part of the design.  The best solution for this situation is to ensure
+that only the top module is put on the command line without any flags, and
+all remaining library files are read in as libraries with -v, or are
 automatically resolved by having filenames that match the module names.
 
 2. A single module is intended to be the top, the name of it is known, and
 all other modules should be ignored if not part of the design.  The best
-solution is to use the --top-module option to specify the top module's
-name. All other modules that are not part of the design will be for the
-most part ignored (they must be clean in syntax and their contents will be
-removed as part of the Verilog module elaboration process.)
+solution is to use the --top option to specify the top module's name. All
+other modules that are not part of the design will be for the most part
+ignored (they must be clean in syntax and their contents will be removed as
+part of the Verilog module elaboration process.)
 
 3. Multiple modules are intended to be design tops, e.g. when linting a
 library file.  As multiple modules are desired, disable the MULTITOP
@@ -4515,37 +4685,56 @@ based on the top module name followed by __02E (a Verilator-encoded ASCII
 ".').  This renaming is done even if the two modules' signals seem
 identical, e.g. multiple modules with a "clk" input.
 
+=item NOLATCH
+
+Warns that no latch was detected in an always_latch block. The warning may
+be disabled with a lint_off pragma around the always block, but recoding
+using a regular always may be more appropriate.
+
+Ignoring this warning will only suppress the lint check, it will simulate
+correctly.
+
 =item PINCONNECTEMPTY
 
-Warns that a cell instantiation has a pin which is connected to
-.pin_name(), e.g. not another signal, but with an explicit mention of the
-pin.  It may be desirable to disable PINCONNECTEMPTY, as this indicates
-intention to have a no-connect.
+Warns that an instance has a pin which is connected to .pin_name(),
+e.g. not another signal, but with an explicit mention of the pin.  It may
+be desirable to disable PINCONNECTEMPTY, as this indicates intention to
+have a no-connect.
 
 Disabled by default as this is a code style warning; it will simulate
 correctly.
 
 =item PINMISSING
 
-Warns that a module has a pin which is not mentioned in a cell
-instantiation.  If a pin is not missing it should still be specified on the
-cell declaration with a empty connection, using "(.pin_name())".
+Warns that a module has a pin which is not mentioned in an instance.  If a
+pin is not missing it should still be specified on the instance declaration
+with a empty connection, using "(.pin_name())".
 
 Ignoring this warning will only suppress the lint check, it will simulate
 correctly.
 
 =item PINNOCONNECT
 
-Warns that a cell instantiation has a pin which is not connected to another
-signal.
+Warns that an instance has a pin which is not connected to another signal.
 
 Disabled by default as this is a code style warning; it will simulate
 correctly.
+
+=item PKGNODECL
+
+Error that a package/class appears to have been referenced that has not yet
+been declared.  According to IEEE 1800-2017 26.3 all packages must be
+declared before being used.
 
 =item PROCASSWIRE
 
 Error that a procedural assignment is setting a wire. According to IEEE, a
 var/reg must be used as the target of procedural assignments.
+
+=item RANDC
+
+Warns that the 'randc' keyword is currently unsupported, and that it is
+being converted to 'rand'.
 
 =item REALCVT
 
@@ -4650,12 +4839,12 @@ correctly.
 
 =item TASKNSVAR
 
-Error when a call to a task or function has a output from that task tied to
+Error when a call to a task or function has an inout from that task tied to
 a non-simple signal.  Instead connect the task output to a temporary signal
 of the appropriate width, and use that signal to set the appropriate
 expression as the next statement.  For example:
 
-      task foo; output sig; ... endtask
+      task foo(inout sig); ... endtask
       always @* begin
            foo(bus_we_select_from[2]);  // Will get TASKNSVAR error
       end
@@ -4769,7 +4958,7 @@ potentially resolving the conflict. If you run with --report-unoptflat
 Verilator will suggest possible candidates for C<split_var>.
 
 The UNOPTFLAT warning may also be due to clock enables, identified from the
-reported path going through a clock gating cell.  To fix these, use the
+reported path going through a clock gating instance.  To fix these, use the
 clock_enable meta comment described above.
 
 The UNOPTFLAT warning may also occur where outputs from a block of logic
@@ -4828,10 +5017,10 @@ design simulate incorrectly; see the details under --bbox-unsup.
 
 =item UNUSED
 
-Warns that the specified signal is never used/consumed.  Verilator is
-fairly liberal in the usage calculations; making a signal public, a signal
-matching --unused-regexp ("*unused*") or accessing only a single array
-element marks the entire signal as used.
+Warns that the specified signal or parameter is never used/consumed.
+Verilator is fairly liberal in the usage calculations; making a signal
+public, a signal matching --unused-regexp ("*unused*") or accessing only a
+single array element marks the entire signal as used.
 
 Disabled by default as this is a code style warning; it will simulate
 correctly.
@@ -4932,19 +5121,11 @@ The following deprecated items are scheduled for future removal:
 
 =over 4
 
-=item Pre-C++11 compiler support
+=item C++11 compiler support
 
-Verilator supports pre-C++11 compilers for non-threaded models when
-configured with --enable-prec11/--enable-prec11-final.  This flag will be
-removed and C++11 compilers will be required for both compiling Verilator
-and compiling Verilated models no sooner than September 2020.
-
-=item SystemC 2.2 and earlier support
-
-Support for SystemC versions 2.2 and earlier including the related sc_clock
-variable attribute will be removed no sooner than September 2020.  The
-supported versions will be SystemC 2.3.0 (SYSTEMC_VERSION 20111121) and
-later (presently 2.3.0, 2.3.1, 2.3.2, 2.3.3).
+Verilator currently requires C++11 or newer compilers.  Verilator will
+require C++14 or newer compilers for both compiling Verilator and compiling
+Verilated models no sooner than January 2022.
 
 =item Configuration File -msg
 
@@ -5352,21 +5533,21 @@ by your code or you'll get strange results.
 
 =item Should a module be in Verilog or SystemC?
 
-Sometimes there is a block that just interconnects cells, and have a choice
-as to if you write it in Verilog or SystemC.  Everything else being equal,
-best performance is when Verilator sees all of the design.  So, look at the
-hierarchy of your design, labeling cells as to if they are SystemC or
-Verilog.  Then:
+Sometimes there is a block that just interconnects instances, and have a
+choice as to if you write it in Verilog or SystemC.  Everything else being
+equal, best performance is when Verilator sees all of the design.  So, look
+at the hierarchy of your design, labeling instances as to if they are
+SystemC or Verilog.  Then:
 
-A module with only SystemC cells below must be SystemC.
+A module with only SystemC instances below must be SystemC.
 
-A module with a mix of Verilog and SystemC cells below must be SystemC. (As
-Verilator cannot connect to lower-level SystemC cells.)
+A module with a mix of Verilog and SystemC instances below must be
+SystemC. (As Verilator cannot connect to lower-level SystemC instances.)
 
-A module with only Verilog cells below can be either, but for best
+A module with only Verilog instances below can be either, but for best
 performance should be Verilog.  (The exception is if you have a design that
 is instantiated many times; in this case Verilating one of the lower
-modules and instantiating that Verilated cells multiple times into a
+modules and instantiating that Verilated instances multiple times into a
 SystemC module *may* be faster.)
 
 =back
@@ -5555,7 +5736,7 @@ remain anonymous.
 
 The latest version is available from L<https://verilator.org>.
 
-Copyright 2003-2020 by Wilson Snyder. This program is free software; you can
+Copyright 2003-2021 by Wilson Snyder. This program is free software; you can
 redistribute it and/or modify the Verilator internals under the terms of
 either the GNU Lesser General Public License Version 3 or the Perl Artistic
 License Version 2.0.

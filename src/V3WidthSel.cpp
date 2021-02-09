@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -36,7 +36,7 @@
 //######################################################################
 // Width state, as a visitor of each AstNode
 
-class WidthSelVisitor : public AstNVisitor {
+class WidthSelVisitor final : public AstNVisitor {
 private:
     // IMPORTANT
     //**** This is not a normal visitor, in that all iteration is instead
@@ -63,12 +63,11 @@ private:
         AstNodeDType* m_errp;  // Node that was found, for error reporting if not known type
         AstNodeDType* m_dtypep;  // Data type for the 'from' slice
         VNumRange m_fromRange;  // Numeric range bounds for the 'from' slice
-        FromData(AstNodeDType* errp, AstNodeDType* dtypep, const VNumRange& fromRange) {
-            m_errp = errp;
-            m_dtypep = dtypep;
-            m_fromRange = fromRange;
-        }
-        ~FromData() {}
+        FromData(AstNodeDType* errp, AstNodeDType* dtypep, const VNumRange& fromRange)
+            : m_errp{errp}
+            , m_dtypep{dtypep}
+            , m_fromRange{fromRange} {}
+        ~FromData() = default;
     };
     FromData fromDataForArray(AstNode* nodep, AstNode* basefromp) {
         // What is the data type and information for this SEL-ish's from()?
@@ -97,8 +96,8 @@ private:
             } else if (adtypep->isRanged()) {
                 UASSERT_OBJ(
                     !(adtypep->rangep()
-                      && (!VN_IS(adtypep->rangep()->msbp(), Const)
-                          || !VN_IS(adtypep->rangep()->lsbp(), Const))),
+                      && (!VN_IS(adtypep->rangep()->leftp(), Const)
+                          || !VN_IS(adtypep->rangep()->rightp(), Const))),
                     nodep,
                     "Non-constant variable range; errored earlier");  // in constifyParam(bfdtypep)
                 fromRange = adtypep->declRange();
@@ -199,13 +198,13 @@ private:
     // VISITORS
     // If adding new visitors, ensure V3Width's visit(TYPE) calls into here
 
-    virtual void visit(AstSelBit* nodep) VL_OVERRIDE {
+    virtual void visit(AstSelBit* nodep) override {
         // Select of a non-width specified part of an array, i.e. "array[2]"
         // This select style has a lsb and msb (no user specified width)
         UINFO(6, "SELBIT " << nodep << endl);
         if (debug() >= 9) nodep->backp()->dumpTree(cout, "--SELBT0: ");
         // lhsp/rhsp do not need to be constant
-        AstNode* fromp = nodep->lhsp()->unlinkFrBack();
+        AstNode* fromp = nodep->fromp()->unlinkFrBack();
         AstNode* rhsp = nodep->rhsp()->unlinkFrBack();  // bit we're extracting
         if (debug() >= 9) nodep->dumpTree(cout, "--SELBT2: ");
         FromData fromdata = fromDataForArray(nodep, fromp);
@@ -226,12 +225,10 @@ private:
         } else if (AstPackArrayDType* adtypep = VN_CAST(ddtypep, PackArrayDType)) {
             // SELBIT(array, index) -> SEL(array, index*width-of-subindex, width-of-subindex)
             AstNode* subp = rhsp;
-            if (fromRange.lo() != 0 || fromRange.hi() < 0) {
-                if (fromRange.littleEndian()) {
-                    subp = newSubNeg(fromRange.hi(), subp);
-                } else {
-                    subp = newSubNeg(subp, fromRange.lo());
-                }
+            if (fromRange.littleEndian()) {
+                subp = newSubNeg(fromRange.hi(), subp);
+            } else {
+                subp = newSubNeg(subp, fromRange.lo());
             }
             UASSERT_OBJ(!(!fromRange.elements() || (adtypep->width() % fromRange.elements()) != 0),
                         adtypep,
@@ -276,14 +273,15 @@ private:
         } else if (VN_IS(ddtypep, BasicDType) && ddtypep->isString()) {
             // SELBIT(string, index) -> GETC(string, index)
             AstNodeVarRef* varrefp = VN_CAST(fromp, NodeVarRef);
-            if (!varrefp)
+            if (!varrefp) {
                 nodep->v3warn(E_UNSUPPORTED,
                               "Unsupported: String array operation on non-variable");
+            }
             AstNode* newp;
-            if (varrefp && varrefp->lvalue()) {
-                newp = new AstGetcRefN(nodep->fileline(), fromp, rhsp);
-            } else {
+            if (varrefp && varrefp->access().isReadOnly()) {
                 newp = new AstGetcN(nodep->fileline(), fromp, rhsp);
+            } else {
+                newp = new AstGetcRefN(nodep->fileline(), fromp, rhsp);
             }
             UINFO(6, "   new " << newp << endl);
             nodep->replaceWith(newp);
@@ -308,7 +306,7 @@ private:
             if (debug() >= 9) newp->dumpTree(cout, "--SELBTn: ");
             nodep->replaceWith(newp);
             VL_DO_DANGLING(pushDeletep(nodep), nodep);
-        } else {  // NULL=bad extract, or unknown node type
+        } else {  // nullptr=bad extract, or unknown node type
             nodep->v3error("Illegal bit or array select; type already selected, or bad dimension: "
                            << "data type is" << fromdata.m_errp->prettyDTypeNameQ());
             // How to recover?  We'll strip a dimension.
@@ -317,21 +315,21 @@ private:
         }
         if (!rhsp->backp()) { VL_DO_DANGLING(pushDeletep(rhsp), rhsp); }
     }
-    virtual void visit(AstSelExtract* nodep) VL_OVERRIDE {
+    virtual void visit(AstSelExtract* nodep) override {
         // Select of a range specified part of an array, i.e. "array[2:3]"
         // SELEXTRACT(from,msb,lsb) -> SEL(from, lsb, 1+msb-lsb)
         // This select style has a (msb or lsb) and width
         UINFO(6, "SELEXTRACT " << nodep << endl);
         // if (debug() >= 9) nodep->dumpTree(cout, "--SELEX0: ");
         // Below 2 lines may change nodep->widthp()
-        V3Const::constifyParamsEdit(nodep->lsbp());  // May relink pointed to node
-        V3Const::constifyParamsEdit(nodep->msbp());  // May relink pointed to node
+        V3Const::constifyParamsEdit(nodep->leftp());  // May relink pointed to node
+        V3Const::constifyParamsEdit(nodep->rightp());  // May relink pointed to node
         // if (debug() >= 9) nodep->dumpTree(cout, "--SELEX3: ");
-        checkConstantOrReplace(nodep->lsbp(),
+        checkConstantOrReplace(nodep->leftp(),
                                "First value of [a:b] isn't a constant, maybe you want +: or -:");
-        checkConstantOrReplace(nodep->msbp(),
+        checkConstantOrReplace(nodep->rightp(),
                                "Second value of [a:b] isn't a constant, maybe you want +: or -:");
-        AstNode* fromp = nodep->lhsp()->unlinkFrBack();
+        AstNode* fromp = nodep->fromp()->unlinkFrBack();
         AstNode* msbp = nodep->rhsp()->unlinkFrBack();
         AstNode* lsbp = nodep->thsp()->unlinkFrBack();
         vlsint32_t msb = VN_CAST(msbp, Const)->toSInt();
@@ -351,8 +349,9 @@ private:
                 nodep->replaceWith(newp);
                 VL_DO_DANGLING(pushDeletep(nodep), nodep);
             } else {  // Slice
-                AstSliceSel* newp = new AstSliceSel(nodep->fileline(), fromp,
-                                                    VNumRange(VNumRange::LeftRight(), msb, lsb));
+                AstSliceSel* newp
+                    = new AstSliceSel{nodep->fileline(), fromp,
+                                      VNumRange{msb - fromRange.lo(), lsb - fromRange.lo()}};
                 nodep->replaceWith(newp);
                 VL_DO_DANGLING(pushDeletep(nodep), nodep);
             }
@@ -370,10 +369,11 @@ private:
                 lsb = x;
             }
             if (lsb > msb) {
-                nodep->v3error("["
-                               << msb << ":" << lsb
-                               << "] Range extract has backward bit ordering, perhaps you wanted ["
-                               << lsb << ":" << msb << "]");
+                nodep->v3warn(
+                    SELRANGE,
+                    "[" << msb << ":" << lsb
+                        << "] Range extract has backward bit ordering, perhaps you wanted [" << lsb
+                        << ":" << msb << "]");
                 int x = msb;
                 msb = lsb;
                 lsb = x;
@@ -399,10 +399,11 @@ private:
                 lsb = x;
             }
             if (lsb > msb) {
-                nodep->v3error("["
-                               << msb << ":" << lsb
-                               << "] Range extract has backward bit ordering, perhaps you wanted ["
-                               << lsb << ":" << msb << "]");
+                nodep->v3warn(
+                    SELRANGE,
+                    "[" << msb << ":" << lsb
+                        << "] Range extract has backward bit ordering, perhaps you wanted [" << lsb
+                        << ":" << msb << "]");
                 int x = msb;
                 msb = lsb;
                 lsb = x;
@@ -420,10 +421,11 @@ private:
         } else if (VN_IS(ddtypep, NodeUOrStructDType)) {
             // Classes aren't little endian
             if (lsb > msb) {
-                nodep->v3error("["
-                               << msb << ":" << lsb
-                               << "] Range extract has backward bit ordering, perhaps you wanted ["
-                               << lsb << ":" << msb << "]");
+                nodep->v3warn(
+                    SELRANGE,
+                    "[" << msb << ":" << lsb
+                        << "] Range extract has backward bit ordering, perhaps you wanted [" << lsb
+                        << ":" << msb << "]");
                 int x = msb;
                 msb = lsb;
                 lsb = x;
@@ -438,7 +440,16 @@ private:
             // if (debug() >= 9) newp->dumpTree(cout, "--SELEXnew: ");
             nodep->replaceWith(newp);
             VL_DO_DANGLING(pushDeletep(nodep), nodep);
-        } else {  // NULL=bad extract, or unknown node type
+        } else if (VN_IS(ddtypep, QueueDType)) {
+            auto* newp = new AstCMethodHard(nodep->fileline(), fromp, "slice", msbp);
+            msbp->addNext(lsbp);
+            newp->dtypep(ddtypep);
+            newp->didWidth(true);
+            newp->protect(false);
+            UINFO(6, "   new " << newp << endl);
+            nodep->replaceWith(newp);
+            VL_DO_DANGLING(pushDeletep(nodep), nodep);
+        } else {  // nullptr=bad extract, or unknown node type
             nodep->v3error("Illegal range select; type already selected, or bad dimension: "
                            << "data type is " << fromdata.m_errp->prettyDTypeNameQ());
             UINFO(1, "    Related ddtype: " << ddtypep << endl);
@@ -464,7 +475,7 @@ private:
         checkConstantOrReplace(nodep->thsp(), "Width of :+ or :- bit extract isn't a constant");
         if (debug() >= 9) nodep->dumpTree(cout, "--SELPM3: ");
         // Now replace it with an AstSel
-        AstNode* fromp = nodep->lhsp()->unlinkFrBack();
+        AstNode* fromp = nodep->fromp()->unlinkFrBack();
         AstNode* rhsp = nodep->rhsp()->unlinkFrBack();
         AstNode* widthp = nodep->thsp()->unlinkFrBack();
         warnTri(rhsp);
@@ -513,7 +524,7 @@ private:
                 newwidthp
                     = new AstConst(nodep->fileline(), AstConst::Unsized32(), width * elwidth);
             }
-            AstNode* newlsbp = NULL;
+            AstNode* newlsbp = nullptr;
             if (VN_IS(nodep, SelPlus)) {
                 if (fromRange.littleEndian()) {
                     // SELPLUS(from,lsb,width) -> SEL(from, (vector_msb-width+1)-sel, width)
@@ -544,7 +555,7 @@ private:
             if (debug() >= 9) newp->dumpTree(cout, "--SELNEW: ");
             nodep->replaceWith(newp);
             VL_DO_DANGLING(pushDeletep(nodep), nodep);
-        } else {  // NULL=bad extract, or unknown node type
+        } else {  // nullptr=bad extract, or unknown node type
             nodep->v3error("Illegal +: or -: select; type already selected, or bad dimension: "
                            << "data type is " << fromdata.m_errp->prettyDTypeNameQ());
             // How to recover?  We'll strip a dimension.
@@ -556,22 +567,22 @@ private:
         if (!rhsp->backp()) { VL_DO_DANGLING(pushDeletep(rhsp), rhsp); }
         if (!widthp->backp()) { VL_DO_DANGLING(pushDeletep(widthp), widthp); }
     }
-    virtual void visit(AstSelPlus* nodep) VL_OVERRIDE { replaceSelPlusMinus(nodep); }
-    virtual void visit(AstSelMinus* nodep) VL_OVERRIDE { replaceSelPlusMinus(nodep); }
+    virtual void visit(AstSelPlus* nodep) override { replaceSelPlusMinus(nodep); }
+    virtual void visit(AstSelMinus* nodep) override { replaceSelPlusMinus(nodep); }
     // If adding new visitors, ensure V3Width's visit(TYPE) calls into here
 
     //--------------------
     // Default
-    virtual void visit(AstNode* nodep) VL_OVERRIDE {  // LCOV_EXCL_LINE
+    virtual void visit(AstNode* nodep) override {  // LCOV_EXCL_LINE
         // See notes above; we never iterate
         nodep->v3fatalSrc("Shouldn't iterate in V3WidthSel");
     }
 
 public:
     // CONSTRUCTORS
-    WidthSelVisitor() {}
+    WidthSelVisitor() = default;
+    virtual ~WidthSelVisitor() override = default;
     AstNode* mainAcceptEdit(AstNode* nodep) { return iterateSubtreeReturnEdits(nodep); }
-    virtual ~WidthSelVisitor() {}
 };
 
 //######################################################################

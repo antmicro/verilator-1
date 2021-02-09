@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -22,7 +22,7 @@
 #include "V3Global.h"
 #include "V3Graph.h"
 #include "V3PartitionGraph.h"  // Just for mtask dumping
-#include "V3String.h"  // For VString::parseDouble
+#include "V3String.h"
 #include "V3EmitCBase.h"
 
 #include <iomanip>
@@ -36,7 +36,7 @@ const char* AstIfaceRefDType::broken() const {
     BROKEN_RTN(m_ifacep && !m_ifacep->brokeExists());
     BROKEN_RTN(m_cellp && !m_cellp->brokeExists());
     BROKEN_RTN(m_modportp && !m_modportp->brokeExists());
-    return NULL;
+    return nullptr;
 }
 
 AstIface* AstIfaceRefDType::ifaceViaCellp() const {
@@ -46,7 +46,7 @@ AstIface* AstIfaceRefDType::ifaceViaCellp() const {
 const char* AstNodeVarRef::broken() const {
     BROKEN_RTN(m_varScopep && !m_varScopep->brokeExists());
     BROKEN_RTN(m_varp && !m_varp->brokeExists());
-    return NULL;
+    return nullptr;
 }
 
 void AstNodeVarRef::cloneRelink() {
@@ -54,7 +54,7 @@ void AstNodeVarRef::cloneRelink() {
 }
 
 string AstNodeVarRef::hiernameProtect() const {
-    return VIdProtect::protectWordsIf(hiername(), protect());
+    return hiernameToUnprot() + VIdProtect::protectWordsIf(hiernameToProt(), protect());
 }
 
 int AstNodeSel::bitConst() const {
@@ -68,13 +68,13 @@ void AstNodeUOrStructDType::repairMemberCache() {
         if (m_members.find(itemp->name()) != m_members.end()) {
             itemp->v3error("Duplicate declaration of member name: " << itemp->prettyNameQ());
         } else {
-            m_members.insert(make_pair(itemp->name(), itemp));
+            m_members.emplace(itemp->name(), itemp);
         }
     }
 }
 
 const char* AstNodeUOrStructDType::broken() const {
-    vl_unordered_set<AstMemberDType*> exists;
+    std::unordered_set<AstMemberDType*> exists;
     for (AstMemberDType* itemp = membersp(); itemp; itemp = VN_CAST(itemp->nextp(), MemberDType)) {
         exists.insert(itemp);
     }
@@ -84,11 +84,13 @@ const char* AstNodeUOrStructDType::broken() const {
             return "member broken";
         }
     }
-    return NULL;
+    return nullptr;
 }
 
+void AstNodeStmt::dump(std::ostream& str) const { this->AstNode::dump(str); }
+
 void AstNodeCCall::dump(std::ostream& str) const {
-    this->AstNode::dump(str);
+    this->AstNodeStmt::dump(str);
     if (funcp()) {
         str << " " << funcp()->name() << " => ";
         funcp()->dump(str);
@@ -101,11 +103,11 @@ void AstNodeCCall::cloneRelink() {
 }
 const char* AstNodeCCall::broken() const {
     BROKEN_RTN(m_funcp && !m_funcp->brokeExists());
-    return NULL;
+    return nullptr;
 }
 bool AstNodeCCall::isPure() const { return funcp()->pure(); }
 string AstNodeCCall::hiernameProtect() const {
-    return VIdProtect::protectWordsIf(hiername(), protect());
+    return hiernameToUnprot() + VIdProtect::protectWordsIf(hiernameToProt(), protect());
 }
 
 void AstNodeCond::numberOperate(V3Number& out, const V3Number& lhs, const V3Number& rhs,
@@ -212,7 +214,7 @@ AstNodeBiop* AstEqWild::newTyped(FileLine* fl, AstNode* lhsp, AstNode* rhsp) {
 }
 
 AstExecGraph::AstExecGraph(FileLine* fileline)
-    : AstNode(AstType::atExecGraph, fileline) {
+    : AstNode{AstType::atExecGraph, fileline} {
     m_depGraphp = new V3Graph;
 }
 AstExecGraph::~AstExecGraph() { VL_DO_DANGLING(delete m_depGraphp, m_depGraphp); }
@@ -253,7 +255,7 @@ AstConst* AstConst::parseParamLiteral(FileLine* fl, const string& literal) {
             return new AstConst(fl, AstConst::StringToParse(), literal.c_str());
         }
     }
-    return NULL;
+    return nullptr;
 }
 
 void AstNetlist::timeprecisionMerge(FileLine*, const VTimescale& value) {
@@ -310,107 +312,22 @@ string AstVar::verilogKwd() const {
     }
 }
 
-class AstVar::VlArgTypeRecursed {
-public:
-    bool m_isRef;  // Is it a reference?
-    string m_type;  // The base type, e.g.: "Foo_t"s
-    string m_dims;  // Array dimensions, e.g.: "[3][2][1]"
-    string render(const string& name) {
-        string out;
-        out += m_type;
-        out += " ";
-        out += m_isRef ? "(&" + name + ")" : name;
-        out += m_dims;
-        return out;
-    }
-};
-
 string AstVar::vlArgType(bool named, bool forReturn, bool forFunc, const string& namespc) const {
     UASSERT_OBJ(!forReturn, this,
                 "Internal data is never passed as return, but as first argument");
     string ostatic;
     if (isStatic() && namespc.empty()) ostatic = "static ";
 
-    VlArgTypeRecursed info = vlArgTypeRecurse(forFunc, dtypep());
+    bool isRef = isDpiOpenArray() || (forFunc && (isWritable() || direction().isRefOrConstRef()));
+
+    if (forFunc && isReadOnly() && isRef) ostatic = ostatic + "const ";
 
     string oname;
     if (named) {
         if (!namespc.empty()) oname += namespc + "::";
         oname += VIdProtect::protectIf(name(), protect());
     }
-    return ostatic + info.render(oname);
-}
-
-AstVar::VlArgTypeRecursed AstVar::vlArgTypeRecurse(bool forFunc, const AstNodeDType* dtypep,
-                                                   bool compound) const {
-    VlArgTypeRecursed info;
-    info.m_isRef
-        = isDpiOpenArray() || (forFunc && (isWritable() || direction().isRefOrConstRef()));
-
-    dtypep = dtypep->skipRefp();
-    if (const AstAssocArrayDType* adtypep = VN_CAST_CONST(dtypep, AssocArrayDType)) {
-        const VlArgTypeRecursed key = vlArgTypeRecurse(false, adtypep->keyDTypep(), true);
-        const VlArgTypeRecursed val = vlArgTypeRecurse(false, adtypep->subDTypep(), true);
-        info.m_type = "VlAssocArray<" + key.m_type + ", " + val.m_type + ">";
-    } else if (const AstDynArrayDType* adtypep = VN_CAST_CONST(dtypep, DynArrayDType)) {
-        const VlArgTypeRecursed sub = vlArgTypeRecurse(false, adtypep->subDTypep(), true);
-        info.m_type = "VlQueue<" + sub.m_type + ">";
-    } else if (const AstQueueDType* adtypep = VN_CAST_CONST(dtypep, QueueDType)) {
-        const VlArgTypeRecursed sub = vlArgTypeRecurse(false, adtypep->subDTypep(), true);
-        info.m_type = "VlQueue<" + sub.m_type;
-        // + 1 below as VlQueue uses 0 to mean unlimited, 1 to mean size() max is 1
-        if (adtypep->boundp()) info.m_type += ", " + cvtToStr(adtypep->boundConst() + 1);
-        info.m_type += ">";
-    } else if (const AstClassRefDType* adtypep = VN_CAST_CONST(dtypep, ClassRefDType)) {
-        info.m_type = "VlClassRef<" + EmitCBaseVisitor::prefixNameProtect(adtypep) + ">";
-    } else if (const AstUnpackArrayDType* adtypep = VN_CAST_CONST(dtypep, UnpackArrayDType)) {
-        if (compound) {
-            v3fatalSrc("Dynamic arrays or queues with unpacked elements are not yet supported");
-        }
-        const VlArgTypeRecursed sub = vlArgTypeRecurse(false, adtypep->subDTypep(), compound);
-        info.m_type = sub.m_type;
-        info.m_dims = "[" + cvtToStr(adtypep->declRange().elements()) + "]" + sub.m_dims;
-    } else if (const AstBasicDType* bdtypep = dtypep->basicp()) {
-        // We don't print msb()/lsb() as multidim packed would require recursion,
-        // and may confuse users as C++ data is stored always with bit 0 used
-        const string bitvec = (!bdtypep->isOpaque() && !v3Global.opt.protectIds())
-                                  ? "/*" + cvtToStr(dtypep->width() - 1) + ":0*/"
-                                  : "";
-        if (bdtypep->keyword() == AstBasicDTypeKwd::CHARPTR) {
-            info.m_type = "const char*";
-        } else if (bdtypep->keyword() == AstBasicDTypeKwd::SCOPEPTR) {
-            info.m_type = "const VerilatedScope*";
-        } else if (bdtypep->keyword() == AstBasicDTypeKwd::DOUBLE) {
-            info.m_type = "DoubleV";
-        } else if (bdtypep->keyword() == AstBasicDTypeKwd::FLOAT) {
-            info.m_type = "FloatV";
-        } else if (bdtypep->keyword() == AstBasicDTypeKwd::STRING) {
-            info.m_type = "std::string";
-        } else if (dtypep->widthMin() <= 8) {  // Handle unpacked arrays; not bdtypep->width
-            info.m_type = "CDataV" + bitvec;
-        } else if (dtypep->widthMin() <= 16) {
-            info.m_type = "SDataV" + bitvec;
-        } else if (dtypep->widthMin() <= VL_IDATASIZE) {
-            info.m_type = "IDataV" + bitvec;
-        } else if (dtypep->isQuad()) {
-            info.m_type = "QDataV" + bitvec;
-        } else if (dtypep->isWide()) {
-            if (compound) {
-                info.m_type = "VlWide<" + cvtToStr(dtypep->widthWords()) + "> ";
-            } else {
-                info.m_type += "WDataV" + bitvec;  // []'s added later
-                info.m_dims = "[" + cvtToStr(dtypep->widthWords()) + "]";
-            }
-        }
-    } else {
-        v3fatalSrc("Unknown data type in var type emitter: " << dtypep->prettyName());
-    }
-
-    UASSERT_OBJ(!compound || info.m_dims.empty(), this, "Declaring C array inside compound type");
-
-    if (forFunc && isReadOnly() && info.m_isRef) { info.m_type = "const " + info.m_type; }
-
-    return info;
+    return ostatic + dtypep()->cType(oname, forFunc, isRef);
 }
 
 string AstVar::vlEnumType() const {
@@ -462,7 +379,7 @@ string AstVar::vlEnumDir() const {
     return out;
 }
 
-string AstVar::vlPropDecl(string propName) const {
+string AstVar::vlPropDecl(const string& propName) const {
     string out;
 
     std::vector<int> ulims;  // Unpacked dimension limits
@@ -481,9 +398,9 @@ string AstVar::vlPropDecl(string propName) const {
         out += "static const int " + propName + "__ulims[";
         out += cvtToStr(ulims.size());
         out += "] = {";
-        std::vector<int>::const_iterator it = ulims.begin();
+        auto it = ulims.cbegin();
         out += cvtToStr(*it);
-        while (++it != ulims.end()) {
+        while (++it != ulims.cend()) {
             out += ", ";
             out += cvtToStr(*it);
         }
@@ -538,38 +455,100 @@ string AstVar::cPubArgType(bool named, bool forReturn) const {
     return arg;
 }
 
-string AstVar::dpiArgType(bool named, bool forReturn) const {
-    if (forReturn) named = false;
-    string arg;
-    if (isDpiOpenArray()) {
-        arg = "const svOpenArrayHandle";
-    } else if (!basicp()) {
-        arg = "UNKNOWN";
-    } else if (basicp()->isDpiBitVec()) {
-        if (forReturn) {
-            arg = "svBitVecVal";
-        } else if (isReadOnly()) {
-            arg = "const svBitVecVal*";
-        } else {
-            arg = "svBitVecVal*";
-        }
-    } else if (basicp()->isDpiLogicVec()) {
-        if (forReturn) {
-            arg = "svLogicVecVal";
-        } else if (isReadOnly()) {
-            arg = "const svLogicVecVal*";
-        } else {
-            arg = "svLogicVecVal*";
-        }
-    } else {
-        arg = basicp()->keyword().dpiType();
-        if (basicp()->keyword().isDpiUnsignable() && !basicp()->isSigned()) {
-            arg = "unsigned " + arg;
-        }
-        if (!forReturn && isWritable()) arg += "*";
+class dpiTypesToStringConverter VL_NOT_FINAL {
+public:
+    virtual string openArray(const AstVar*) const { return "const svOpenArrayHandle"; }
+    virtual string bitLogicVector(const AstVar* varp, bool isBit) const {
+        return isBit ? "svBitVecVal" : "svLogicVecVal";
     }
-    if (named) arg += " " + name();
-    return arg;
+    virtual string primitive(const AstVar* varp) const {
+        string type;
+        const AstBasicDTypeKwd keyword = varp->basicp()->keyword();
+        if (keyword.isDpiUnsignable() && !varp->basicp()->isSigned()) type = "unsigned ";
+        type += keyword.dpiType();
+        return type;
+    }
+    string convert(const AstVar* varp) const {
+        if (varp->isDpiOpenArray()) {
+            return openArray(varp);
+        } else if (const AstBasicDType* basicp = varp->basicp()) {
+            if (basicp->isDpiBitVec() || basicp->isDpiLogicVec()) {
+                return bitLogicVector(varp, basicp->isDpiBitVec());
+            } else {
+                return primitive(varp);
+            }
+        } else {
+            return "UNKNOWN";
+        }
+    }
+};
+
+string AstVar::dpiArgType(bool named, bool forReturn) const {
+    if (forReturn) {
+        return dpiTypesToStringConverter{}.convert(this);
+    } else {
+        class converter final : public dpiTypesToStringConverter {
+            virtual string bitLogicVector(const AstVar* varp, bool isBit) const override {
+                return string(varp->isReadOnly() ? "const " : "")
+                       + dpiTypesToStringConverter::bitLogicVector(varp, isBit) + '*';
+            }
+            virtual string primitive(const AstVar* varp) const override {
+                string type = dpiTypesToStringConverter::primitive(varp);
+                if (varp->isWritable() || VN_IS(varp->dtypep()->skipRefp(), UnpackArrayDType)) {
+                    if (!varp->isWritable()
+                        && varp->basicp()->keyword() != AstBasicDTypeKwd::STRING)
+                        type = "const " + type;
+                    type += "*";
+                }
+                return type;
+            }
+        };
+        string arg = converter{}.convert(this);
+        if (named) arg += " " + name();
+        return arg;
+    }
+}
+
+string AstVar::dpiTmpVarType(const string& varName) const {
+    class converter final : public dpiTypesToStringConverter {
+        string m_name;
+        string arraySuffix(const AstVar* varp, size_t n) const {
+            if (AstUnpackArrayDType* unpackp
+                = VN_CAST(varp->dtypep()->skipRefp(), UnpackArrayDType)) {
+                // Convert multi dimensional unpacked array to 1D array
+                if (n == 0) n = 1;
+                n *= unpackp->arrayUnpackedElements();
+                return '[' + cvtToStr(n) + ']';
+            } else if (n > 0) {
+                return '[' + cvtToStr(n) + ']';
+            } else {
+                return "";
+            }
+        }
+        virtual string openArray(const AstVar* varp) const override {
+            return dpiTypesToStringConverter::openArray(varp) + ' ' + m_name
+                   + arraySuffix(varp, 0);
+        }
+        virtual string bitLogicVector(const AstVar* varp, bool isBit) const override {
+            string type = dpiTypesToStringConverter::bitLogicVector(varp, isBit);
+            type += ' ' + m_name + arraySuffix(varp, varp->widthWords());
+            return type;
+        }
+        virtual string primitive(const AstVar* varp) const override {
+            string type = dpiTypesToStringConverter::primitive(varp);
+            if (varp->isWritable() || VN_IS(varp->dtypep()->skipRefp(), UnpackArrayDType)) {
+                if (!varp->isWritable() && varp->basicp()->keyword() == AstBasicDTypeKwd::CHANDLE)
+                    type = "const " + type;
+            }
+            type += ' ' + m_name + arraySuffix(varp, 0);
+            return type;
+        }
+
+    public:
+        explicit converter(const string& name)
+            : m_name(name) {}
+    };
+    return converter{varName}.convert(this);
 }
 
 string AstVar::scType() const {
@@ -604,13 +583,13 @@ AstVar* AstVar::scVarRecurse(AstNode* nodep) {
         if (anodep->isSc()) {
             return anodep;
         } else {
-            return NULL;
+            return nullptr;
         }
     } else if (VN_IS(nodep, VarRef)) {
         if (VN_CAST(nodep, VarRef)->varp()->isSc()) {
             return VN_CAST(nodep, VarRef)->varp();
         } else {
-            return NULL;
+            return nullptr;
         }
     } else if (VN_IS(nodep, ArraySel)) {
         if (nodep->op1p()) {
@@ -626,16 +605,102 @@ AstVar* AstVar::scVarRecurse(AstNode* nodep) {
             if (AstVar* p = scVarRecurse(nodep->op4p())) return p;
         }
     }
-    return NULL;
+    return nullptr;
 }
 
 string AstVar::mtasksString() const {
     std::ostringstream os;
     os << "all: ";
-    for (MTaskIdSet::const_iterator it = m_mtaskIds.begin(); it != m_mtaskIds.end(); ++it) {
-        os << *it << " ";
-    }
+    for (const auto& id : m_mtaskIds) os << id << " ";
     return os.str();
+}
+
+class AstNodeDType::CTypeRecursed final {
+public:
+    string m_type;  // The base type, e.g.: "Foo_t"s
+    string m_dims;  // Array dimensions, e.g.: "[3][2][1]"
+    string render(const string& name, bool isRef) const {
+        string out;
+        out += m_type;
+        if (name != "") out += " ";
+        out += isRef ? "(&" + name + ")" : name;
+        out += m_dims;
+        return out;
+    }
+};
+
+string AstNodeDType::cType(const string& name, bool forFunc, bool isRef) const {
+    CTypeRecursed info = cTypeRecurse(false);
+    return info.render(name, isRef);
+}
+
+AstNodeDType::CTypeRecursed AstNodeDType::cTypeRecurse(bool compound) const {
+    CTypeRecursed info;
+
+    const AstNodeDType* dtypep = this->skipRefp();
+    if (const auto* adtypep = VN_CAST_CONST(dtypep, AssocArrayDType)) {
+        const CTypeRecursed key = adtypep->keyDTypep()->cTypeRecurse(true);
+        const CTypeRecursed val = adtypep->subDTypep()->cTypeRecurse(true);
+        info.m_type = "VlAssocArray<" + key.m_type + ", " + val.m_type + ">";
+    } else if (const auto* adtypep = VN_CAST_CONST(dtypep, DynArrayDType)) {
+        const CTypeRecursed sub = adtypep->subDTypep()->cTypeRecurse(true);
+        info.m_type = "VlQueue<" + sub.m_type + ">";
+    } else if (const auto* adtypep = VN_CAST_CONST(dtypep, QueueDType)) {
+        const CTypeRecursed sub = adtypep->subDTypep()->cTypeRecurse(true);
+        info.m_type = "VlQueue<" + sub.m_type;
+        // + 1 below as VlQueue uses 0 to mean unlimited, 1 to mean size() max is 1
+        if (adtypep->boundp()) info.m_type += ", " + cvtToStr(adtypep->boundConst() + 1);
+        info.m_type += ">";
+    } else if (const auto* adtypep = VN_CAST_CONST(dtypep, ClassRefDType)) {
+        info.m_type = "VlClassRef<" + EmitCBaseVisitor::prefixNameProtect(adtypep) + ">";
+    } else if (const auto* adtypep = VN_CAST_CONST(dtypep, UnpackArrayDType)) {
+        if (adtypep->isCompound()) compound = true;
+        const CTypeRecursed sub = adtypep->subDTypep()->cTypeRecurse(compound);
+        if (compound) {
+            info.m_type = "VlUnpacked<" + sub.m_type;
+            info.m_type += ", " + cvtToStr(adtypep->declRange().elements());
+            info.m_type += ">";
+        } else {
+            info.m_type = sub.m_type;
+            info.m_dims = "[" + cvtToStr(adtypep->declRange().elements()) + "]" + sub.m_dims;
+        }
+    } else if (const AstBasicDType* bdtypep = dtypep->basicp()) {
+        // We don't print msb()/lsb() as multidim packed would require recursion,
+        // and may confuse users as C++ data is stored always with bit 0 used
+        const string bitvec = (!bdtypep->isOpaque() && !v3Global.opt.protectIds())
+                                  ? "/*" + cvtToStr(dtypep->width() - 1) + ":0*/"
+                                  : "";
+        if (bdtypep->keyword() == AstBasicDTypeKwd::CHARPTR) {
+            info.m_type = "const char*";
+        } else if (bdtypep->keyword() == AstBasicDTypeKwd::SCOPEPTR) {
+            info.m_type = "const VerilatedScope*";
+        } else if (bdtypep->keyword() == AstBasicDTypeKwd::DOUBLE) {
+            info.m_type = "DoubleV";
+        } else if (bdtypep->keyword() == AstBasicDTypeKwd::STRING) {
+            info.m_type = "std::string";
+        } else if (dtypep->widthMin() <= 8) {  // Handle unpacked arrays; not bdtypep->width
+            info.m_type = "CDataV" + bitvec;
+        } else if (dtypep->widthMin() <= 16) {
+            info.m_type = "SDataV" + bitvec;
+        } else if (dtypep->widthMin() <= VL_IDATASIZE) {
+            info.m_type = "IDataV" + bitvec;
+        } else if (dtypep->isQuad()) {
+            info.m_type = "QDataV" + bitvec;
+        } else if (dtypep->isWide()) {
+            if (compound) {
+                info.m_type = "VlWide<" + cvtToStr(dtypep->widthWords()) + ">";
+            } else {
+                info.m_type += "WDataV" + bitvec;  // []'s added later
+                info.m_dims = "[" + cvtToStr(dtypep->widthWords()) + "]";
+            }
+        }
+    } else {
+        v3fatalSrc("Unknown data type in var type emitter: " << dtypep->prettyName());
+    }
+
+    UASSERT_OBJ(!compound || info.m_dims.empty(), this, "Declaring C array inside compound type");
+
+    return info;
 }
 
 AstNodeDType* AstNodeDType::dtypeDimensionp(int dimension) {
@@ -662,19 +727,21 @@ AstNodeDType* AstNodeDType::dtypeDimensionp(int dimension) {
         } else if (AstBasicDType* adtypep = VN_CAST(dtypep, BasicDType)) {
             // AstBasicDType - nothing below, return null
             if (adtypep->isRanged()) {
+                // cppcheck-suppress unreadVariable  // Cppcheck bug - thinks dim isn't used
                 if ((dim++) == dimension) return adtypep;
             }
-            return NULL;
+            return nullptr;
         } else if (AstNodeUOrStructDType* adtypep = VN_CAST(dtypep, NodeUOrStructDType)) {
             if (adtypep->packed()) {
+                // cppcheck-suppress unreadVariable  // Cppcheck bug - thinks dim isn't used
                 if ((dim++) == dimension) return adtypep;
             }
-            return NULL;
+            return nullptr;
         }
         // Node no ->next in loop; use continue where necessary
         break;
     }
-    return NULL;
+    return nullptr;
 }
 
 uint32_t AstNodeDType::arrayUnpackedElements() {
@@ -749,7 +816,7 @@ AstNode* AstArraySel::baseFromp(AstNode* nodep) {
             if (VN_CAST(nodep, NodePreSel)->attrp()) {
                 nodep = VN_CAST(nodep, NodePreSel)->attrp();
             } else {
-                nodep = VN_CAST(nodep, NodePreSel)->lhsp();
+                nodep = VN_CAST(nodep, NodePreSel)->fromp();
             }
             continue;
         } else {
@@ -761,7 +828,7 @@ AstNode* AstArraySel::baseFromp(AstNode* nodep) {
 
 const char* AstJumpBlock::broken() const {
     BROKEN_RTN(!labelp()->brokeExistsBelow());
-    return NULL;
+    return nullptr;
 }
 void AstJumpBlock::cloneRelink() {
     if (m_labelp->clonep()) m_labelp = m_labelp->clonep();
@@ -772,7 +839,7 @@ const char* AstScope::broken() const {
     BROKEN_RTN(m_aboveCellp && !m_aboveCellp->brokeExists());
     BROKEN_RTN(!m_modp);
     BROKEN_RTN(m_modp && !m_modp->brokeExists());
-    return NULL;
+    return nullptr;
 }
 void AstScope::cloneRelink() {
     if (m_aboveScopep && m_aboveScopep->clonep()) m_aboveScopep->clonep();
@@ -845,9 +912,7 @@ bool AstSenTree::hasCombo() const {
 void AstTypeTable::clearCache() {
     // When we mass-change widthMin in V3WidthCommit, we need to correct the table.
     // Just clear out the maps; the search functions will be used to rebuild the map
-    for (int i = 0; i < static_cast<int>(AstBasicDTypeKwd::_ENUM_MAX); ++i) {
-        m_basicps[i] = NULL;
-    }
+    for (auto& itr : m_basicps) itr = nullptr;
     m_detailedMap.clear();
     // Clear generic()'s so dead detection will work
     for (AstNode* nodep = typesp(); nodep; nodep = nodep->nextp()) {
@@ -872,6 +937,15 @@ AstVoidDType* AstTypeTable::findVoidDType(FileLine* fl) {
         m_voidp = newp;
     }
     return m_voidp;
+}
+
+AstQueueDType* AstTypeTable::findQueueIndexDType(FileLine* fl) {
+    if (VL_UNLIKELY(!m_queueIndexp)) {
+        AstQueueDType* newp = new AstQueueDType(fl, AstNode::findUInt32DType(), nullptr);
+        addTypesp(newp);
+        m_queueIndexp = newp;
+    }
+    return m_queueIndexp;
 }
 
 AstBasicDType* AstTypeTable::findBasicDType(FileLine* fl, AstBasicDTypeKwd kwd) {
@@ -904,8 +978,9 @@ AstBasicDType* AstTypeTable::findLogicBitDType(FileLine* fl, AstBasicDTypeKwd kw
     return newp;
 }
 
-AstBasicDType* AstTypeTable::findLogicBitDType(FileLine* fl, AstBasicDTypeKwd kwd, VNumRange range,
-                                               int widthMin, VSigning numeric) {
+AstBasicDType* AstTypeTable::findLogicBitDType(FileLine* fl, AstBasicDTypeKwd kwd,
+                                               const VNumRange& range, int widthMin,
+                                               VSigning numeric) {
     AstBasicDType* new1p = new AstBasicDType(fl, kwd, numeric, range, widthMin);
     AstBasicDType* newp = findInsertSameDType(new1p);
     if (newp != new1p) {
@@ -920,9 +995,9 @@ AstBasicDType* AstTypeTable::findInsertSameDType(AstBasicDType* nodep) {
     VBasicTypeKey key(nodep->width(), nodep->widthMin(), nodep->numeric(), nodep->keyword(),
                       nodep->nrange());
     DetailedMap& mapr = m_detailedMap;
-    DetailedMap::const_iterator it = mapr.find(key);
+    const auto it = mapr.find(key);
     if (it != mapr.end()) return it->second;
-    mapr.insert(make_pair(key, nodep));
+    mapr.emplace(key, nodep);
     nodep->generic(true);
     // No addTypesp; the upper function that called new() is responsible for adding
     return nodep;
@@ -1036,8 +1111,10 @@ void AstNode::dump(std::ostream& str) const {
     }
 }
 
+void AstNodeProcedure::dump(std::ostream& str) const { this->AstNode::dump(str); }
+
 void AstAlways::dump(std::ostream& str) const {
-    this->AstNode::dump(str);
+    this->AstNodeProcedure::dump(str);
     if (keyword() != VAlwaysKwd::ALWAYS) str << " [" << keyword().ascii() << "]";
 }
 
@@ -1058,8 +1135,12 @@ string AstBasicDType::prettyDTypeName() const {
     }
     return os.str();
 }
+
+void AstNodeMath::dump(std::ostream& str) const { this->AstNode::dump(str); }
+void AstNodeUniop::dump(std::ostream& str) const { this->AstNodeMath::dump(str); }
+
 void AstCCast::dump(std::ostream& str) const {
-    this->AstNode::dump(str);
+    this->AstNodeUniop::dump(str);
     str << " sz" << size();
 }
 void AstCell::dump(std::ostream& str) const {
@@ -1075,18 +1156,21 @@ void AstCell::dump(std::ostream& str) const {
 void AstCellInline::dump(std::ostream& str) const {
     this->AstNode::dump(str);
     str << " -> " << origModName();
+    str << " [scopep=" << reinterpret_cast<const void*>(scopep()) << "]";
 }
 const char* AstClassPackage::broken() const {
     BROKEN_BASE_RTN(AstNodeModule::broken());
     BROKEN_RTN(m_classp && !m_classp->brokeExists());
-    return NULL;
+    return nullptr;
 }
 void AstClass::insertCache(AstNode* nodep) {
-    if (VN_IS(nodep, Var) || VN_IS(nodep, NodeFTask) || VN_IS(nodep, EnumItemRef)) {
+    bool doit = (VN_IS(nodep, Var) || VN_IS(nodep, EnumItemRef)
+                 || (VN_IS(nodep, NodeFTask) && !VN_CAST(nodep, NodeFTask)->isExternProto()));
+    if (doit) {
         if (m_members.find(nodep->name()) != m_members.end()) {
             nodep->v3error("Duplicate declaration of member name: " << nodep->prettyNameQ());
         } else {
-            m_members.insert(make_pair(nodep->name(), nodep));
+            m_members.emplace(nodep->name(), nodep);
         }
     }
 }
@@ -1094,9 +1178,23 @@ void AstClass::repairCache() {
     clearCache();
     for (AstNode* itemp = membersp(); itemp; itemp = itemp->nextp()) { insertCache(itemp); }
 }
-void AstClass::dump(std::ostream& str) const { this->AstNode::dump(str); }
+bool AstClass::isClassExtendedFrom(const AstClass* refClassp, const AstClass* baseClassp) {
+    // TAIL RECURSIVE
+    if (!refClassp || !baseClassp) return false;
+    if (refClassp == baseClassp) return true;
+    if (!refClassp->extendsp()) return false;
+    return isClassExtendedFrom(refClassp->extendsp()->classp(), baseClassp);
+}
+void AstClass::dump(std::ostream& str) const {
+    this->AstNode::dump(str);
+    if (isExtended()) str << " [EXT]";
+    if (isVirtual()) str << " [VIRT]";
+}
 AstClass* AstClassExtends::classp() const {
     AstClassRefDType* refp = VN_CAST(dtypep(), ClassRefDType);
+    if (VL_UNLIKELY(!refp)) {  // LinkDot uses this for 'super.'
+        refp = VN_CAST(childDTypep(), ClassRefDType);
+    }
     UASSERT_OBJ(refp, this, "class extends non-ref");
     return refp->classp();
 }
@@ -1114,15 +1212,15 @@ void AstClassRefDType::dumpSmall(std::ostream& str) const {
     str << "class:" << name();
 }
 void AstNodeCoverOrAssert::dump(std::ostream& str) const {
-    this->AstNode::dump(str);
+    this->AstNodeStmt::dump(str);
     if (immediate()) str << " [IMMEDIATE]";
 }
 void AstDisplay::dump(std::ostream& str) const {
-    this->AstNode::dump(str);
+    this->AstNodeStmt::dump(str);
     // str<<" "<<displayType().ascii();
 }
 void AstEnumItemRef::dump(std::ostream& str) const {
-    this->AstNode::dump(str);
+    this->AstNodeMath::dump(str);
     str << " -> ";
     if (itemp()) {
         itemp()->dump(str);
@@ -1153,16 +1251,16 @@ void AstInitArray::dump(std::ostream& str) const {
     this->AstNode::dump(str);
     int n = 0;
     const AstInitArray::KeyItemMap& mapr = map();
-    for (AstInitArray::KeyItemMap::const_iterator it = mapr.begin(); it != mapr.end(); ++it) {
+    for (const auto& itr : mapr) {
         if (n++ > 5) {
             str << " ...";
             break;
         }
-        str << " [" << it->first << "]=" << (void*)it->second;
+        str << " [" << itr.first << "]=" << reinterpret_cast<const void*>(itr.second);
     }
 }
 void AstJumpGo::dump(std::ostream& str) const {
-    this->AstNode::dump(str);
+    this->AstNodeStmt::dump(str);
     str << " -> ";
     if (labelp()) {
         labelp()->dump(str);
@@ -1171,7 +1269,7 @@ void AstJumpGo::dump(std::ostream& str) const {
     }
 }
 void AstJumpLabel::dump(std::ostream& str) const {
-    this->AstNode::dump(str);
+    this->AstNodeStmt::dump(str);
     str << " -> ";
     if (blockp()) {
         blockp()->dump(str);
@@ -1180,7 +1278,7 @@ void AstJumpLabel::dump(std::ostream& str) const {
     }
 }
 void AstMemberSel::dump(std::ostream& str) const {
-    this->AstNode::dump(str);
+    this->AstNodeMath::dump(str);
     str << " -> ";
     if (varp()) {
         varp()->dump(str);
@@ -1189,7 +1287,7 @@ void AstMemberSel::dump(std::ostream& str) const {
     }
 }
 void AstMethodCall::dump(std::ostream& str) const {
-    this->AstNode::dump(str);
+    this->AstNodeStmt::dump(str);
     if (isStatement()) str << " [STMT]";
     str << " -> ";
     if (taskp()) {
@@ -1230,27 +1328,30 @@ void AstPin::dump(std::ostream& str) const {
     if (svImplicit()) str << " [.SV]";
 }
 void AstPrintTimeScale::dump(std::ostream& str) const {
-    this->AstNode::dump(str);
+    this->AstNodeStmt::dump(str);
     str << " " << timeunit();
 }
+
+void AstNodeTermop::dump(std::ostream& str) const { this->AstNodeMath::dump(str); }
 void AstTime::dump(std::ostream& str) const {
-    this->AstNode::dump(str);
+    this->AstNodeTermop::dump(str);
     str << " " << timeunit();
 }
 void AstTimeD::dump(std::ostream& str) const {
-    this->AstNode::dump(str);
+    this->AstNodeTermop::dump(str);
     str << " " << timeunit();
 }
 void AstTimeImport::dump(std::ostream& str) const {
-    this->AstNode::dump(str);
+    this->AstNodeUniop::dump(str);
     str << " " << timeunit();
 }
 void AstTypedef::dump(std::ostream& str) const {
     this->AstNode::dump(str);
     if (attrPublic()) str << " [PUBLIC]";
 }
+void AstNodeRange::dump(std::ostream& str) const { this->AstNode::dump(str); }
 void AstRange::dump(std::ostream& str) const {
-    this->AstNode::dump(str);
+    this->AstNodeRange::dump(str);
     if (littleEndian()) str << " [LITTLE]";
 }
 void AstRefDType::dump(std::ostream& str) const {
@@ -1293,15 +1394,17 @@ void AstNodeDType::dumpSmall(std::ostream& str) const {
 }
 void AstNodeArrayDType::dumpSmall(std::ostream& str) const {
     this->AstNodeDType::dumpSmall(str);
-    if (VN_IS(this, PackArrayDType)) {
-        str << "p";
+    if (auto* adtypep = VN_CAST_CONST(this, UnpackArrayDType)) {
+        // uc = packed compound object, u = unpacked POD
+        str << (adtypep->isCompound() ? "uc" : "u");
     } else {
-        str << "u";
+        str << "p";
     }
     str << declRange();
 }
 void AstNodeArrayDType::dump(std::ostream& str) const {
     this->AstNodeDType::dump(str);
+    if (isCompound()) str << " [COMPOUND]";
     str << " " << declRange();
 }
 string AstPackArrayDType::prettyDTypeName() const {
@@ -1321,6 +1424,18 @@ string AstUnpackArrayDType::prettyDTypeName() const {
     }
     os << subp->prettyDTypeName() << "$" << ranges;
     return os.str();
+}
+std::vector<AstUnpackArrayDType*> AstUnpackArrayDType::unpackDimensions() {
+    std::vector<AstUnpackArrayDType*> dims;
+    for (AstUnpackArrayDType* unpackp = this; unpackp;) {
+        dims.push_back(unpackp);
+        if (AstNodeDType* subp = unpackp->subDTypep()) {
+            unpackp = VN_CAST(subp, UnpackArrayDType);
+        } else {
+            unpackp = nullptr;
+        }
+    }
+    return dims;
 }
 void AstNetlist::dump(std::ostream& str) const {
     this->AstNode::dump(str);
@@ -1347,15 +1462,20 @@ void AstPackageImport::dump(std::ostream& str) const {
     this->AstNode::dump(str);
     str << " -> " << packagep();
 }
-void AstSel::dump(std::ostream& str) const {
+void AstPatMember::dump(std::ostream& str) const {
     this->AstNode::dump(str);
+    if (isDefault()) str << " [DEFAULT]";
+}
+void AstNodeTriop::dump(std::ostream& str) const { this->AstNodeMath::dump(str); }
+void AstSel::dump(std::ostream& str) const {
+    this->AstNodeTriop::dump(str);
     if (declRange().ranged()) {
         str << " decl" << declRange() << "]";
         if (declElWidth() != 1) str << "/" << declElWidth();
     }
 }
 void AstSliceSel::dump(std::ostream& str) const {
-    this->AstNode::dump(str);
+    this->AstNodeTriop::dump(str);
     if (declRange().ranged()) str << " decl" << declRange();
 }
 void AstMTaskBody::dump(std::ostream& str) const {
@@ -1367,7 +1487,7 @@ void AstTypeTable::dump(std::ostream& str) const {
     this->AstNode::dump(str);
     for (int i = 0; i < static_cast<int>(AstBasicDTypeKwd::_ENUM_MAX); ++i) {
         if (AstBasicDType* subnodep = m_basicps[i]) {
-            str << endl;  // Newline from caller, so newline first
+            str << '\n';  // Newline from caller, so newline first
             str << "\t\t" << std::setw(8) << AstBasicDTypeKwd(i).ascii();
             str << "  -> ";
             subnodep->dump(str);
@@ -1375,9 +1495,9 @@ void AstTypeTable::dump(std::ostream& str) const {
     }
     {
         const DetailedMap& mapr = m_detailedMap;
-        for (DetailedMap::const_iterator it = mapr.begin(); it != mapr.end(); ++it) {
-            AstBasicDType* dtypep = it->second;
-            str << endl;  // Newline from caller, so newline first
+        for (const auto& itr : mapr) {
+            AstBasicDType* dtypep = itr.second;
+            str << '\n';  // Newline from caller, so newline first
             str << "\t\tdetailed  ->  ";
             dtypep->dump(str);
         }
@@ -1386,7 +1506,7 @@ void AstTypeTable::dump(std::ostream& str) const {
 }
 void AstAssocArrayDType::dumpSmall(std::ostream& str) const {
     this->AstNodeDType::dumpSmall(str);
-    str << "[assoc-" << (void*)keyDTypep() << "]";
+    str << "[assoc-" << reinterpret_cast<const void*>(keyDTypep()) << "]";
 }
 string AstAssocArrayDType::prettyDTypeName() const {
     return subDTypep()->prettyDTypeName() + "[" + keyDTypep()->prettyDTypeName() + "]";
@@ -1423,14 +1543,13 @@ void AstVarScope::dump(std::ostream& str) const {
         str << " ->UNLINKED";
     }
 }
+void AstNodeVarRef::dump(std::ostream& str) const {
+    this->AstNodeMath::dump(str);
+    if (classOrPackagep()) str << " pkg=" << nodeAddr(classOrPackagep());
+    str << " " << access().arrow() << " ";
+}
 void AstVarXRef::dump(std::ostream& str) const {
-    this->AstNode::dump(str);
-    if (packagep()) { str << " pkg=" << nodeAddr(packagep()); }
-    if (lvalue()) {
-        str << " [LV] => ";
-    } else {
-        str << " [RV] <- ";
-    }
+    this->AstNodeVarRef::dump(str);
     str << ".=" << dotted() << " ";
     if (inlinedDots() != "") str << " inline.=" << inlinedDots() << " - ";
     if (varScopep()) {
@@ -1442,13 +1561,7 @@ void AstVarXRef::dump(std::ostream& str) const {
     }
 }
 void AstVarRef::dump(std::ostream& str) const {
-    this->AstNode::dump(str);
-    if (packagep()) { str << " pkg=" << nodeAddr(packagep()); }
-    if (lvalue()) {
-        str << " [LV] => ";
-    } else {
-        str << " [RV] <- ";
-    }
+    this->AstNodeVarRef::dump(str);
     if (varScopep()) {
         varScopep()->dump(str);
     } else if (varp()) {
@@ -1467,6 +1580,7 @@ void AstVar::dump(std::ostream& str) const {
     if (isPulldown()) str << " [PULLDOWN]";
     if (isUsedClock()) str << " [CLK]";
     if (isSigPublic()) str << " [P]";
+    if (isLatched()) str << " [LATCHED]";
     if (isUsedLoopIdx()) str << " [LOOP]";
     if (attrClockEn()) str << " [aCLKEN]";
     if (attrIsolateAssign()) str << " [aISO]";
@@ -1480,6 +1594,12 @@ void AstVar::dump(std::ostream& str) const {
     if (!attrClocker().unknown()) str << " [" << attrClocker().ascii() << "] ";
     if (!lifetime().isNone()) str << " [" << lifetime().ascii() << "] ";
     str << " " << varType();
+}
+void AstScope::dump(std::ostream& str) const {
+    this->AstNode::dump(str);
+    str << " [abovep=" << reinterpret_cast<const void*>(aboveScopep()) << "]";
+    str << " [cellp=" << reinterpret_cast<const void*>(aboveCellp()) << "]";
+    str << " [modp=" << reinterpret_cast<const void*>(modp()) << "]";
 }
 void AstSenTree::dump(std::ostream& str) const {
     this->AstNode::dump(str);
@@ -1495,10 +1615,10 @@ void AstParseRef::dump(std::ostream& str) const {
 }
 void AstClassOrPackageRef::dump(std::ostream& str) const {
     this->AstNode::dump(str);
-    if (classOrPackagep()) { str << " cpkg=" << nodeAddr(classOrPackagep()); }
+    if (classOrPackageNodep()) str << " cpkg=" << nodeAddr(classOrPackageNodep());
     str << " -> ";
-    if (classOrPackagep()) {
-        classOrPackagep()->dump(str);
+    if (classOrPackageNodep()) {
+        classOrPackageNodep()->dump(str);
     } else {
         str << "UNLINKED";
     }
@@ -1517,8 +1637,8 @@ void AstActive::dump(std::ostream& str) const {
     }
 }
 void AstNodeFTaskRef::dump(std::ostream& str) const {
-    this->AstNode::dump(str);
-    if (packagep()) { str << " pkg=" << nodeAddr(packagep()); }
+    this->AstNodeStmt::dump(str);
+    if (classOrPackagep()) str << " pkg=" << nodeAddr(classOrPackagep());
     str << " -> ";
     if (dotted() != "") { str << ".=" << dotted() << " "; }
     if (taskp()) {
@@ -1549,7 +1669,7 @@ void AstBegin::dump(std::ostream& str) const {
     if (implied()) str << " [IMPLIED]";
 }
 void AstCoverDecl::dump(std::ostream& str) const {
-    this->AstNode::dump(str);
+    this->AstNodeStmt::dump(str);
     if (!page().empty()) str << " page=" << page();
     if (!linescov().empty()) str << " lc=" << linescov();
     if (this->dataDeclNullp()) {
@@ -1560,7 +1680,7 @@ void AstCoverDecl::dump(std::ostream& str) const {
     }
 }
 void AstCoverInc::dump(std::ostream& str) const {
-    this->AstNode::dump(str);
+    this->AstNodeStmt::dump(str);
     str << " -> ";
     if (declp()) {
         declp()->dump(str);
@@ -1573,7 +1693,7 @@ void AstFork::dump(std::ostream& str) const {
     if (!joinType().join()) str << " [" << joinType() << "]";
 }
 void AstTraceInc::dump(std::ostream& str) const {
-    this->AstNode::dump(str);
+    this->AstNodeStmt::dump(str);
     str << " -> ";
     if (declp()) {
         declp()->dump(str);
@@ -1592,10 +1712,11 @@ void AstNodeText::dump(std::ostream& str) const {
     str << " \"" << out << "\"";
 }
 
-void AstVFile::dump(std::ostream& str) const { this->AstNode::dump(str); }
+void AstNodeFile::dump(std::ostream& str) const { this->AstNode::dump(str); }
+void AstVFile::dump(std::ostream& str) const { this->AstNodeFile::dump(str); }
 
 void AstCFile::dump(std::ostream& str) const {
-    this->AstNode::dump(str);
+    this->AstNodeFile::dump(str);
     if (source()) str << " [SRC]";
     if (slow()) str << " [SLOW]";
 }

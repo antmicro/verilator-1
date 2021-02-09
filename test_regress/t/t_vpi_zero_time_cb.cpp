@@ -100,7 +100,7 @@ static int _start_of_sim_cb(p_cb_data cb_data) {
     t.low = 0;
     cb_data_n.time = &t;
     cb_data_n.cb_rtn = _zero_time_cb;
-    vpi_register_cb(&cb_data_n);
+    TestVpiHandle _cb_data_n_h = vpi_register_cb(&cb_data_n);
     callback_count_start_of_sim++;
     return 0;
 }
@@ -117,7 +117,9 @@ static int _end_of_sim_cb(p_cb_data cb_data) {
 extern "C"
 #endif
 
+    // clang-format off
 void vpi_compat_bootstrap(void) {
+    // clang-format on
     t_cb_data cb_data;
     bzero(&cb_data, sizeof(cb_data));
 
@@ -125,12 +127,12 @@ void vpi_compat_bootstrap(void) {
     cb_data.reason = cbStartOfSimulation;
     cb_data.time = 0;
     cb_data.cb_rtn = _start_of_sim_cb;
-    vpi_register_cb(&cb_data);
+    TestVpiHandle _start_of_sim_cb_h = vpi_register_cb(&cb_data);
 
     cb_data.reason = cbEndOfSimulation;
     cb_data.time = 0;
     cb_data.cb_rtn = _end_of_sim_cb;
-    vpi_register_cb(&cb_data);
+    TestVpiHandle _end_of_sim_cb_h = vpi_register_cb(&cb_data);
 }
 
 // icarus entry
@@ -147,11 +149,13 @@ int main(int argc, char** argv, char** env) {
 
     VM_PREFIX* topp = new VM_PREFIX("");  // Note null name - we're flattening it out
 
+// clang-format off
 #ifdef VERILATOR
 # ifdef TEST_VERBOSE
     Verilated::scopesDump();
 # endif
 #endif
+    // clang-format on
 
 #if VM_TRACE
     Verilated::traceEverOn(true);

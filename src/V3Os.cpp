@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -49,6 +49,16 @@
 # include <direct.h>  // mkdir
 # include <psapi.h>   // GetProcessMemoryInfo
 # include <thread>
+// These macros taken from gdbsupport/gdb_wait.h in binutils-gdb
+# ifndef WIFEXITED
+#  ifdef __MINGW32__
+#   define WIFEXITED(w)	(((w) & 0xC0000000) == 0)
+#   define WEXITSTATUS(w)	((w) & ~0xC0000000)
+#  else
+#   define WIFEXITED(w)	(((w) & 0377) == 0)
+#   define WEXITSTATUS(w)	(((w) >> 8) & 0377)
+#  endif
+# endif
 #else
 # include <sys/time.h>
 # include <sys/wait.h> // Needed on FreeBSD for WIFEXITED
@@ -137,7 +147,7 @@ string V3Os::filenameNonExt(const string& filename) {
 
 string V3Os::filenameSubstitute(const string& filename) {
     string out;
-    enum { NONE, PAREN, CURLY } brackets = NONE;
+    enum : uint8_t { NONE, PAREN, CURLY } brackets = NONE;
     for (string::size_type pos = 0; pos < filename.length(); ++pos) {
         if ((filename[pos] == '$') && (pos + 1 < filename.length())) {
             switch (filename[pos + 1]) {
@@ -244,12 +254,12 @@ void V3Os::unlinkRegexp(const string& dir, const string& regexp) {
 //######################################################################
 // METHODS (random)
 
-vluint64_t V3Os::rand64(vluint64_t* statep) {
+vluint64_t V3Os::rand64(std::array<vluint64_t, 2>& stater) {
     // Xoroshiro128+ algorithm
-    vluint64_t result = statep[0] + statep[1];
-    statep[1] ^= statep[0];
-    statep[0] = (((statep[0] << 55) | (statep[0] >> 9)) ^ statep[1] ^ (statep[1] << 14));
-    statep[1] = (statep[1] << 36) | (statep[1] >> 28);
+    vluint64_t result = stater[0] + stater[1];
+    stater[1] ^= stater[0];
+    stater[0] = (((stater[0] << 55) | (stater[0] >> 9)) ^ stater[1] ^ (stater[1] << 14));
+    stater[1] = (stater[1] << 36) | (stater[1] >> 28);
     return result;
 }
 
@@ -259,7 +269,7 @@ string V3Os::trueRandom(size_t size) {
     // Note: std::string.data() returns a non-const Char* from C++17 onwards.
     // For pre-C++17, this cast is OK in practice, even though it's UB.
 #if defined(_WIN32) || defined(__MINGW32__)
-    NTSTATUS hr = BCryptGenRandom(NULL, reinterpret_cast<BYTE*>(data), size,
+    NTSTATUS hr = BCryptGenRandom(nullptr, reinterpret_cast<BYTE*>(data), size,
                                   BCRYPT_USE_SYSTEM_PREFERRED_RNG);
     if (!BCRYPT_SUCCESS(hr)) { v3fatal("Could not acquire random data."); }
 #else
@@ -290,7 +300,7 @@ uint64_t V3Os::timeUsecs() {
 #else
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
     timeval tv;
-    if (gettimeofday(&tv, NULL) < 0) return 0;
+    if (gettimeofday(&tv, nullptr) < 0) return 0;
     return static_cast<uint64_t>(tv.tv_sec) * 1000000 + tv.tv_usec;
 #endif
 }

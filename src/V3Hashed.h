@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2005-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2005-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -24,11 +24,11 @@
 
 //============================================================================
 
-class VHashedBase {
+class VHashedBase VL_NOT_FINAL {
 public:
     // CONSTRUCTORS
-    VHashedBase() {}
-    ~VHashedBase() {}
+    VHashedBase() = default;
+    ~VHashedBase() = default;
 
     // METHODS
     VL_DEBUG_FUNC;  // Declare debug()
@@ -39,11 +39,11 @@ public:
 struct V3HashedUserSame {
     // Functor for V3Hashed::findDuplicate
     virtual bool isSame(AstNode*, AstNode*) = 0;
-    V3HashedUserSame() {}
-    virtual ~V3HashedUserSame() {}
+    V3HashedUserSame() = default;
+    virtual ~V3HashedUserSame() = default;
 };
 
-class V3Hashed : public VHashedBase {
+class V3Hashed final : public VHashedBase {
     // NODE STATE
     //  AstNode::user4()        -> V3Hash.  Hash value of this node (hash of 0 is illegal)
     AstUser4InUse m_inuser4;
@@ -60,7 +60,7 @@ private:
 public:
     // CONSTRUCTORS
     V3Hashed() { clear(); }
-    ~V3Hashed() {}
+    ~V3Hashed() = default;
 
     // ACCESSORS
     HashMmap& mmap() { return m_hashMmap; }  // Return map for iteration
@@ -75,11 +75,12 @@ public:
     void check();  // Check assertions on structure
     // Hash the node, and insert into map. Return iterator to inserted
     iterator hashAndInsert(AstNode* nodep);
-    void hash(AstNode* nodep);  // Only hash the node
-    bool sameNodes(AstNode* node1p, AstNode* node2p);  // After hashing, and tell if identical
+    static void hash(AstNode* nodep);  // Only hash the node
+    // After hashing, and tell if identical
+    static bool sameNodes(AstNode* node1p, AstNode* node2p);
     void erase(iterator it);  // Remove node from structures
     // Return duplicate in hash, if any, with optional user check for sameness
-    iterator findDuplicate(AstNode* nodep, V3HashedUserSame* checkp = NULL);
+    iterator findDuplicate(AstNode* nodep, V3HashedUserSame* checkp = nullptr);
     AstNode* iteratorNodep(iterator it) { return it->second; }
     void dumpFile(const string& filename, bool tree);
     void dumpFilePrefixed(const string& nameComment, bool tree = false);

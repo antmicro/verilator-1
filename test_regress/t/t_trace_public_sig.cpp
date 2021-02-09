@@ -9,6 +9,7 @@
 #include <verilated.h>
 #include <verilated_vcd_c.h>
 
+// clang-format off
 #include VM_PREFIX_INCLUDE
 #ifdef T_TRACE_PUBLIC_SIG_VLT
 # include "Vt_trace_public_sig_vlt_t.h"
@@ -17,6 +18,7 @@
 # include "Vt_trace_public_sig_t.h"
 # include "Vt_trace_public_sig_glbl.h"
 #endif
+// clang-format on
 
 unsigned long long main_time = 0;
 double sc_time_stamp() { return (double)main_time; }
@@ -45,6 +47,7 @@ int main(int argc, char** argv, char** env) {
     tfp->close();
     top->final();
     VL_DO_DANGLING(delete top, top);
+    VL_DO_DANGLING(delete tfp, tfp);
     printf("*-* All Finished *-*\n");
     return 0;
 }

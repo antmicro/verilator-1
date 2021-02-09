@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2009-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2009-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -37,9 +37,9 @@ class V3Lexer;
 //======================================================================
 // Types (between parser & lexer)
 
-typedef enum { uniq_NONE, uniq_UNIQUE, uniq_UNIQUE0, uniq_PRIORITY } V3UniqState;
+typedef enum : uint8_t { uniq_NONE, uniq_UNIQUE, uniq_UNIQUE0, uniq_PRIORITY } V3UniqState;
 
-typedef enum { iprop_NONE, iprop_CONTEXT, iprop_PURE } V3ImportProperty;
+typedef enum : uint8_t { iprop_NONE, iprop_CONTEXT, iprop_PURE } V3ImportProperty;
 
 //============================================================================
 // Member qualifiers
@@ -50,7 +50,7 @@ struct VMemberQualifiers {
         struct {
             uint32_t m_local : 1;  // Local class item (ignored until warning implemented)
             uint32_t m_protected : 1;  // Protected class item (ignored until warning implemented)
-            uint32_t m_rand : 1;  // Rand property/member qualifier (ignored until supported)
+            uint32_t m_rand : 1;  // Rand property/member qualifier
             uint32_t m_randc : 1;  // Randc property/member qualifier (ignored until supported)
             uint32_t m_virtual : 1;  // Virtual property/method qualifier
             uint32_t m_automatic : 1;  // Automatic property/method qualifier
@@ -70,8 +70,8 @@ struct VMemberQualifiers {
     }
     void applyToNodes(AstNodeFTask* nodesp) const {
         for (AstNodeFTask* nodep = nodesp; nodep; nodep = VN_CAST(nodep->nextp(), NodeFTask)) {
-            // Ignored for now: m_local
-            // Ignored for now: m_protected
+            if (m_local) nodep->isHideLocal(true);
+            if (m_protected) nodep->isHideProtected(true);
             if (m_virtual) nodep->isVirtual(true);
             if (m_automatic) nodep->lifetime(VLifetime::AUTOMATIC);
             if (m_static) nodep->lifetime(VLifetime::STATIC);
@@ -83,10 +83,13 @@ struct VMemberQualifiers {
     }
     void applyToNodes(AstVar* nodesp) const {
         for (AstVar* nodep = nodesp; nodep; nodep = VN_CAST(nodep->nextp(), Var)) {
-            // Ignored for now: m_local
-            // Ignored for now: m_protected
-            // Ignored for now: m_rand
-            // Ignored for now: m_randc
+            if (m_randc) {
+                nodep->v3warn(RANDC, "Unsupported: Converting 'randc' to 'rand'");
+                nodep->isRand(true);
+            }
+            if (m_rand) nodep->isRand(true);
+            if (m_local) nodep->isHideLocal(true);
+            if (m_protected) nodep->isHideProtected(true);
             if (m_automatic) nodep->lifetime(VLifetime::AUTOMATIC);
             if (m_static) nodep->lifetime(VLifetime::STATIC);
             if (m_const) nodep->isConst(true);
@@ -129,6 +132,7 @@ struct V3ParseBisonYYSType {
         AstClass* classp;
         AstConst* constp;
         AstFork* forkp;
+        AstFunc* funcp;
         AstMemberDType* memberp;
         AstNodeModule* modulep;
         AstNodeUOrStructDType* uorstructp;
@@ -155,7 +159,7 @@ std::ostream& operator<<(std::ostream& os, const V3ParseBisonYYSType& rhs);
 
 //######################################################################
 
-class V3ParseImp {
+class V3ParseImp final {
     // MEMBERS
     AstNetlist* m_rootp;  // Root of the design
     VInFilter* m_filterp;  // Reading filter
@@ -180,7 +184,7 @@ class V3ParseImp {
     std::deque<FileLine> m_lexLintState;  // Current lint state for save/restore
     std::deque<string> m_ppBuffers;  // Preprocessor->lex buffer of characters to process
 
-    AstNode* m_tagNodep;  // Points to the node to set to m_tag or NULL to not set.
+    AstNode* m_tagNodep;  // Points to the node to set to m_tag or nullptr to not set.
     VTimescale m_timeLastUnit;  // Last `timescale's unit
 
 public:
@@ -301,16 +305,16 @@ public:
 public:
     // CONSTRUCTORS
     V3ParseImp(AstNetlist* rootp, VInFilter* filterp, V3ParseSym* parserSymp)
-        : m_rootp(rootp)
-        , m_filterp(filterp)
-        , m_symp(parserSymp) {
-        m_lexFileline = NULL;
-        m_lexerp = NULL;
+        : m_rootp{rootp}
+        , m_filterp{filterp}
+        , m_symp{parserSymp} {
+        m_lexFileline = nullptr;
+        m_lexerp = nullptr;
         m_inLibrary = false;
         m_lexKwdDepth = 0;
         m_lexKwdLast = stateVerilogRecent();
         m_lexPrevToken = 0;
-        m_tagNodep = NULL;
+        m_tagNodep = nullptr;
         m_timeLastUnit = v3Global.opt.timeDefaultUnit();
     }
     ~V3ParseImp();

@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -23,6 +23,7 @@
 // Limited V3 headers here - this is a base class for Vlc etc
 #include "V3String.h"
 
+#include <array>
 #include <bitset>
 #include <cassert>
 #include <deque>
@@ -32,10 +33,10 @@
 
 //######################################################################
 
-class V3ErrorCode {
+class V3ErrorCode final {
 public:
     // clang-format off
-    enum en {
+    enum en: uint8_t  {
         EC_MIN=0,       // Keep first
         //
         EC_INFO,        // General information out
@@ -51,6 +52,7 @@ public:
         I_DEF_NETTYPE_WIRE,  // `default_nettype is WIRE (false=NONE)
         // Error codes:
         E_DETECTARRAY,  // Error: Unsupported: Can't detect changes on arrayed variable
+        E_ENCAPSULATED, // Error: local/protected violation
         E_PORTSHORT,    // Error: Output port is connected to a constant, electrical short
         E_UNSUPPORTED,  // Error: Unsupported (generally)
         E_TASKNSVAR,    // Error: Task I/O not simple
@@ -69,6 +71,7 @@ public:
         CASEOVERLAP,    // Case statements overlap
         CASEWITHX,      // Case with X values
         CASEX,          // Casex
+        CASTCONST,      // Cast is constant
         CDCRSTLOGIC,    // Logic in async reset path
         CLKDATA,        // Clock used as data
         CMPCONST,       // Comparison is constant due to limited range
@@ -80,6 +83,7 @@ public:
         DEPRECATED,     // Feature will be deprecated
         ENDLABEL,       // End lable name mismatch
         GENCLK,         // Generated Clock
+        HIERBLOCK,      // Ignored hierarchical block setting
         IFDEPTH,        // If statements too deep
         IGNOREDRETURN,  // Ignoring return value (function as task)
         IMPERFECTSCH,   // Imperfect schedule (disabled by default)
@@ -90,14 +94,18 @@ public:
         INFINITELOOP,   // Infinite loop
         INITIALDLY,     // Initial delayed statement
         INSECURE,       // Insecure options
+        LATCH,          // Latch detected outside of always_latch block
         LITENDIAN,      // Little bit endian vector
         MODDUP,         // Duplicate module
         MULTIDRIVEN,    // Driven from multiple blocks
         MULTITOP,       // Multiple top level modules
+        NOLATCH,        // No latch detected in always_latch block
         PINMISSING,     // Cell pin not specified
         PINNOCONNECT,   // Cell pin not connected
         PINCONNECTEMPTY,// Cell pin connected by name with empty reference
+        PKGNODECL,      // Error: Package/class needs to be predeclared
         PROCASSWIRE,    // Procedural assignment on wire
+        RANDC,          // Unsupported: 'randc' converted to 'rand'
         REALCVT,        // Real conversion
         REDEFMACRO,     // Redefining existing define macro
         SELRANGE,       // Selection index out of range
@@ -128,13 +136,13 @@ public:
     // clang-format on
     enum en m_e;
     inline V3ErrorCode()
-        : m_e(EC_MIN) {}
+        : m_e{EC_MIN} {}
     // cppcheck-suppress noExplicitConstructor
     inline V3ErrorCode(en _e)
-        : m_e(_e) {}
+        : m_e{_e} {}
     explicit V3ErrorCode(const char* msgp);  // Matching code or ERROR
     explicit inline V3ErrorCode(int _e)
-        : m_e(static_cast<en>(_e)) {}
+        : m_e(static_cast<en>(_e)) {}  // Need () or GCC 4.8 false warning
     operator en() const { return m_e; }
     const char* ascii() const {
         // clang-format off
@@ -144,22 +152,22 @@ public:
             // Boolean
             " I_CELLDEFINE", " I_COVERAGE", " I_TRACING", " I_LINT", " I_DEF_NETTYPE_WIRE",
             // Errors
-            "DETECTARRAY", "PORTSHORT", "UNSUPPORTED", "TASKNSVAR",
+            "DETECTARRAY", "ENCAPSULATED", "PORTSHORT", "UNSUPPORTED", "TASKNSVAR",
             // Warnings
             " EC_FIRST_WARN",
             "ALWCOMBORDER", "ASSIGNDLY", "ASSIGNIN",
             "BLKANDNBLK", "BLKLOOPINIT", "BLKSEQ", "BSSPACE",
-            "CASEINCOMPLETE", "CASEOVERLAP", "CASEWITHX", "CASEX", "CDCRSTLOGIC", "CLKDATA",
+            "CASEINCOMPLETE", "CASEOVERLAP", "CASEWITHX", "CASEX", "CASTCONST", "CDCRSTLOGIC", "CLKDATA",
             "CMPCONST", "COLONPLUS", "COMBDLY", "CONTASSREG",
             "DEFPARAM", "DECLFILENAME", "DEPRECATED",
-            "ENDLABEL", "GENCLK",
+            "ENDLABEL", "GENCLK", "HIERBLOCK",
             "IFDEPTH", "IGNOREDRETURN",
             "IMPERFECTSCH", "IMPLICIT", "IMPORTSTAR", "IMPURE",
             "INCABSPATH", "INFINITELOOP", "INITIALDLY", "INSECURE",
-            "LITENDIAN", "MODDUP",
-            "MULTIDRIVEN", "MULTITOP",
-            "PINMISSING", "PINNOCONNECT", "PINCONNECTEMPTY", "PROCASSWIRE",
-            "REALCVT", "REDEFMACRO",
+            "LATCH", "LITENDIAN", "MODDUP",
+            "MULTIDRIVEN", "MULTITOP","NOLATCH",
+            "PINMISSING", "PINNOCONNECT", "PINCONNECTEMPTY", "PKGNODECL", "PROCASSWIRE",
+            "RANDC", "REALCVT", "REDEFMACRO",
             "SELRANGE", "SHORTREAL", "SPLITVAR", "STMTDLY", "SYMRSVDWORD", "SYNCASYNCNET",
             "TICKCOUNT", "TIMESCALEMOD",
             "UNDRIVEN", "UNOPT", "UNOPTFLAT", "UNOPTTHREADS",
@@ -181,7 +189,7 @@ public:
     // Later -Werror- options may make more of these.
     bool pretendError() const {
         return (m_e == ASSIGNIN || m_e == BLKANDNBLK || m_e == BLKLOOPINIT || m_e == CONTASSREG
-                || m_e == IMPURE || m_e == PROCASSWIRE  //
+                || m_e == IMPURE || m_e == PKGNODECL || m_e == PROCASSWIRE  //
                 || m_e == TIMESCALEMOD);  // Says IEEE
     }
     // Warnings to mention manual
@@ -191,9 +199,10 @@ public:
     // Warnings that are lint only
     bool lintError() const {
         return (m_e == ALWCOMBORDER || m_e == BSSPACE || m_e == CASEINCOMPLETE
-                || m_e == CASEOVERLAP || m_e == CASEWITHX || m_e == CASEX || m_e == CMPCONST
-                || m_e == COLONPLUS || m_e == ENDLABEL || m_e == IMPLICIT || m_e == LITENDIAN
-                || m_e == PINMISSING || m_e == REALCVT || m_e == UNSIGNED || m_e == WIDTH);
+                || m_e == CASEOVERLAP || m_e == CASEWITHX || m_e == CASEX || m_e == CASTCONST
+                || m_e == CMPCONST || m_e == COLONPLUS || m_e == ENDLABEL || m_e == IMPLICIT
+                || m_e == LATCH || m_e == LITENDIAN || m_e == PINMISSING || m_e == REALCVT
+                || m_e == UNSIGNED || m_e == WIDTH);
     }
     // Warnings that are style only
     bool styleError() const {
@@ -214,7 +223,7 @@ inline std::ostream& operator<<(std::ostream& os, const V3ErrorCode& rhs) {
 
 //######################################################################
 
-class V3Error {
+class V3Error final {
     // Base class for any object that wants debugging and error reporting
 
     typedef std::set<string> MessagesSet;
@@ -222,9 +231,10 @@ class V3Error {
 
 private:
     static bool s_describedWarnings;  // Told user how to disable warns
-    static bool
-        s_describedEachWarn[V3ErrorCode::_ENUM_MAX];  // Told user specifics about this warning
-    static bool s_pretendError[V3ErrorCode::_ENUM_MAX];  // Pretend this warning is an error
+    static std::array<bool, V3ErrorCode::_ENUM_MAX>
+        s_describedEachWarn;  // Told user specifics about this warning
+    static std::array<bool, V3ErrorCode::_ENUM_MAX>
+        s_pretendError;  // Pretend this warning is an error
     static int s_debugDefault;  // Option: --debugi Default debugging level
     static int s_errorLimit;  // Option: --error-limit Number of errors before exit
     static bool s_warnFatal;  // Option: --warnFatal Warnings are fatal
@@ -238,7 +248,7 @@ private:
     static MessagesSet s_messages;  // What errors we've outputted
     static ErrorExitCb s_errorExitCb;  // Callback when error occurs for dumping
 
-    enum MaxErrors { MAX_ERRORS = 50 };  // Fatal after this may errors
+    static constexpr unsigned MAX_ERRORS = 50;  // Fatal after this may errors
 
     V3Error() {
         std::cerr << ("Static class");

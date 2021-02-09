@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -29,56 +29,55 @@
 // Algorithms - acyclic
 //      Break the minimal number of backward edges to make the graph acyclic
 
-class GraphAcycVertex : public V3GraphVertex {
+class GraphAcycVertex final : public V3GraphVertex {
     // user() is used for various sub-algorithm pieces
     V3GraphVertex* m_origVertexp;  // Pointer to first vertex this represents
 protected:
     friend class GraphAcyc;
     V3ListEnt<GraphAcycVertex*> m_work;  // List of vertices with optimization work left
-    uint32_t m_storedRank;  // Rank held until commit to edge placement
-    bool m_onWorkList;  // True if already on list of work to do
-    bool m_deleted;  // True if deleted
+    uint32_t m_storedRank = 0;  // Rank held until commit to edge placement
+    bool m_onWorkList = false;  // True if already on list of work to do
+    bool m_deleted = false;  // True if deleted
 public:
     GraphAcycVertex(V3Graph* graphp, V3GraphVertex* origVertexp)
-        : V3GraphVertex(graphp)
-        , m_origVertexp(origVertexp)
-        , m_storedRank(0)
-        , m_onWorkList(false)
-        , m_deleted(false) {}
-    virtual ~GraphAcycVertex() {}
+        : V3GraphVertex{graphp}
+        , m_origVertexp{origVertexp} {}
+    virtual ~GraphAcycVertex() override = default;
     V3GraphVertex* origVertexp() const { return m_origVertexp; }
     void setDelete() { m_deleted = true; }
     bool isDelete() const { return m_deleted; }
-    virtual string name() const { return m_origVertexp->name(); }
-    virtual string dotColor() const { return m_origVertexp->dotColor(); }
-    virtual FileLine* fileline() const { return m_origVertexp->fileline(); }
+    virtual string name() const override { return m_origVertexp->name(); }
+    virtual string dotColor() const override { return m_origVertexp->dotColor(); }
+    virtual FileLine* fileline() const override { return m_origVertexp->fileline(); }
 };
 
 //--------------------------------------------------------------------
 
-class GraphAcycEdge : public V3GraphEdge {
+class GraphAcycEdge final : public V3GraphEdge {
     // userp() is always used to point to the head original graph edge
 private:
     typedef std::list<V3GraphEdge*> OrigEdgeList;  // List of orig edges, see also GraphAcyc's decl
     V3GraphEdge* origEdgep() const {
         OrigEdgeList* oEListp = static_cast<OrigEdgeList*>(userp());
-        if (!oEListp) v3fatalSrc("No original edge associated with acyc edge " << this << endl);
+        if (!oEListp) v3fatalSrc("No original edge associated with acyc edge " << this);
         return (oEListp->front());
     }
 
 public:
     GraphAcycEdge(V3Graph* graphp, V3GraphVertex* fromp, V3GraphVertex* top, int weight,
                   bool cutable = false)
-        : V3GraphEdge(graphp, fromp, top, weight, cutable) {}
-    virtual ~GraphAcycEdge() {}
+        : V3GraphEdge{graphp, fromp, top, weight, cutable} {}
+    virtual ~GraphAcycEdge() override = default;
     // yellow=we might still cut it, else oldEdge: yellowGreen=made uncutable, red=uncutable
-    virtual string dotColor() const { return (cutable() ? "yellow" : origEdgep()->dotColor()); }
+    virtual string dotColor() const override {
+        return (cutable() ? "yellow" : origEdgep()->dotColor());
+    }
 };
 
 //--------------------------------------------------------------------
 
 struct GraphAcycEdgeCmp {
-    inline bool operator()(const V3GraphEdge* lhsp, const V3GraphEdge* rhsp) const {
+    bool operator()(const V3GraphEdge* lhsp, const V3GraphEdge* rhsp) const {
         if (lhsp->weight() > rhsp->weight()) return true;  // LHS goes first
         if (lhsp->weight() < rhsp->weight()) return false;  // RHS goes first
         return false;
@@ -88,7 +87,7 @@ struct GraphAcycEdgeCmp {
 //--------------------------------------------------------------------
 
 // CLASSES
-class GraphAcyc {
+class GraphAcyc final {
 private:
     typedef std::list<V3GraphEdge*>
         OrigEdgeList;  // List of orig edges, see also GraphAcycEdge's decl
@@ -104,7 +103,7 @@ private:
     V3List<GraphAcycVertex*> m_work;  // List of vertices with optimization work left
     std::vector<OrigEdgeList*> m_origEdgeDelp;  // List of deletions to do when done
     V3EdgeFuncP m_origEdgeFuncp;  // Function that says we follow this edge (in original graph)
-    uint32_t m_placeStep;  // Number that user() must be equal to to indicate processing
+    uint32_t m_placeStep = 0;  // Number that user() must be equal to to indicate processing
 
     static int debug() { return V3Graph::debug(); }
 
@@ -136,7 +135,7 @@ private:
     void addOrigEdgep(V3GraphEdge* toEdgep, V3GraphEdge* addEdgep) {
         // Add addEdge (or it's list) to list of edges that break edge represents
         // Note addEdge may already have a bunch of similar linked edge representations.  Yuk.
-        UASSERT(addEdgep, "Adding NULL");
+        UASSERT(addEdgep, "Adding nullptr");
         if (!toEdgep->userp()) {
             OrigEdgeList* oep = new OrigEdgeList;
             m_origEdgeDelp.push_back(oep);
@@ -144,9 +143,7 @@ private:
         }
         OrigEdgeList* oEListp = static_cast<OrigEdgeList*>(toEdgep->userp());
         if (OrigEdgeList* addListp = static_cast<OrigEdgeList*>(addEdgep->userp())) {
-            for (OrigEdgeList::iterator it = addListp->begin(); it != addListp->end(); ++it) {
-                oEListp->push_back(*it);
-            }
+            for (const auto& itr : *addListp) oEListp->push_back(itr);
             addListp->clear();  // Done with it
         } else {
             oEListp->push_back(addEdgep);
@@ -158,11 +155,10 @@ private:
         breakEdgep->cut();
         OrigEdgeList* oEListp = static_cast<OrigEdgeList*>(breakEdgep->userp());
         if (!oEListp) {
-            v3fatalSrc("No original edge associated with cutting edge " << breakEdgep << endl);
+            v3fatalSrc("No original edge associated with cutting edge " << breakEdgep);
         }
         // The breakGraph edge may represent multiple real edges; cut them all
-        for (OrigEdgeList::iterator it = oEListp->begin(); it != oEListp->end(); ++it) {
-            V3GraphEdge* origEdgep = *it;
+        for (const auto& origEdgep : *oEListp) {
             origEdgep->cut();
             UINFO(8,
                   "  " << why << "   " << origEdgep->fromp() << " ->" << origEdgep->top() << endl);
@@ -186,16 +182,11 @@ private:
 
 public:
     // CONSTRUCTORS
-    GraphAcyc(V3Graph* origGraphp, V3EdgeFuncP edgeFuncp) {
-        m_origGraphp = origGraphp;
-        m_origEdgeFuncp = edgeFuncp;
-        m_placeStep = 0;
-    }
+    GraphAcyc(V3Graph* origGraphp, V3EdgeFuncP edgeFuncp)
+        : m_origGraphp{origGraphp}
+        , m_origEdgeFuncp{edgeFuncp} {}
     ~GraphAcyc() {
-        for (std::vector<OrigEdgeList*>::iterator it = m_origEdgeDelp.begin();
-             it != m_origEdgeDelp.end(); ++it) {
-            delete (*it);
-        }
+        for (OrigEdgeList* ip : m_origEdgeDelp) delete ip;
         m_origEdgeDelp.clear();
     }
     void main();
@@ -382,7 +373,7 @@ void GraphAcyc::simplifyDup(GraphAcycVertex* avertexp) {
     if (avertexp->isDelete()) return;
     // Clear marks
     for (V3GraphEdge* edgep = avertexp->outBeginp(); edgep; edgep = edgep->outNextp()) {
-        edgep->top()->userp(NULL);
+        edgep->top()->userp(nullptr);
     }
     // Mark edges and detect duplications
     for (V3GraphEdge *nextp, *edgep = avertexp->outBeginp(); edgep; edgep = nextp) {
@@ -479,10 +470,7 @@ void GraphAcyc::place() {
 
     // Process each edge in weighted order
     m_placeStep = 10;
-    for (std::vector<V3GraphEdge*>::iterator it = edges.begin(); it != edges.end(); ++it) {
-        V3GraphEdge* edgep = (*it);
-        placeTryEdge(edgep);
-    }
+    for (V3GraphEdge* edgep : edges) placeTryEdge(edgep);
 }
 
 void GraphAcyc::placeTryEdge(V3GraphEdge* edgep) {

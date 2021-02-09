@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -41,7 +41,7 @@
 
 //######################################################################
 
-class UnknownVisitor : public AstNVisitor {
+class UnknownVisitor final : public AstNVisitor {
 private:
     // NODE STATE
     // Cleared on Netlist
@@ -52,11 +52,11 @@ private:
     AstUser2InUse m_inuser2;
 
     // STATE
-    AstNodeModule* m_modp;  // Current module
-    bool m_constXCvt;  // Convert X's
+    AstNodeModule* m_modp = nullptr;  // Current module
+    AstAssignW* m_assignwp = nullptr;  // Current assignment
+    AstAssignDly* m_assigndlyp = nullptr;  // Current assignment
+    bool m_constXCvt = false;  // Convert X's
     VDouble0 m_statUnkVars;  // Statistic tracking
-    AstAssignW* m_assignwp;  // Current assignment
-    AstAssignDly* m_assigndlyp;  // Current assignment
 
     // METHODS
     VL_DEBUG_FUNC;  // Declare debug()
@@ -82,9 +82,9 @@ private:
             // of multiple statements.  Perhaps someday make all wassigns into always's?
             UINFO(5, "     IM_WireRep  " << m_assignwp << endl);
             m_assignwp->convertToAlways();
-            VL_DO_CLEAR(pushDeletep(m_assignwp), m_assignwp = NULL);
+            VL_DO_CLEAR(pushDeletep(m_assignwp), m_assignwp = nullptr);
         }
-        bool needDly = (m_assigndlyp != NULL);
+        bool needDly = (m_assigndlyp != nullptr);
         if (m_assigndlyp) {
             // Delayed assignments become normal assignments,
             // then the temp created becomes the delayed assignment
@@ -92,7 +92,7 @@ private:
                                           m_assigndlyp->lhsp()->unlinkFrBackWithNext(),
                                           m_assigndlyp->rhsp()->unlinkFrBackWithNext());
             m_assigndlyp->replaceWith(newp);
-            VL_DO_CLEAR(pushDeletep(m_assigndlyp), m_assigndlyp = NULL);
+            VL_DO_CLEAR(pushDeletep(m_assigndlyp), m_assigndlyp = nullptr);
         }
         AstNode* prep = nodep;
 
@@ -118,14 +118,14 @@ private:
             m_modp->addStmtp(varp);
 
             AstNode* abovep = prep->backp();  // Grab above point before lose it w/ next replace
-            prep->replaceWith(new AstVarRef(fl, varp, true));
-            AstIf* newp
-                = new AstIf(fl, condp,
-                            (needDly ? static_cast<AstNode*>(
-                                 new AstAssignDly(fl, prep, new AstVarRef(fl, varp, false)))
-                                     : static_cast<AstNode*>(
-                                         new AstAssign(fl, prep, new AstVarRef(fl, varp, false)))),
-                            NULL);
+            prep->replaceWith(new AstVarRef(fl, varp, VAccess::WRITE));
+            AstIf* newp = new AstIf(
+                fl, condp,
+                (needDly ? static_cast<AstNode*>(
+                     new AstAssignDly(fl, prep, new AstVarRef(fl, varp, VAccess::READ)))
+                         : static_cast<AstNode*>(
+                             new AstAssign(fl, prep, new AstVarRef(fl, varp, VAccess::READ)))),
+                nullptr);
             newp->branchPred(VBranchPred::BP_LIKELY);
             if (debug() >= 9) newp->dumpTree(cout, "     _new: ");
             abovep->addNextStmt(newp, abovep);
@@ -134,36 +134,45 @@ private:
     }
 
     // VISITORS
-    virtual void visit(AstNodeModule* nodep) VL_OVERRIDE {
+    virtual void visit(AstNodeModule* nodep) override {
         UINFO(4, " MOD   " << nodep << endl);
-        AstNodeModule* origModp = m_modp;
+        VL_RESTORER(m_modp);
+        VL_RESTORER(m_constXCvt);
         {
             m_modp = nodep;
             m_constXCvt = true;
             iterateChildren(nodep);
         }
-        m_modp = origModp;
     }
-    virtual void visit(AstAssignDly* nodep) VL_OVERRIDE {
-        m_assigndlyp = nodep;
-        VL_DO_DANGLING(iterateChildren(nodep), nodep);  // May delete nodep.
-        m_assigndlyp = NULL;
+    virtual void visit(AstAssignDly* nodep) override {
+        VL_RESTORER(m_assigndlyp);
+        {
+            m_assigndlyp = nodep;
+            VL_DO_DANGLING(iterateChildren(nodep), nodep);  // May delete nodep.
+        }
     }
-    virtual void visit(AstAssignW* nodep) VL_OVERRIDE {
-        m_assignwp = nodep;
-        VL_DO_DANGLING(iterateChildren(nodep), nodep);  // May delete nodep.
-        m_assignwp = NULL;
+    virtual void visit(AstAssignW* nodep) override {
+        VL_RESTORER(m_assignwp);
+        {
+            m_assignwp = nodep;
+            VL_DO_DANGLING(iterateChildren(nodep), nodep);  // May delete nodep.
+        }
     }
-    virtual void visit(AstCaseItem* nodep) VL_OVERRIDE {
-        m_constXCvt = false;  // Avoid losing the X's in casex
-        iterateAndNextNull(nodep->condsp());
-        m_constXCvt = true;
-        iterateAndNextNull(nodep->bodysp());
+    virtual void visit(AstCaseItem* nodep) override {
+        VL_RESTORER(m_constXCvt);
+        {
+            m_constXCvt = false;  // Avoid losing the X's in casex
+            iterateAndNextNull(nodep->condsp());
+            m_constXCvt = true;
+            iterateAndNextNull(nodep->bodysp());
+        }
     }
-    virtual void visit(AstNodeDType* nodep) VL_OVERRIDE {
-        m_constXCvt = false;  // Avoid losing the X's in casex
-        iterateChildren(nodep);
-        m_constXCvt = true;
+    virtual void visit(AstNodeDType* nodep) override {
+        VL_RESTORER(m_constXCvt);
+        {
+            m_constXCvt = false;  // Avoid losing the X's in casex
+            iterateChildren(nodep);
+        }
     }
     void visitEqNeqCase(AstNodeBiop* nodep) {
         UINFO(4, " N/EQCASE->EQ " << nodep << endl);
@@ -237,19 +246,55 @@ private:
         }
     }
 
-    virtual void visit(AstEqCase* nodep) VL_OVERRIDE { visitEqNeqCase(nodep); }
-    virtual void visit(AstNeqCase* nodep) VL_OVERRIDE { visitEqNeqCase(nodep); }
-    virtual void visit(AstEqWild* nodep) VL_OVERRIDE { visitEqNeqWild(nodep); }
-    virtual void visit(AstNeqWild* nodep) VL_OVERRIDE { visitEqNeqWild(nodep); }
-    virtual void visit(AstIsUnknown* nodep) VL_OVERRIDE {
+    virtual void visit(AstEqCase* nodep) override { visitEqNeqCase(nodep); }
+    virtual void visit(AstNeqCase* nodep) override { visitEqNeqCase(nodep); }
+    virtual void visit(AstEqWild* nodep) override { visitEqNeqWild(nodep); }
+    virtual void visit(AstNeqWild* nodep) override { visitEqNeqWild(nodep); }
+    virtual void visit(AstIsUnknown* nodep) override {
         iterateChildren(nodep);
         // Ahh, we're two state, so this is easy
         UINFO(4, " ISUNKNOWN->0 " << nodep << endl);
-        AstConst* newp = new AstConst(nodep->fileline(), AstConst::LogicFalse());
+        AstConst* newp = new AstConst(nodep->fileline(), AstConst::BitFalse());
         nodep->replaceWith(newp);
         VL_DO_DANGLING(nodep->deleteTree(), nodep);
     }
-    virtual void visit(AstConst* nodep) VL_OVERRIDE {
+    virtual void visit(AstCountBits* nodep) override {
+        // Ahh, we're two state, so this is easy
+        std::array<bool, 3> dropop;
+        dropop[0] = VN_IS(nodep->rhsp(), Const) && VN_CAST(nodep->rhsp(), Const)->num().isAnyX();
+        dropop[1] = VN_IS(nodep->thsp(), Const) && VN_CAST(nodep->thsp(), Const)->num().isAnyX();
+        dropop[2] = VN_IS(nodep->fhsp(), Const) && VN_CAST(nodep->fhsp(), Const)->num().isAnyX();
+        UINFO(4, " COUNTBITS(" << dropop[0] << dropop[1] << dropop[2] << " " << nodep << endl);
+
+        AstNode* nonXp = nullptr;
+        if (!dropop[0])
+            nonXp = nodep->rhsp();
+        else if (!dropop[1])
+            nonXp = nodep->thsp();
+        else if (!dropop[2])
+            nonXp = nodep->fhsp();
+        else {  // Was all X-s
+            UINFO(4, " COUNTBITS('x)->0 " << nodep << endl);
+            AstConst* newp = new AstConst(nodep->fileline(), AstConst::BitFalse());
+            nodep->replaceWith(newp);
+            VL_DO_DANGLING(nodep->deleteTree(), nodep);
+            return;
+        }
+        if (dropop[0]) {
+            nodep->rhsp()->unlinkFrBack()->deleteTree();
+            nodep->rhsp(nonXp->cloneTree(true));
+        }
+        if (dropop[1]) {
+            nodep->thsp()->unlinkFrBack()->deleteTree();
+            nodep->thsp(nonXp->cloneTree(true));
+        }
+        if (dropop[2]) {
+            nodep->fhsp()->unlinkFrBack()->deleteTree();
+            nodep->fhsp(nonXp->cloneTree(true));
+        }
+        iterateChildren(nodep);
+    }
+    virtual void visit(AstConst* nodep) override {
         if (m_constXCvt && nodep->num().isFourState()) {
             UINFO(4, " CONST4 " << nodep << endl);
             if (debug() >= 9) nodep->dumpTree(cout, "  Const_old: ");
@@ -282,16 +327,18 @@ private:
                 ++m_statUnkVars;
                 AstNRelinker replaceHandle;
                 nodep->unlinkFrBack(&replaceHandle);
-                AstNodeVarRef* newref1p = new AstVarRef(nodep->fileline(), newvarp, false);
+                AstNodeVarRef* newref1p = new AstVarRef(nodep->fileline(), newvarp, VAccess::READ);
                 replaceHandle.relink(newref1p);  // Replace const with varref
                 AstInitial* newinitp = new AstInitial(
                     nodep->fileline(),
                     new AstAssign(
-                        nodep->fileline(), new AstVarRef(nodep->fileline(), newvarp, true),
-                        new AstOr(
-                            nodep->fileline(), new AstConst(nodep->fileline(), numb1),
-                            new AstAnd(nodep->fileline(), new AstConst(nodep->fileline(), numbx),
-                                       new AstRand(nodep->fileline(), nodep->dtypep(), true)))));
+                        nodep->fileline(),
+                        new AstVarRef(nodep->fileline(), newvarp, VAccess::WRITE),
+                        new AstOr(nodep->fileline(), new AstConst(nodep->fileline(), numb1),
+                                  new AstAnd(nodep->fileline(),
+                                             new AstConst(nodep->fileline(), numbx),
+                                             new AstRand(nodep->fileline(), AstRand::Reset{},
+                                                         nodep->dtypep(), true)))));
                 // Add inits in front of other statement.
                 // In the future, we should stuff the initp into the module's constructor.
                 AstNode* afterp = m_modp->stmtsp()->unlinkFrBackWithNext();
@@ -306,14 +353,14 @@ private:
         }
     }
 
-    virtual void visit(AstSel* nodep) VL_OVERRIDE {
+    virtual void visit(AstSel* nodep) override {
         iterateChildren(nodep);
         if (!nodep->user1SetOnce()) {
             // Guard against reading/writing past end of bit vector array
             AstNode* basefromp = AstArraySel::baseFromp(nodep);
             bool lvalue = false;
             if (const AstNodeVarRef* varrefp = VN_CAST(basefromp, NodeVarRef)) {
-                lvalue = varrefp->lvalue();
+                lvalue = varrefp->access().isWriteOrRW();
             }
             // Find range of dtype we are selecting from
             // Similar code in V3Const::warnSelect
@@ -353,7 +400,7 @@ private:
     // visit(AstSliceSel) not needed as its bounds are constant and checked
     // in V3Width.
 
-    virtual void visit(AstArraySel* nodep) VL_OVERRIDE {
+    virtual void visit(AstArraySel* nodep) override {
         iterateChildren(nodep);
         if (!nodep->user1SetOnce()) {
             if (debug() == 9) nodep->dumpTree(cout, "-in: ");
@@ -361,7 +408,7 @@ private:
             AstNode* basefromp = AstArraySel::baseFromp(nodep->fromp());
             bool lvalue = false;
             if (const AstNodeVarRef* varrefp = VN_CAST(basefromp, NodeVarRef)) {
-                lvalue = varrefp->lvalue();
+                lvalue = varrefp->access().isWriteOrRW();
             } else if (VN_IS(basefromp, Const)) {
                 // If it's a PARAMETER[bit], then basefromp may be a constant instead of a varrefp
             } else {
@@ -424,18 +471,12 @@ private:
         }
     }
     //--------------------
-    virtual void visit(AstNode* nodep) VL_OVERRIDE { iterateChildren(nodep); }
+    virtual void visit(AstNode* nodep) override { iterateChildren(nodep); }
 
 public:
     // CONSTRUCTORS
-    explicit UnknownVisitor(AstNetlist* nodep) {
-        m_modp = NULL;
-        m_assigndlyp = NULL;
-        m_assignwp = NULL;
-        m_constXCvt = false;
-        iterate(nodep);
-    }
-    virtual ~UnknownVisitor() {  //
+    explicit UnknownVisitor(AstNetlist* nodep) { iterate(nodep); }
+    virtual ~UnknownVisitor() override {  //
         V3Stats::addStat("Unknowns, variables created", m_statUnkVars);
     }
 };

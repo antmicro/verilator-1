@@ -6,7 +6,7 @@
 //
 //*************************************************************************
 //
-// Copyright 2005-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2005-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -26,7 +26,7 @@
 //######################################################################
 // Assert class functions
 
-class AssertPreVisitor : public AstNVisitor {
+class AssertPreVisitor final : public AstNVisitor {
     // Removes clocks and other pre-optimizations
     // Eventually inlines calls to sequences, properties, etc.
     // We're not parsing the tree, or anything more complicated.
@@ -34,35 +34,40 @@ private:
     // NODE STATE/TYPES
     // STATE
     // Reset each module:
-    AstSenItem* m_seniDefaultp;  // Default sensitivity (from AstDefClock)
+    AstSenItem* m_seniDefaultp = nullptr;  // Default sensitivity (from AstDefClock)
     // Reset each assertion:
-    AstSenItem* m_senip;  // Last sensitivity
+    AstSenItem* m_senip = nullptr;  // Last sensitivity
     // Reset each always:
-    AstSenItem* m_seniAlwaysp;  // Last sensitivity in always
+    AstSenItem* m_seniAlwaysp = nullptr;  // Last sensitivity in always
+    // Reset each assertion:
+    AstNode* m_disablep = nullptr;  // Last disable
 
     // METHODS
     VL_DEBUG_FUNC;  // Declare debug()
 
     AstSenTree* newSenTree(AstNode* nodep) {
         // Create sentree based on clocked or default clock
-        // Return NULL for always
-        AstSenTree* newp = NULL;
+        // Return nullptr for always
+        AstSenTree* newp = nullptr;
         AstSenItem* senip = m_senip;
         if (!senip) senip = m_seniDefaultp;
         if (!senip) senip = m_seniAlwaysp;
         if (!senip) {
             nodep->v3warn(E_UNSUPPORTED, "Unsupported: Unclocked assertion");
-            newp = new AstSenTree(nodep->fileline(), NULL);
+            newp = new AstSenTree(nodep->fileline(), nullptr);
         } else {
             newp = new AstSenTree(nodep->fileline(), senip->cloneTree(true));
         }
         return newp;
     }
-    void clearAssertInfo() { m_senip = NULL; }
+    void clearAssertInfo() {
+        m_senip = nullptr;
+        m_disablep = nullptr;
+    }
 
     // VISITORS
     //========== Statements
-    virtual void visit(AstClocking* nodep) VL_OVERRIDE {
+    virtual void visit(AstClocking* nodep) override {
         UINFO(8, "   CLOCKING" << nodep << endl);
         // Store the new default clock, reset on new module
         m_seniDefaultp = nodep->sensesp();
@@ -74,14 +79,14 @@ private:
         }
         VL_DO_DANGLING(pushDeletep(nodep), nodep);
     }
-    virtual void visit(AstAlways* nodep) VL_OVERRIDE {
+    virtual void visit(AstAlways* nodep) override {
         iterateAndNextNull(nodep->sensesp());
         if (nodep->sensesp()) m_seniAlwaysp = nodep->sensesp()->sensesp();
         iterateAndNextNull(nodep->bodysp());
-        m_seniAlwaysp = NULL;
+        m_seniAlwaysp = nullptr;
     }
 
-    virtual void visit(AstNodeCoverOrAssert* nodep) VL_OVERRIDE {
+    virtual void visit(AstNodeCoverOrAssert* nodep) override {
         if (nodep->sentreep()) return;  // Already processed
         clearAssertInfo();
         // Find Clocking's buried under nodep->exprsp
@@ -89,27 +94,72 @@ private:
         if (!nodep->immediate()) nodep->sentreep(newSenTree(nodep));
         clearAssertInfo();
     }
-    virtual void visit(AstPast* nodep) VL_OVERRIDE {
-        if (nodep->sentreep()) return;  // Already processed
-        iterateChildren(nodep);
-        nodep->sentreep(newSenTree(nodep));
-    }
-    virtual void visit(AstStable* nodep) VL_OVERRIDE {
+    virtual void visit(AstFell* nodep) override {
         if (nodep->sentreep()) return;  // Already processed
         iterateChildren(nodep);
         FileLine* fl = nodep->fileline();
         AstNode* exprp = nodep->exprp()->unlinkFrBack();
-        AstNode* past = new AstPast(fl, exprp, NULL);
+        if (exprp->width() > 1) exprp = new AstSel(fl, exprp, 0, 1);
+        AstNode* past = new AstPast(fl, exprp, nullptr);
         past->dtypeFrom(exprp);
-        exprp = new AstEq(fl, past,
-                          exprp->cloneTree(false));  // new AstVarRef(fl, exprp, true)
-        exprp->dtypeSetLogicBool();
+        exprp = new AstAnd(fl, past, new AstNot(fl, exprp->cloneTree(false)));
+        exprp->dtypeSetBit();
+        nodep->replaceWith(exprp);
+        nodep->sentreep(newSenTree(nodep));
+        VL_DO_DANGLING(pushDeletep(nodep), nodep);
+    }
+    virtual void visit(AstPast* nodep) override {
+        if (nodep->sentreep()) return;  // Already processed
+        iterateChildren(nodep);
+        nodep->sentreep(newSenTree(nodep));
+    }
+    virtual void visit(AstRose* nodep) override {
+        if (nodep->sentreep()) return;  // Already processed
+        iterateChildren(nodep);
+        FileLine* fl = nodep->fileline();
+        AstNode* exprp = nodep->exprp()->unlinkFrBack();
+        if (exprp->width() > 1) exprp = new AstSel(fl, exprp, 0, 1);
+        AstNode* past = new AstPast(fl, exprp, nullptr);
+        past->dtypeFrom(exprp);
+        exprp = new AstAnd(fl, new AstNot(fl, past), exprp->cloneTree(false));
+        exprp->dtypeSetBit();
+        nodep->replaceWith(exprp);
+        nodep->sentreep(newSenTree(nodep));
+        VL_DO_DANGLING(pushDeletep(nodep), nodep);
+    }
+    virtual void visit(AstStable* nodep) override {
+        if (nodep->sentreep()) return;  // Already processed
+        iterateChildren(nodep);
+        FileLine* fl = nodep->fileline();
+        AstNode* exprp = nodep->exprp()->unlinkFrBack();
+        AstNode* past = new AstPast(fl, exprp, nullptr);
+        past->dtypeFrom(exprp);
+        exprp = new AstEq(fl, past, exprp->cloneTree(false));
+        exprp->dtypeSetBit();
         nodep->replaceWith(exprp);
         nodep->sentreep(newSenTree(nodep));
         VL_DO_DANGLING(pushDeletep(nodep), nodep);
     }
 
-    virtual void visit(AstPropClocked* nodep) VL_OVERRIDE {
+    virtual void visit(AstImplication* nodep) override {
+        if (nodep->sentreep()) return;  // Already processed
+
+        FileLine* fl = nodep->fileline();
+        AstNode* rhsp = nodep->rhsp()->unlinkFrBack();
+        AstNode* lhsp = nodep->lhsp()->unlinkFrBack();
+
+        if (m_disablep) { lhsp = new AstAnd(fl, new AstNot(fl, m_disablep), lhsp); }
+
+        AstNode* past = new AstPast(fl, lhsp, nullptr);
+        past->dtypeFrom(lhsp);
+        AstNode* exprp = new AstOr(fl, new AstNot(fl, past), rhsp);
+        exprp->dtypeSetBit();
+        nodep->replaceWith(exprp);
+        nodep->sentreep(newSenTree(nodep));
+        VL_DO_DANGLING(pushDeletep(nodep), nodep);
+    }
+
+    virtual void visit(AstPropClocked* nodep) override {
         // No need to iterate the body, once replace will get iterated
         iterateAndNextNull(nodep->sensesp());
         if (m_senip)
@@ -117,6 +167,7 @@ private:
         // Block is the new expression to evaluate
         AstNode* blockp = nodep->propp()->unlinkFrBack();
         if (nodep->disablep()) {
+            m_disablep = nodep->disablep()->cloneTree(false);
             if (VN_IS(nodep->backp(), Cover)) {
                 blockp = new AstAnd(
                     nodep->disablep()->fileline(),
@@ -132,23 +183,21 @@ private:
         nodep->replaceWith(blockp);
         VL_DO_DANGLING(pushDeletep(nodep), nodep);
     }
-    virtual void visit(AstNodeModule* nodep) VL_OVERRIDE {
+    virtual void visit(AstNodeModule* nodep) override {
         iterateChildren(nodep);
         // Reset defaults
-        m_seniDefaultp = NULL;
+        m_seniDefaultp = nullptr;
     }
-    virtual void visit(AstNode* nodep) VL_OVERRIDE { iterateChildren(nodep); }
+    virtual void visit(AstNode* nodep) override { iterateChildren(nodep); }
 
 public:
     // CONSTRUCTORS
     explicit AssertPreVisitor(AstNetlist* nodep) {
-        m_seniDefaultp = NULL;
-        m_seniAlwaysp = NULL;
         clearAssertInfo();
         // Process
         iterate(nodep);
     }
-    virtual ~AssertPreVisitor() {}
+    virtual ~AssertPreVisitor() override = default;
 };
 
 //######################################################################

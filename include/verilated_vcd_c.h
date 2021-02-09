@@ -3,7 +3,7 @@
 //
 // THIS MODULE IS PUBLICLY LICENSED
 //
-// Copyright 2001-2020 by Wilson Snyder. This program is free software; you
+// Copyright 2001-2021 by Wilson Snyder. This program is free software; you
 // can redistribute it and/or modify it under the terms of either the GNU
 // Lesser General Public License Version 3 or the Perl Artistic License
 // Version 2.0.
@@ -34,14 +34,13 @@ class VerilatedVcd;
 // VerilatedFile
 /// File handling routines, which can be overrode for e.g. socket I/O
 
-class VerilatedVcdFile {
+class VerilatedVcdFile VL_NOT_FINAL {
 private:
-    int m_fd;  ///< File descriptor we're writing to
+    int m_fd = 0;  ///< File descriptor we're writing to
 public:
     // METHODS
-    VerilatedVcdFile()
-        : m_fd(0) {}
-    virtual ~VerilatedVcdFile() {}
+    VerilatedVcdFile() = default;
+    virtual ~VerilatedVcdFile() = default;
     virtual bool open(const std::string& name) VL_MT_UNSAFE;
     virtual void close() VL_MT_UNSAFE;
     virtual ssize_t write(const char* bufp, ssize_t len) VL_MT_UNSAFE;
@@ -52,7 +51,7 @@ public:
 /// Base class to create a Verilator VCD dump
 /// This is an internally used class - see VerilatedVcdC for what to call from applications
 
-class VerilatedVcd : public VerilatedTrace<VerilatedVcd> {
+class VerilatedVcd VL_NOT_FINAL : public VerilatedTrace<VerilatedVcd> {
 private:
     // Give the superclass access to private bits (to avoid virtual functions)
     friend class VerilatedTrace<VerilatedVcd>;
@@ -62,23 +61,23 @@ private:
 
     VerilatedVcdFile* m_filep;  ///< File we're writing to
     bool m_fileNewed;  ///< m_filep needs destruction
-    bool m_isOpen;  ///< True indicates open file
-    bool m_evcd;  ///< True for evcd format
+    bool m_isOpen = false;  ///< True indicates open file
+    bool m_evcd = false;  ///< True for evcd format
     std::string m_filename;  ///< Filename we're writing to (if open)
-    vluint64_t m_rolloverMB;  ///< MB of file size to rollover at
-    int m_modDepth;  ///< Depth of module hierarchy
+    vluint64_t m_rolloverMB = 0;  ///< MB of file size to rollover at
+    int m_modDepth = 0;  ///< Depth of module hierarchy
 
     char* m_wrBufp;  ///< Output buffer
     char* m_wrFlushp;  ///< Output buffer flush trigger location
     char* m_writep;  ///< Write pointer into output buffer
     vluint64_t m_wrChunkSize;  ///< Output buffer size
-    vluint64_t m_wroteBytes;  ///< Number of bytes written to this file
+    vluint64_t m_wroteBytes = 0;  ///< Number of bytes written to this file
 
     std::vector<char> m_suffixes;  ///< VCD line end string codes + metadata
     const char* m_suffixesp;  ///< Pointer to first element of above
 
-    typedef std::map<std::string, std::string> NameMap;
-    NameMap* m_namemapp;  ///< List of names for the header
+    typedef std::map<const std::string, const std::string> NameMap;
+    NameMap* m_namemapp = nullptr;  ///< List of names for the header
 
     void bufferResize(vluint64_t minsize);
     void bufferFlush() VL_MT_UNSAFE_ONE;
@@ -101,7 +100,7 @@ private:
 
     void dumpHeader();
 
-    char* writeCode(char* writep, vluint32_t code);
+    static char* writeCode(char* writep, vluint32_t code);
 
     void finishLine(vluint32_t code, char* writep);
 
@@ -113,11 +112,11 @@ protected:
     // Implementation of VerilatedTrace interface
 
     // Implementations of protected virtual methods for VerilatedTrace
-    void emitTimeChange(vluint64_t timeui) VL_OVERRIDE;
+    virtual void emitTimeChange(vluint64_t timeui) override;
 
     // Hooks called from VerilatedTrace
-    bool preFullDump() VL_OVERRIDE { return isOpen(); }
-    bool preChangeDump() VL_OVERRIDE;
+    virtual bool preFullDump() override { return isOpen(); }
+    virtual bool preChangeDump() override;
 
     // Implementations of duck-typed methods for VerilatedTrace. These are
     // called from only one place (namely full*) so always inline them.
@@ -134,7 +133,7 @@ public:
     //=========================================================================
     // External interface to client code
 
-    explicit VerilatedVcd(VerilatedVcdFile* filep = NULL);
+    explicit VerilatedVcd(VerilatedVcdFile* filep = nullptr);
     ~VerilatedVcd();
 
     // ACCESSORS
@@ -343,15 +342,15 @@ template <> void VerilatedTrace<VerilatedVcd>::set_time_resolution(const std::st
 /// Also derived for use in SystemC simulations.
 /// Thread safety: Unless otherwise indicated, every function is VL_MT_UNSAFE_ONE
 
-class VerilatedVcdC {
+class VerilatedVcdC VL_NOT_FINAL {
     VerilatedVcd m_sptrace;  ///< Trace file being created
 
     // CONSTRUCTORS
     VL_UNCOPYABLE(VerilatedVcdC);
 
 public:
-    explicit VerilatedVcdC(VerilatedVcdFile* filep = NULL)
-        : m_sptrace(filep) {}
+    explicit VerilatedVcdC(VerilatedVcdFile* filep = nullptr)
+        : m_sptrace{filep} {}
     ~VerilatedVcdC() { close(); }
     /// Routines can only be called from one thread; allow next call from different thread
     void changeThread() { spTrace()->changeThread(); }

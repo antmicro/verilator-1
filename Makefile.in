@@ -7,7 +7,7 @@
 #
 #*****************************************************************************
 #
-# Copyright 2003-2020 by Wilson Snyder. This program is free software; you
+# Copyright 2003-2021 by Wilson Snyder. This program is free software; you
 # can redistribute it and/or modify it under the terms of either the GNU
 # Lesser General Public License Version 3 or the Perl Artistic License
 # Version 2.0.
@@ -89,7 +89,6 @@ datarootdir = @datarootdir@
 CFG_WITH_CCWARN = @CFG_WITH_CCWARN@
 CFG_WITH_DEFENV = @CFG_WITH_DEFENV@
 CFG_WITH_LONGTESTS = @CFG_WITH_LONGTESTS@
-CFG_WITH_THREADED = @CFG_WITH_THREADED@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 
 #### End of system configuration section. ####
@@ -154,6 +153,7 @@ DISTFILES_INC = $(INFOS) .gitignore \
 	.*attributes */.*attributes  */*/.*attributes \
 	src/.*ignore src/*.in src/*.cpp src/*.[chly] \
 	src/astgen src/bisonpre src/*fix src/cppcheck_filtered \
+	src/config_rev \
 	src/vlcovgen src/mkinstalldirs \
 	src/.gdbinit \
 	src/*.pl src/*.pod \
@@ -171,6 +171,8 @@ DISTFILES_INC = $(INFOS) .gitignore \
 	test_regress/t/t*/*.v* \
 	test_regress/t/t*/*/*.sv* \
 	test_regress/t/t*/*/*.v* \
+	test_regress/t/t*/*.cpp \
+	test_regress/t/t*/CMakeLists.txt \
 	test_regress/t/*.cpp \
 	test_regress/t/*.h \
 	test_regress/t/*.dat \
@@ -218,7 +220,7 @@ all_nomsg: verilator_exe $(VL_INST_MAN_FILES)
 verilator_exe verilator_bin verilator_bin_dbg verilator_coverage_bin_dbg:
 	@echo ------------------------------------------------------------
 	@echo "making verilator in src"
-	$(MAKE) -C src $(OBJCACHE_JOBS)
+	$(MAKE) -C src $(OBJCACHE_JOBS) $(CI_MAKE_SRC_TARGET)
 
 .PHONY:msg_test
 msg_test: all_nomsg
@@ -420,6 +422,7 @@ endif
 
 # Use --xml flag to see the cppcheck code to use for suppression
 CPPCHECK_CPP = $(wildcard \
+	$(srcdir)/examples/*/*.cpp \
 	$(srcdir)/include/*.cpp \
 	$(srcdir)/src/*.cpp )
 CPPCHECK_H = $(wildcard \
@@ -428,7 +431,7 @@ CPPCHECK_H = $(wildcard \
 CPPCHECK_YL = $(wildcard \
 	$(srcdir)/src/*.y \
 	$(srcdir)/src/*.l )
-CPPCHECK = src/cppcheck_filtered
+CPPCHECK = src/cppcheck_filtered cppcheck
 CPPCHECK_FLAGS = --enable=all --inline-suppr \
 	--suppress=unusedScopedObject --suppress=cstyleCast --suppress=useInitializationList \
 	--suppress=nullPointerRedundantCheck
@@ -438,18 +441,19 @@ CPPCHECK_INC = -I$(srcdir)/include -I$(srcdir)/src/obj_dbg -I$(srcdir)/src
 
 cppcheck: $(CPPCHECK_DEP)
 %.cppcheck: %.cpp
-	$(CPPCHECK) $(CPPCHECK_FLAGS) -DVL_DEBUG=1 -DVL_CPPCHECK=1 $(CPPCHECK_INC) $<
+	$(CPPCHECK) $(CPPCHECK_FLAGS) -DVL_DEBUG=1 -DVL_CPPCHECK=1 -DVL_THREADED=1 $(CPPCHECK_INC) $<
 
 CLANGTIDY = clang-tidy
-CLANGTIDY_FLAGS = -config=''
+CLANGTIDY_FLAGS = -config='' -checks='-fuchsia-*,-cppcoreguidelines-avoid-c-arrays,-cppcoreguidelines-init-variables'
 CLANGTIDY_DEP = $(subst .h,.h.tidy,$(CPPCHECK_H)) \
 	$(subst .cpp,.cpp.tidy,$(CPPCHECK_CPP))
+CLANGTIDY_DEFS = -DVL_DEBUG=1 -DVL_THREADED=1 -DVL_CPPCHECK=1
 
-clangtidy: $(CLANGTIDY_DEP)
+clang-tidy: $(CLANGTIDY_DEP)
 %.cpp.tidy: %.cpp
-	$(CLANGTIDY) $(CLANGTIDY_FLAGS) $< -- -DVL_DEBUG=1 -DVL_CPPCHECK=1 $(CPPCHECK_INC) | 2>&1 tee $@
+	$(CLANGTIDY) $(CLANGTIDY_FLAGS) $< -- $(CLANGTIDY_DEFS) $(CPPCHECK_INC) | 2>&1 tee $@
 %.h.tidy: %.h
-	$(CLANGTIDY) $(CLANGTIDY_FLAGS) $< -- -DVL_DEBUG=1 -DVL_CPPCHECK=1 $(CPPCHECK_INC) | 2>&1 tee $@
+	$(CLANGTIDY) $(CLANGTIDY_FLAGS) $< -- $(CLANGTIDY_DEFS) $(CPPCHECK_INC) | 2>&1 tee $@
 
 analyzer-src:
 	-rm -rf src/obj_dbg
@@ -459,13 +463,37 @@ analyzer-include:
 	-rm -rf examples/*/obj*
 	scan-build $(MAKE) -k examples
 
+format: clang-format yapf
+
 CLANGFORMAT = clang-format
 CLANGFORMAT_FLAGS = -i
+CLANGFORMAT_FILES = $(CPPCHECK_CPP) $(CPPCHECK_H) $(CPPCHECK_YL) test_regress/t/*.c* test_regress/t/*.h
 
 clang-format:
 	@$(CLANGFORMAT) --version | egrep 10.0 > /dev/null \
 		|| echo "*** You are not using clang-format 10.0, indents may differ from master's ***"
-	$(CLANGFORMAT) $(CLANGFORMAT_FLAGS) $(CPPCHECK_CPP) $(CPPCHECK_H) $(CPPCHECK_YL)
+	$(CLANGFORMAT) $(CLANGFORMAT_FLAGS) $(CLANGFORMAT_FILES)
+
+YAPF = yapf3
+YAPF_FLAGS = -i
+YAPF_FILES = \
+	examples/xml_py/vl_file_copy \
+	examples/xml_py/vl_hier_graph \
+	src/astgen \
+	src/bisonpre \
+	src/config_rev \
+	src/cppcheck_filtered \
+	src/flexfix \
+	src/vlcovgen \
+	nodist/code_coverage \
+	nodist/code_coverage.dat \
+	nodist/dot_importer \
+	nodist/fuzzer/actual_fail \
+	nodist/fuzzer/generate_dictionary \
+	nodist/install_test \
+
+yapf:
+	$(YAPF) $(YAPF_FLAGS) $(YAPF_FILES)
 
 ftp: info
 
@@ -545,9 +573,6 @@ dist-file-list:
 	@echo "begin-dist-file-list:";  # Scripts look for this
 	@echo $(wildcard $(DISTFILES))
 	@echo "end-dist-file-list:";  # Scripts look for this
-
-print-cfg-with-threaded:
-	@echo $(CFG_WITH_THREADED)
 
 ######################################################################
 # Distributions
