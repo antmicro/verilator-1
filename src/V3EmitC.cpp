@@ -905,7 +905,9 @@ public:
     virtual void visit(AstTimingControl* nodep) override {
         puts("/* [@ statement] */\n");
         puts("self->wait_for(std::forward_as_tuple(");
+        STASH_AND_SET(m_primitiveCast, false);
         iterateAndNextNull(nodep->sensesp());
+        RESTORE(m_primitiveCast);
         puts("));\n");
         puts("if (self->should_exit()) return;\n");
         // XXX should we handle this too??
@@ -948,6 +950,7 @@ public:
                 return;
             }
         }
+        STASH_AND_SET(m_primitiveCast, false);
         puts("self->wait_until(std::forward_as_tuple(");
 
         std::unordered_map<AstVar*, size_t> varIndices;
@@ -968,6 +971,7 @@ public:
             VL_DO_DANGLING(nodeClonep->deleteTree(), nodeClonep);
         }
         puts(";\n});\n");
+        RESTORE(m_primitiveCast);
 
         puts("if (self->should_exit()) return;\n");
     }
@@ -1025,7 +1029,9 @@ public:
     virtual void visit(AstSenItem* nodep) override { iterateAndNextNull(nodep->sensp()); }
     virtual void visit(AstEventTrigger* nodep) override {
         puts("/* [ -> statement ] */\n");
+        STASH_AND_SET(m_primitiveCast, false);
         iterateAndNextNull(nodep->trigger());
+        RESTORE(m_primitiveCast);
         puts(" = 1;\n");
         // Also mark the __Vtriggered variable
         auto* varp = VN_CAST(VN_CAST(nodep->trigger(), VarRef)->varp(), Var);
@@ -1350,8 +1356,8 @@ public:
             case 8: puts("vluint8_t"); break;
             case 16: puts("vluint16_t"); break;
             case 32: puts("vluint32_t"); break;
-            case 64:
-            default: puts("vluint64_t"); break;
+            case 64: puts("vluint64_t"); break;
+            default: puts("vluint32_t"); break; // wide signal
             }
             puts(")");
         }
@@ -2269,17 +2275,16 @@ void EmitCStmts::emitOpName(AstNode* nodep, const string& format, AstNode* lhsp,
                             AstNode* thsp) {
     bool useScheduledValue = false;
     auto* varrefp = getVarRefp(lhsp);
+    bool primitiveCastPre = m_primitiveCast;
     if (varrefp && varrefp->useScheduledValue()) {
         useScheduledValue = true;
         varrefp->useScheduledValue(false);
         puts("verilated_nba_ctrl.get_scheduled(&");
+        m_primitiveCast = false;
     }
-    bool primitiveCastPre = m_primitiveCast;
-    if (VN_IS(nodep, NodeSel)) {
-        if (m_primitiveCast) {
-            emitPrimitiveCast(getVarRefp(nodep)->varp()->dtypep());
-            m_primitiveCast = false;
-        }
+    if (VN_IS(nodep, NodeSel) && m_primitiveCast) {
+        emitPrimitiveCast(getVarRefp(nodep)->varp()->dtypep());
+        m_primitiveCast = false;
     }
     // Look at emitOperator() format for term/uni/dual/triops,
     // and write out appropriate text.
