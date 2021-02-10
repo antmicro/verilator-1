@@ -434,7 +434,9 @@ public:
     }
     virtual void visit(AstAlwaysPublic*) override {}
     virtual void visit(AstAssocSel* nodep) override {
+        STASH_AND_SET(m_primitiveCast, false);
         iterateAndNextNull(nodep->fromp());
+        RESTORE(m_primitiveCast);
         putbs(".at(");
         AstAssocArrayDType* adtypep = VN_CAST(nodep->fromp()->dtypep(), AssocArrayDType);
         UASSERT_OBJ(adtypep, nodep, "Associative select on non-associative type");
@@ -502,7 +504,14 @@ public:
     }
     virtual void visit(AstNodeCCall* nodep) override { visit_call(nodep); }
     virtual void visit(AstCMethodHard* nodep) override {
+        bool primitiveCastPre = m_primitiveCast;
+        // is there a return value that is wide convert to array?
+        bool returnCArray = nodep->dtypep()->isWide()
+            && (VN_IS(nodep->fromp()->dtypep(), QueueDType)
+                || VN_IS(nodep->fromp()->dtypep(), DynArrayDType));
+        if (returnCArray) m_primitiveCast = false; // do not cast array ptr to primitive
         iterate(nodep->fromp());
+        m_primitiveCast = primitiveCastPre;
         puts(".");
         puts(nodep->nameProtect());
         puts("(");
@@ -518,12 +527,7 @@ public:
             comma = true;
         }
         puts(")");
-        // if there is a return value that is wide convert to array
-        if (nodep->dtypep()->isWide()
-            && (VN_IS(nodep->fromp()->dtypep(), QueueDType)
-                || VN_IS(nodep->fromp()->dtypep(), DynArrayDType))) {
-            puts(".data()");  // Access returned std::array as C array
-        }
+        if (returnCArray) puts(".data()");  // Access returned std::array as C array
         // Some are statements some are math.
         if (nodep->isStatement()) puts(";\n");
         UASSERT_OBJ(!nodep->isStatement() || VN_IS(nodep->dtypep(), VoidDType), nodep,
