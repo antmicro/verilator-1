@@ -1355,14 +1355,13 @@ public:
             puts("(double)");
         } else if (!dtypep->isString()) {
             int width = dtypep->width();
+            if (!width) return;
             puts("(");
-            switch (width) {
-            case 8: puts("vluint8_t"); break;
-            case 16: puts("vluint16_t"); break;
-            case 32: puts("vluint32_t"); break;
-            case 64: puts("vluint64_t"); break;
-            default: puts("vluint32_t"); break; // wide signal
-            }
+            if (width <= 8) puts("vluint8_t");
+            else if (width <= 16) puts("vluint16_t");
+            else if (width <= 32) puts("vluint32_t");
+            else if (width <= 64) puts("vluint64_t");
+            else puts("vluint32_t"); // wide signal, array of uint32
             puts(")");
         }
     }
