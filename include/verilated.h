@@ -88,7 +88,7 @@ class VerilatedThread;
 class VerilatedSyms;
 template <typename T> class MonitoredValue;
 
-class VerilatedThreadRegistry {
+class VerilatedThreadRegistry final {
 private:
     std::vector<VerilatedThread*> m_threads;
     std::mutex m_mtx;
@@ -107,7 +107,7 @@ public:
 
 extern VerilatedThreadRegistry thread_registry;
 
-class VerilatedThreadPool {
+class VerilatedThreadPool final {
 private:
     std::mutex m_mtx;
     std::vector<VerilatedThread*> m_threads;
@@ -121,7 +121,7 @@ public:
 
 extern VerilatedThreadPool thread_pool;
 
-class VerilatedThread {
+class VerilatedThread final {
 public:
     template <typename T> struct Promise {
         VerilatedThread& thread;
@@ -134,7 +134,7 @@ public:
         }
     };
 
-    class Join {
+    class Join final {
     private:
         VerilatedThread& m_thread;
         unsigned m_expected;
@@ -316,14 +316,14 @@ public:
     std::string name() { return m_name; }
 };
 
-class MonitoredValueBase {
+class MonitoredValueBase VL_NOT_FINAL {
 public:
     virtual void release(){};
     virtual void assign_no_notify(vluint64_t){};
     virtual vluint64_t value() const = 0;
 };
 
-template <typename T> class MonitoredValue : public MonitoredValueBase {
+template <typename T> class MonitoredValue final : public MonitoredValueBase {
 public:
     MonitoredValue()
         : m_value()
@@ -519,7 +519,7 @@ class VerilatedThread;
 
 extern std::vector<VerilatedThread*> verilated_threads;
 
-class VerilatedNBACtrl {
+class VerilatedNBACtrl final {
 private:
     std::map<MonitoredValueBase*, vluint64_t> data;
     // For continuous assignments

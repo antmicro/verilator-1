@@ -196,7 +196,7 @@ public:
 //======================================================================
 // VerilatedTimedQueue
 /// A priority queue of events to activate at a given time
-class VerilatedTimedQueue {
+class VerilatedTimedQueue final {
     typedef std::pair<vluint64_t, VerilatedThread*> TimeEvent;  // time, eventp
 
     struct CustomCompare {

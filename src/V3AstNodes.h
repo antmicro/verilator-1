@@ -4775,7 +4775,7 @@ public:
     AstJumpLabel* labelp() const { return m_labelp; }
 };
 
-class AstTimedEvent : public AstNodeStmt {
+class AstTimedEvent final : public AstNodeStmt {
     // Schedule event for later time
     // Parents:  {statement list}
     // Children: {Math, VarRef lvalue}
