@@ -1004,7 +1004,7 @@ public:
             if (auto* beginp = VN_CAST(stmtp, Begin))
                 iterateAndNextNull(beginp->stmtsp());
             else
-                visit(stmtp);
+                iterateAndNextNull(stmtp);
 
             if (nodep->joinType().join())
                 puts("join.joined();\n");
