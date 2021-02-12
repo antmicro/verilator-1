@@ -980,6 +980,9 @@ public:
         puts("if (self->should_exit()) return;\n");
     }
     virtual void visit(AstFork* nodep) override {
+        // Skip forks with no statements
+        if (nodep->stmtsp() == nullptr) return;
+
         if (nodep->joinType().join()) {
             size_t thread_count = 0;
             for (auto* stmtp = nodep->stmtsp(); stmtp; stmtp = stmtp->nextp()) thread_count++;
