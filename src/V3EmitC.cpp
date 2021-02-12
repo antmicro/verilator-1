@@ -56,7 +56,7 @@ private:
     int m_labelNum;  // Next label number
     int m_splitSize;  // # of cfunc nodes placed into output file
     int m_splitFilenum;  // File number being created, 0 = primary
-    bool m_primitiveCast;
+    bool m_primitiveCast = false;
 
 protected:
     AstCFunc* m_funcp;  // Function we're in now
