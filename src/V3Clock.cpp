@@ -201,6 +201,8 @@ private:
                 AstCCall* callp = new AstCCall{funcp->fileline(), funcp};
                 callp->argTypes("vlSymsp");
                 ofuncp->addStmtsp(callp);
+                ofuncp->addStmtsp(new AstCStmt(ofuncp->fileline(),
+                                               "if (Verilated::gotFinish()) return;\n"));
                 func_stmts = 0;
             }
             funcp->addStmtsp(itemp);
@@ -373,6 +375,9 @@ private:
     }
     void addToInitial(AstNode* stmtsp) {
         m_initFuncp->addStmtsp(stmtsp);  // add to top level function
+        if (!v3Global.opt.outputSplitCFuncs())
+            m_initFuncp->addStmtsp(new AstCStmt(m_initFuncp->fileline(),
+                                                "if (Verilated::gotFinish()) return;\n"));
     }
     virtual void visit(AstTimingControl* nodep) override {
         // Do not iterate to keep sentree in place

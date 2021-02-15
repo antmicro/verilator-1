@@ -496,7 +496,6 @@ public:
             }
             if (!funcp->oneshot()) {
                 puts(funcp->nameProtect() + "__thread.wait_for_idle();\n}\n");
-                ;
             }
         } else {
             visit_call(nodep);
