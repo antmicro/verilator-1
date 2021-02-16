@@ -912,7 +912,7 @@ sub compile_vlt_flags {
                    "--prefix ".$param{VM_PREFIX},
                    @verilator_flags,
                    @{$param{verilator_flags2}},
-                   "--output-split-cfuncs 1 -LDFLAGS -lpthread -CFLAGS -DVL_THREADED",
+                   "-LDFLAGS -lpthread -CFLAGS -DVL_THREADED",
                    @{$param{verilator_flags3}},
                    @{$param{v_flags}},
                    @{$param{v_flags2}},
