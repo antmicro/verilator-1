@@ -345,14 +345,9 @@ void GraphAcyc::simplifyOut(GraphAcycVertex* avertexp) {
                 nextp = inEdgep->inNextp();
                 V3GraphVertex* inVertexp = inEdgep->fromp();
                 if (inVertexp == avertexp) {
-                    if (debug()) v3error("Non-cutable edge forms a loop, vertex=" << avertexp);
-                    v3error("Circular logic when ordering code (non-cutable edge loop)");
-                    m_origGraphp->reportLoops(
-                        &V3GraphEdge::followNotCutable,
-                        avertexp->origVertexp());  // calls OrderGraph::loopsVertexCb
-                    // Things are unlikely to end well at this point,
-                    // but we'll try something to get to further errors...
-                    inEdgep->cutable(true);
+                    // cutting of the cycles, exactly in the first node causing a cycle 
+                    // the method for choosing the node to be cut should be changed 
+                    avertexp->origVertexp()->unlinkDelete(m_origGraphp);
                     return;
                 }
                 // Make a new edge connecting the two vertices directly
