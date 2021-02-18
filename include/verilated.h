@@ -465,7 +465,7 @@ public:
     virtual vluint64_t value() const { return m_value; }
 
 private:
-    std::atomic<T> m_value;
+    T m_value;
 
     mutable std::mutex m_mtx;
 
