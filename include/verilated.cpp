@@ -164,6 +164,7 @@ void VerilatedThreadRegistry::exit() {
     std::unique_lock<std::mutex> lck(m_mtx);
     for (auto thread : m_threads) { thread->exit(); }
     m_threads.clear();
+    m_idle_counter=0;
 }
 
 VerilatedThread::VerilatedThread(std::function<void(VerilatedThread*)> func, bool oneshot,
