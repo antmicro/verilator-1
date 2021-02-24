@@ -703,7 +703,9 @@ public:
     }
     virtual void visit(AstFGetS* nodep) override {
         checkMaxWords(nodep);
+        STASH_AND_SET(m_primitiveCast, false);
         emitOpName(nodep, nodep->emitC(), nodep->lhsp(), nodep->rhsp(), nullptr);
+        RESTORE(m_primitiveCast);
     }
 
     void checkMaxWords(AstNode* nodep) {
@@ -832,13 +834,19 @@ public:
                 nodep->v3error(nodep->verilogKwd()
                                << " loading other than unpacked-array variable");
             }
+            if (varrefp->isWide()) memory=true;
         }
         puts(cvtToStr(array_lo));
         putbs(",");
         puts(cvtToStr(array_size));
         putbs(", ");
-        if (!memory) puts("&(");
+        bool primitiveCastPre = m_primitiveCast;
+        if (!memory) {
+            puts("&(");
+            m_primitiveCast = false;
+        }
         iterateAndNextNull(nodep->memp());
+        m_primitiveCast = primitiveCastPre;
         if (!memory) puts(")");
         putbs(", ");
         iterateAndNextNull(nodep->filep());
@@ -2497,12 +2505,16 @@ void EmitCStmts::displayEmit(AstNode* nodep, bool isScan) {
                 if (func != "") {
                     puts(func);
                 } else if (argp) {
+                    bool primitiveCastPre = m_primitiveCast;
                     if (isScan) {
                         puts("&(");
+                        m_primitiveCast = false;
                     } else if (fmt == '@') {
                         puts("&(");
+                        m_primitiveCast = false;
                     }
                     iterate(argp);
+                    m_primitiveCast = primitiveCastPre;
                     if (isScan) {
                         puts(")");
                     } else if (fmt == '@') {

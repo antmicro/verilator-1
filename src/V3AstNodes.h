@@ -8193,7 +8193,8 @@ public:
     virtual string emitVerilog() override { return "%f$fgets(%l,%r)"; }
     virtual string emitC() override {
         return strgp()->dtypep()->basicp()->isString() ? "VL_FGETS_NI(%li, %ri)"
-                                                       : "VL_FGETS_%nqX%rq(%lw, %P, &(%li), %ri)";
+                                                       : (strgp()->isWide() ? "VL_FGETS_%nqX%rq(%lw, %P, %li, %ri)"
+                                                                            : "VL_FGETS_%nqX%rq(%lw, %P, &(%li), %ri)");
     }
     virtual bool cleanOut() const override { return false; }
     virtual bool cleanLhs() const override { return true; }
