@@ -1239,7 +1239,7 @@ static inline void* VL_CVT_Q_VP(QData lhs) VL_PURE {
     return u.fp;
 }
 /// Return QData from void*
-static inline QData VL_CVT_VP_Q(void* fp) VL_PURE {
+static inline QData VL_CVT_VP_Q(const void* fp) VL_PURE {
     union { const void* fp; vluint64_t q; } u;
     u.q = 0;
     u.fp = fp;
