@@ -462,6 +462,8 @@ public:
 
     std::mutex& mtx() { return m_mtx; }
 
+    T* data() { return &m_value; }
+
     virtual vluint64_t value() const { return m_value; }
 
 private:
@@ -1167,6 +1169,43 @@ extern WDataOutP _vl_moddiv_w(int lbits, WDataOutP owp, WDataInP lwp, WDataInP r
 
 /// File I/O
 extern IData VL_FGETS_IXI(int obits, void* destp, IData fpi);
+
+extern IData _VL_GET_LINE(std::string& str, IData fpi, size_t maxLen) VL_MT_SAFE;
+
+template<typename T>
+void _VL_STRING_TO_VINT(int obits, MonitoredValue<T>* destp, size_t srclen, const char* srcp) VL_MT_SAFE {
+    // Convert C string to Verilog format
+    size_t bytes = VL_BYTES_I(obits);
+    if (srclen > bytes) srclen = bytes;  // Don't overflow destination
+    size_t i = 0;
+    for (i = 0; i < srclen; i += sizeof(T)) {
+        std::unique_lock<std::mutex> lck(destp->mtx());
+        char* op = (char*)destp->data();
+        size_t max = std::min(i + sizeof(T), srclen);
+        size_t j;
+        for (j = i; j < max; ++j) { *op++ = srcp[srclen - 1 - j]; }
+        for (; j < i + sizeof(T); ++j) { *op++ = 0; }
+        destp++;
+    }
+    for (; i < bytes; i += sizeof(T)) { *destp++ = 0; }
+}
+
+template<typename T>
+IData VL_FGETS_IXI(int obits, MonitoredValue<T>* destp, IData fpi) {
+    std::string str;
+    const IData bytes = VL_BYTES_I(obits);
+    IData got = _VL_GET_LINE(str, fpi, bytes);
+
+    if (VL_UNLIKELY(str.empty())) return 0;
+
+    // V3Emit has static check that bytes < VL_TO_STRING_MAX_WORDS, but be safe
+    if (VL_UNCOVERABLE(bytes < str.size())) {
+        VL_FATAL_MT(__FILE__, __LINE__, "", "Internal: fgets buffer overrun");  // LCOV_EXCL_LINE
+    }
+
+    _VL_STRING_TO_VINT(obits, destp, got, str.data());
+    return got;
+}
 
 extern void VL_FFLUSH_I(IData fdi);
 extern IData VL_FSEEK_I(IData fdi, IData offset, IData origin);

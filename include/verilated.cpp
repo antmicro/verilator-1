@@ -1457,7 +1457,7 @@ void _VL_STRING_TO_VINT(int obits, void* destp, size_t srclen, const char* srcp)
     for (; i < bytes; ++i) { *op++ = 0; }
 }
 
-static IData getLine(std::string& str, IData fpi, size_t maxLen) VL_MT_SAFE {
+IData _VL_GET_LINE(std::string& str, IData fpi, size_t maxLen) VL_MT_SAFE {
     str.clear();
 
     // While threadsafe, each thread can only access different file handles
@@ -1477,7 +1477,7 @@ static IData getLine(std::string& str, IData fpi, size_t maxLen) VL_MT_SAFE {
 IData VL_FGETS_IXI(int obits, void* destp, IData fpi) VL_MT_SAFE {
     std::string str;
     const IData bytes = VL_BYTES_I(obits);
-    IData got = getLine(str, fpi, bytes);
+    IData got = _VL_GET_LINE(str, fpi, bytes);
 
     if (VL_UNLIKELY(str.empty())) return 0;
 
@@ -1492,7 +1492,7 @@ IData VL_FGETS_IXI(int obits, void* destp, IData fpi) VL_MT_SAFE {
 
 // declared in verilated_heavy.h
 IData VL_FGETS_NI(std::string& dest, IData fpi) VL_MT_SAFE {
-    return getLine(dest, fpi, std::numeric_limits<size_t>::max());
+    return _VL_GET_LINE(dest, fpi, std::numeric_limits<size_t>::max());
 }
 
 IData VL_FERROR_IN(IData, std::string& outputr) VL_MT_SAFE {
