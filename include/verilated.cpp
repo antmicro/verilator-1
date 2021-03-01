@@ -1396,16 +1396,16 @@ IData _vl_vsscanf(FILE* fp,  // If a fscanf
                     std::string* p = va_arg(ap, std::string*);
                     *p = t_tmp;
                 } else if (obits <= VL_BYTESIZE) {
-                    CData* p = va_arg(ap, CData*);
+                    CDataV* p = va_arg(ap, CDataV*);
                     *p = owp[0];
                 } else if (obits <= VL_SHORTSIZE) {
-                    SData* p = va_arg(ap, SData*);
+                    SDataV* p = va_arg(ap, SDataV*);
                     *p = owp[0];
                 } else if (obits <= VL_IDATASIZE) {
-                    IData* p = va_arg(ap, IData*);
+                    IDataV* p = va_arg(ap, IDataV*);
                     *p = owp[0];
                 } else if (obits <= VL_QUADSIZE) {
-                    QData* p = va_arg(ap, QData*);
+                    QDataV* p = va_arg(ap, QDataV*);
                     *p = VL_SET_QW(owp);
                 }
             }
