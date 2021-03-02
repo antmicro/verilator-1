@@ -915,11 +915,11 @@ public:
     }
     virtual void visit(AstTimingControl* nodep) override {
         puts("/* [@ statement] */\n");
-        puts("self->wait_for(std::forward_as_tuple(");
+        puts("self->wait_for(");
         STASH_AND_SET(m_primitiveCast, false);
         iterateAndNextNull(nodep->sensesp());
         RESTORE(m_primitiveCast);
-        puts("));\n");
+        puts(");\n");
         puts("if (self->should_exit()) return;\n");
         // XXX should we handle this too??
         // iterateAndNextNull(nodep->stmtsp());
@@ -939,7 +939,7 @@ public:
         if (auto* varrefp = VN_CAST(nodep, VarRef)) {
             auto* newp
                 = new AstCStmt(nodep->fileline(), "std::get<" + cvtToStr(indices[varrefp->varp()])
-                                                      + ">(promises).value");
+                                                      + ">(values)");
             newp->dtypep(nodep->dtypep());
             nodep->replaceWith(newp);
             VL_DO_DANGLING(nodep->deleteTree(), nodep);
@@ -962,26 +962,30 @@ public:
             }
         }
         STASH_AND_SET(m_primitiveCast, false);
-        puts("self->wait_until(std::forward_as_tuple(");
+        puts("self->wait_until(");
 
         std::unordered_map<AstVar*, size_t> varIndices;
         {
             size_t index = 0;
             for (auto p : varrefps) {
-                if (index > 0) puts(", ");
                 varIndices.insert(std::make_pair(p.first, index++));
-                iterateAndNextNull(p.second);
             }
         }
 
-        puts("),\n[](auto& promises) -> bool {\nreturn ");
+        puts("[](auto&& values) -> bool {\nreturn ");
         {
             auto* nodeClonep = nodep->cloneTree(false);
             replaceVarRefps(nodeClonep->condp(), varIndices);
             iterateAndNextNull(nodeClonep->condp());
             VL_DO_DANGLING(nodeClonep->deleteTree(), nodeClonep);
         }
-        puts(";\n});\n");
+        puts(";\n}");
+
+        for (auto p : varrefps) {
+            puts(", ");
+            iterateAndNextNull(p.second);
+        }
+        puts(");\n");
         RESTORE(m_primitiveCast);
 
         puts("if (self->should_exit()) return;\n");

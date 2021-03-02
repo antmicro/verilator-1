@@ -104,6 +104,14 @@ VerilatedThreadRegistry thread_registry;
 // Note a TODO is a future version of the API will pass a structure so that
 // the calling arguments allow for extension
 
+MonitoredValueCallback::~MonitoredValueCallback() {
+    if (m_mon_val) m_mon_val->unsubscribe(*this);
+}
+
+void MonitoredValueCallback::operator()() {
+    m_callback();
+}
+
 VerilatedThreadPool::~VerilatedThreadPool() {
     for (auto* thread : m_threads) { delete thread; }
 }

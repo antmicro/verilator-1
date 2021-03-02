@@ -87,6 +87,7 @@ class VerilatedFstC;
 class VerilatedThread;
 class VerilatedSyms;
 template <typename T> class MonitoredValue;
+class MonitoredValueCallback;
 
 class VerilatedThreadRegistry final {
 private:
@@ -123,17 +124,6 @@ extern VerilatedThreadPool thread_pool;
 
 class VerilatedThread final {
 public:
-    template <typename T> struct Promise {
-        VerilatedThread& thread;
-        T value;
-
-        void set(const T& v) {
-            std::unique_lock<std::mutex> lck(thread.m_mtx);
-            value = v;
-            thread.m_cv.notify_all();
-        }
-    };
-
     class Join final {
     private:
         VerilatedThread& m_thread;
@@ -177,39 +167,22 @@ private:
 
     template <typename T, std::size_t I = 0, typename... Ts>
     static inline typename std::enable_if<I == sizeof...(Ts), bool>::type
-    any_equal(std::tuple<Promise<Ts>...>&, const T&) {
+    any_equal(std::tuple<Ts...>&, const T&) {
         return false;
     }
 
     template <typename T, std::size_t I = 0, typename... Ts>
-        static inline typename std::enable_if < I<sizeof...(Ts), bool>::type
-        any_equal(std::tuple<Promise<Ts>...>& promises, const T& value) {
-        return std::get<I>(promises).value == value || any_equal<T, I + 1, Ts...>(promises, value);
+    static inline typename std::enable_if < I<sizeof...(Ts), bool>::type
+    any_equal(std::tuple<Ts...>& values, const T& value) {
+        return std::get<I>(values) == value || any_equal<T, I + 1, Ts...>(values, value);
     }
 
-    template <std::size_t I = 0, typename... Ts>
-    static inline typename std::enable_if<I == sizeof...(Ts), void>::type
-    subscribe_all(std::tuple<MonitoredValue<Ts>&...>&, std::tuple<Promise<Ts>...>&, bool) {}
-
-    template <std::size_t I = 0, typename... Ts>
-        static inline typename std::enable_if
-        < I<sizeof...(Ts), void>::type subscribe_all(std::tuple<MonitoredValue<Ts>&...>& mon_vals,
-                                                     std::tuple<Promise<Ts>...>& promises,
-                                                     bool init) {
-        std::get<I>(mon_vals).subscribe(std::get<I>(promises), init);
-        subscribe_all<I + 1, Ts...>(mon_vals, promises, init);
-    }
-
-    template <std::size_t I = 0, typename... Ts>
-    static inline typename std::enable_if<I == sizeof...(Ts), void>::type
-    unsubscribe_all(std::tuple<MonitoredValue<Ts>&...>&, std::tuple<Promise<Ts>...>&) {}
-
-    template <std::size_t I = 0, typename... Ts>
-        static inline typename std::enable_if < I<sizeof...(Ts), void>::type
-        unsubscribe_all(std::tuple<MonitoredValue<Ts>&...>& mon_vals,
-                        std::tuple<Promise<Ts>...>& promises) {
-        std::get<I>(mon_vals).unsubscribe(std::get<I>(promises));
-        unsubscribe_all<I + 1, Ts...>(mon_vals, promises);
+    // This function is needed to create MonitoredValueCallbacks in place (as arguments) instead of copying/moving them
+    void wait_internal(MonitoredValueCallback&&...) {
+        std::unique_lock<std::mutex> lck(m_mtx);
+        set_idle(true);
+        m_cv.wait(lck);
+        set_idle(false);
     }
 
     void set_idle(bool idle) {
@@ -279,14 +252,9 @@ public:
 
     void kick();
 
-    template <typename... Ts> void wait_for(std::tuple<MonitoredValue<Ts>&...> mon_vals) {
-        std::tuple<Promise<Ts>...> promises(Promise<Ts>{*this, 0}...);
-        std::unique_lock<std::mutex> lck(m_mtx);
-        subscribe_all(mon_vals, promises, false);
-        set_idle(true);
-        while (!should_exit() && !any_equal(promises, 1)) { m_cv.wait(lck); }
-        set_idle(false);
-        unsubscribe_all(mon_vals, promises);
+    template <typename... Ts> void wait_for(MonitoredValue<Ts>&... mon_vals) {
+        wait_until([](auto values) { return any_equal(values, 1); },
+                   mon_vals...);
     }
 
     template <typename P> void wait_until(P pred) {
@@ -297,14 +265,13 @@ public:
     }
 
     template <typename P, typename... Ts>
-    void wait_until(std::tuple<MonitoredValue<Ts>&...> mon_vals, P pred) {
-        std::tuple<Promise<Ts>...> promises(Promise<Ts>{*this}...);
-        std::unique_lock<std::mutex> lck(m_mtx);
-        subscribe_all(mon_vals, promises, true);
-        set_idle(true);
-        while (!should_exit() && !pred(promises)) { m_cv.wait(lck); }
-        set_idle(false);
-        unsubscribe_all(mon_vals, promises);
+    void wait_until(P pred, MonitoredValue<Ts>&... mon_vals) {
+        auto p = [this, pred, &mon_vals...]() {
+            if (pred(std::forward_as_tuple(mon_vals...)))
+                m_cv.notify_all();
+        };
+        if (!pred(std::forward_as_tuple(mon_vals...)))
+            wait_internal(MonitoredValueCallback(&mon_vals, p)...);
     }
 
     void wait_for_time(VerilatedSyms* symsp, vluint64_t time);
@@ -321,6 +288,32 @@ public:
     virtual void release(){};
     virtual void assign_no_notify(vluint64_t){};
     virtual vluint64_t value() const = 0;
+    virtual void subscribe(MonitoredValueCallback& callback) = 0;
+    virtual void unsubscribe(MonitoredValueCallback& callback) = 0;
+};
+
+class MonitoredValueCallback final {
+public:
+    template<typename F>
+    MonitoredValueCallback(MonitoredValueBase* mv, F func)
+        : m_callback(func)
+        , m_mon_val(mv) {
+        m_mon_val->subscribe(*this);
+    }
+
+    MonitoredValueCallback(const MonitoredValueCallback&) = delete;
+    MonitoredValueCallback(MonitoredValueCallback&&) = delete;
+    MonitoredValueCallback& operator=(const MonitoredValueCallback&) = delete;
+    MonitoredValueCallback& operator=(MonitoredValueCallback&&) = delete;
+    ~MonitoredValueCallback();
+    void operator()();
+
+private:
+    std::function<void()> m_callback;
+    MonitoredValueBase* m_mon_val = nullptr;
+
+    template<typename T>
+    friend  class MonitoredValue;
 };
 
 template <typename T> class MonitoredValue final : public MonitoredValueBase {
@@ -421,23 +414,18 @@ public:
     }
 
     template <class U> bool operator==(const U& b) {
-        std::unique_lock<std::mutex> lck(m_mtx);
         return m_value == b;
     }
     template <class U> bool operator>(const U& b) {
-        std::unique_lock<std::mutex> lck(m_mtx);
         return m_value > b;
     }
     template <class U> bool operator>=(const U& b) {
-        std::unique_lock<std::mutex> lck(m_mtx);
         return m_value >= b;
     }
     template <class U> bool operator<(const U& b) {
-        std::unique_lock<std::mutex> lck(m_mtx);
         return m_value < b;
     }
     template <class U> bool operator<=(const U& b) {
-        std::unique_lock<std::mutex> lck(m_mtx);
         return m_value <= b;
     }
 
@@ -448,16 +436,17 @@ public:
         written();
     }
 
-    void subscribe(VerilatedThread::Promise<T>& promise, bool init) {
+    virtual void subscribe(MonitoredValueCallback& callback) {
         std::unique_lock<std::mutex> lck(m_mtx);
-        promises.push_back(&promise);
-        if (init) promise.value = m_value;
+        callback.m_mon_val = this;
+        m_callbacks.push_back(&callback);
     }
 
-    void unsubscribe(VerilatedThread::Promise<T>& promise) {
+    virtual void unsubscribe(MonitoredValueCallback& callback) {
         std::unique_lock<std::mutex> lck(m_mtx);
-        auto it = std::find(promises.begin(), promises.end(), &promise);
-        if (it != promises.end()) { promises.erase(it); }
+        callback.m_mon_val = nullptr;
+        auto it = std::remove(m_callbacks.begin(), m_callbacks.end(), &callback);
+        m_callbacks.erase(it, m_callbacks.end());
     }
 
     std::mutex& mtx() { return m_mtx; }
@@ -471,10 +460,12 @@ private:
 
     mutable std::mutex m_mtx;
 
-    std::vector<VerilatedThread::Promise<T>*> promises;
+    std::vector<MonitoredValueCallback*> m_callbacks;
 
     void written() {
-        for (auto& promise : promises) { promise->set(m_value); }
+        for (auto callback : m_callbacks) {
+            (*callback)();
+        }
     }
 };
 
