@@ -562,6 +562,7 @@ enum VerilatedVarType : vluint8_t {
     VLVT_UINT32,  // AKA IData
     VLVT_UINT64,  // AKA QData
     VLVT_WDATA,  // AKA WData
+    VLVT_WDATAV,  // AKA WDataV
     VLVT_STRING  // C++ string
 };
 

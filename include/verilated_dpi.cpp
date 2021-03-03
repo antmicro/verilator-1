@@ -279,6 +279,7 @@ static void _vl_svGetBitArrElemVecVal(svBitVecVal* d, const svOpenArrayHandle s,
         d[1] = lwp[1];
         break;
     }
+    case VLVT_WDATAV: 
     case VLVT_WDATA: {
         WDataOutP wdatap = (reinterpret_cast<WDataOutP>(datap));
         for (int i = 0; i < VL_WORDS_I(varp->packed().elements()); ++i) d[i] = wdatap[i];
@@ -318,6 +319,7 @@ static void _vl_svGetLogicArrElemVecVal(svLogicVecVal* d, const svOpenArrayHandl
         d[1].bval = 0;
         break;
     }
+    case VLVT_WDATAV: 
     case VLVT_WDATA: {
         WDataOutP wdatap = (reinterpret_cast<WDataOutP>(datap));
         for (int i = 0; i < VL_WORDS_I(varp->packed().elements()); ++i) {
@@ -344,6 +346,7 @@ static void _vl_svPutBitArrElemVecVal(const svOpenArrayHandle d, const svBitVecV
     case VLVT_UINT16: *(reinterpret_cast<SDataV*>(datap)) = s[0]; return;
     case VLVT_UINT32: *(reinterpret_cast<IDataV*>(datap)) = s[0]; return;
     case VLVT_UINT64: *(reinterpret_cast<QDataV*>(datap)) = _VL_SET_QII(s[1], s[0]); break;
+    case VLVT_WDATAV: 
     case VLVT_WDATA: {
         WDataOutP wdatap = (reinterpret_cast<WDataOutP>(datap));
         for (int i = 0; i < VL_WORDS_I(varp->packed().elements()); ++i) wdatap[i] = s[i];
@@ -368,6 +371,7 @@ static void _vl_svPutLogicArrElemVecVal(const svOpenArrayHandle d, const svLogic
     case VLVT_UINT64:
         *(reinterpret_cast<QDataV*>(datap)) = _VL_SET_QII(s[1].aval, s[0].aval);
         break;
+    case VLVT_WDATAV: 
     case VLVT_WDATA: {
         WDataOutP wdatap = (reinterpret_cast<WDataOutP>(datap));
         for (int i = 0; i < VL_WORDS_I(varp->packed().elements()); ++i) wdatap[i] = s[i].aval;

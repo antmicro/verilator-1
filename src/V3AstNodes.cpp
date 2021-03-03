@@ -349,7 +349,7 @@ string AstVar::vlEnumType() const {
     } else if (isQuad()) {
         arg += "VLVT_UINT64";
     } else if (isWide()) {
-        arg += "VLVT_WDATA";
+        arg += "VLVT_WDATAV";
     }
     // else return "VLVT_UNKNOWN"
     return arg;
