@@ -614,7 +614,23 @@ public:
     virtual void visit(AstDisplay* nodep) override {
         string text = nodep->fmtp()->text();
         if (nodep->addNewline()) text += "\n";
-        displayNode(nodep, nodep->fmtp()->scopeNamep(), text, nodep->fmtp()->exprsp(), false);
+        if (nodep->displayType() == AstDisplayType::DT_MONITOR) {
+            puts("monitor.on( [vlSymsp, vlTOPp] () {\n");
+            displayNode(nodep, nodep->fmtp()->scopeNamep(), text, nodep->fmtp()->exprsp(), false);
+            puts("}");
+            for (auto* exprp = nodep->fmtp()->exprsp(); exprp; exprp = exprp->nextp()) {
+                if (auto* varrefp = VN_CAST(exprp, VarRef)) {
+                    puts(", ");
+                    iterate(varrefp);
+                }
+            }
+            puts(");\n");
+        } else
+            displayNode(nodep, nodep->fmtp()->scopeNamep(), text, nodep->fmtp()->exprsp(), false);
+    }
+    virtual void visit(AstMonitorOff* nodep) override {
+        if (nodep->off()) puts("monitor.off();");
+        else puts("monitor.on();");
     }
     virtual void visit(AstDumpCtl* nodep) override {
         switch (nodep->ctlType()) {

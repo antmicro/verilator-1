@@ -98,6 +98,7 @@ struct VerilatedInitializer {
 VerilatedNBACtrl verilated_nba_ctrl;
 VerilatedThreadPool thread_pool;
 VerilatedThreadRegistry thread_registry;
+Monitor monitor;
 
 //===========================================================================
 // User definable functions
@@ -110,6 +111,18 @@ MonitoredValueCallback::~MonitoredValueCallback() {
 
 void MonitoredValueCallback::operator()() {
     m_callback();
+}
+
+void Monitor::off() {
+    m_callbacks.clear();
+}
+
+void Monitor::on() {
+    if (!m_callbacks.empty()) return;
+    m_mon_vals.reserve(m_mon_vals.size());
+    for (auto mon_val : m_mon_vals) {
+        m_callbacks.emplace_back(mon_val, m_func);
+    }
 }
 
 VerilatedThreadPool::~VerilatedThreadPool() {

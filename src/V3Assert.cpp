@@ -368,6 +368,7 @@ private:
                    || nodep->displayType() == AstDisplayType::DT_FATAL) {
             replaceDisplay(nodep, "%%Error");
         } else if (nodep->displayType() == AstDisplayType::DT_MONITOR) {
+            return;
             nodep->displayType(AstDisplayType::DT_DISPLAY);
             const auto fl = nodep->fileline();
             const auto monNum = ++m_monitorNum;
@@ -409,6 +410,7 @@ private:
         }
     }
     virtual void visit(AstMonitorOff* nodep) override {
+        return;
         const auto newp
             = new AstAssign(nodep->fileline(), newMonitorOffVarRefp(nodep, VAccess::WRITE),
                             new AstConst(nodep->fileline(), AstConst::BitTrue{}, nodep->off()));

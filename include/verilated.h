@@ -36,6 +36,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <vector>
+#include <list>
 #include <map>
 #include <algorithm>
 #include <atomic>
@@ -286,7 +287,7 @@ public:
 class MonitoredValueBase VL_NOT_FINAL {
 public:
     virtual void release(){};
-    virtual void assign_no_notify(vluint64_t){};
+    virtual void assign(vluint64_t){};
     virtual vluint64_t value() const = 0;
     virtual void subscribe(MonitoredValueCallback& callback) = 0;
     virtual void unsubscribe(MonitoredValueCallback& callback) = 0;
@@ -429,7 +430,14 @@ public:
         return m_value <= b;
     }
 
-    void assign_no_notify(vluint64_t v) { m_value = (T)v; }
+    void assign(vluint64_t v) {
+        m_value = (T)v;
+        written();
+    }
+
+    void assign_no_notify(T v) {
+        m_value = v;
+    }
 
     void assign_no_lock(T v) {
         m_value = v;
@@ -468,6 +476,36 @@ private:
         }
     }
 };
+
+class Monitor final {
+public:
+    void off();
+    void on();
+
+    template <typename F, typename... Ts>
+    void on(F func, MonitoredValue<Ts>&... mon_vals) {
+        off();
+        m_func = func;
+        m_mon_vals.clear();
+        on_internal(mon_vals...);
+        on();
+    }
+
+private:
+    void on_internal() {}
+
+    template <typename T, typename... Ts>
+    void on_internal(MonitoredValue<T>& mon_val, MonitoredValue<Ts>&... rest) {
+        m_mon_vals.push_back(&mon_val);
+        on_internal(rest...);
+    }
+
+    std::list<MonitoredValueCallback> m_callbacks;
+    std::vector<MonitoredValueBase*> m_mon_vals;
+    std::function<void()> m_func;
+};
+
+extern Monitor monitor;
 
 // clang-format off
 //                   P          // Packed data of bit type (C/S/I/Q/W)
@@ -537,10 +575,10 @@ public:
     void assign() {
         std::unique_lock<std::mutex> lck(mtx);
 
-        for (auto const& v : data) { v.first->assign_no_notify(v.second); }
+        for (auto const& v : data) { v.first->assign(v.second); }
         data.clear();
 
-        for (auto const& v : edata) { v.first->assign_no_notify(v.second()); }
+        for (auto const& v : edata) { v.first->assign(v.second()); }
         edata.clear();
     }
 };
