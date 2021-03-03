@@ -1552,19 +1552,19 @@ void vl_get_value(const VerilatedVar* varp, void* varDatap, p_vpi_value valuep,
         static VL_THREAD_LOCAL t_vpi_vecval t_out[VL_MULS_MAX_WORDS * 2];
         valuep->value.vector = t_out;
         if (varp->vltype() == VLVT_UINT8) {
-            t_out[0].aval = *(reinterpret_cast<CData*>(varDatap));
+            t_out[0].aval = *(reinterpret_cast<CDataV*>(varDatap));
             t_out[0].bval = 0;
             return;
         } else if (varp->vltype() == VLVT_UINT16) {
-            t_out[0].aval = *(reinterpret_cast<SData*>(varDatap));
+            t_out[0].aval = *(reinterpret_cast<SDataV*>(varDatap));
             t_out[0].bval = 0;
             return;
         } else if (varp->vltype() == VLVT_UINT32) {
-            t_out[0].aval = *(reinterpret_cast<IData*>(varDatap));
+            t_out[0].aval = *(reinterpret_cast<IDataV*>(varDatap));
             t_out[0].bval = 0;
             return;
         } else if (varp->vltype() == VLVT_UINT64) {
-            QData data = *(reinterpret_cast<QData*>(varDatap));
+            QData data = *(reinterpret_cast<QDataV*>(varDatap));
             t_out[1].aval = static_cast<IData>(data >> 32ULL);
             t_out[1].bval = 0;
             t_out[0].aval = static_cast<IData>(data);
@@ -1587,7 +1587,7 @@ void vl_get_value(const VerilatedVar* varp, void* varDatap, p_vpi_value valuep,
     } else if (valuep->format == vpiBinStrVal) {
         valuep->value.str = t_outStr;
         int bits = varp->packed().elements();
-        CData* datap = (reinterpret_cast<CData*>(varDatap));
+        CDataV* datap = (reinterpret_cast<CDataV*>(varDatap));
         int i;
         if (bits > t_outStrSz) {
             // limit maximum size of output to size of buffer to prevent overrun.
@@ -1609,7 +1609,7 @@ void vl_get_value(const VerilatedVar* varp, void* varDatap, p_vpi_value valuep,
         valuep->value.str = t_outStr;
         int chars = (varp->packed().elements() + 2) / 3;
         int bytes = VL_BYTES_I(varp->packed().elements());
-        CData* datap = (reinterpret_cast<CData*>(varDatap));
+        CDataV* datap = (reinterpret_cast<CDataV*>(varDatap));
         int i;
         if (chars > t_outStrSz) {
             // limit maximum size of output to size of buffer to prevent overrun.
@@ -1649,25 +1649,25 @@ void vl_get_value(const VerilatedVar* varp, void* varDatap, p_vpi_value valuep,
         // outStrSz does not include nullptr termination so add one
         if (varp->vltype() == VLVT_UINT8) {
             VL_SNPRINTF(t_outStr, t_outStrSz + 1, "%hhu",
-                        static_cast<unsigned char>(*(reinterpret_cast<CData*>(varDatap))));
+                        static_cast<unsigned char>(*(reinterpret_cast<CDataV*>(varDatap))));
             return;
         } else if (varp->vltype() == VLVT_UINT16) {
             VL_SNPRINTF(t_outStr, t_outStrSz + 1, "%hu",
-                        static_cast<unsigned short>(*(reinterpret_cast<SData*>(varDatap))));
+                        static_cast<unsigned short>(*(reinterpret_cast<SDataV*>(varDatap))));
             return;
         } else if (varp->vltype() == VLVT_UINT32) {
             VL_SNPRINTF(t_outStr, t_outStrSz + 1, "%u",
-                        static_cast<unsigned int>(*(reinterpret_cast<IData*>(varDatap))));
+                        static_cast<unsigned int>(*(reinterpret_cast<IDataV*>(varDatap))));
             return;
         } else if (varp->vltype() == VLVT_UINT64) {
             VL_SNPRINTF(t_outStr, t_outStrSz + 1, "%llu",
-                        static_cast<unsigned long long>(*(reinterpret_cast<QData*>(varDatap))));
+                        static_cast<unsigned long long>(*(reinterpret_cast<QDataV*>(varDatap))));
             return;
         }
     } else if (valuep->format == vpiHexStrVal) {
         valuep->value.str = t_outStr;
         int chars = (varp->packed().elements() + 3) >> 2;
-        CData* datap = (reinterpret_cast<CData*>(varDatap));
+        CDataV* datap = (reinterpret_cast<CDataV*>(varDatap));
         int i;
         if (chars > t_outStrSz) {
             // limit maximum size of output to size of buffer to prevent overrun.
@@ -1701,7 +1701,7 @@ void vl_get_value(const VerilatedVar* varp, void* varDatap, p_vpi_value valuep,
         } else {
             valuep->value.str = t_outStr;
             int bytes = VL_BYTES_I(varp->packed().elements());
-            CData* datap = (reinterpret_cast<CData*>(varDatap));
+            CDataV* datap = (reinterpret_cast<CDataV*>(varDatap));
             int i;
             if (bytes > t_outStrSz) {
                 // limit maximum size of output to size of buffer to prevent overrun.
@@ -1723,13 +1723,13 @@ void vl_get_value(const VerilatedVar* varp, void* varDatap, p_vpi_value valuep,
         }
     } else if (valuep->format == vpiIntVal) {
         if (varp->vltype() == VLVT_UINT8) {
-            valuep->value.integer = *(reinterpret_cast<CData*>(varDatap));
+            valuep->value.integer = *(reinterpret_cast<CDataV*>(varDatap));
             return;
         } else if (varp->vltype() == VLVT_UINT16) {
-            valuep->value.integer = *(reinterpret_cast<SData*>(varDatap));
+            valuep->value.integer = *(reinterpret_cast<SDataV*>(varDatap));
             return;
         } else if (varp->vltype() == VLVT_UINT32) {
-            valuep->value.integer = *(reinterpret_cast<IData*>(varDatap));
+            valuep->value.integer = *(reinterpret_cast<IDataV*>(varDatap));
             return;
         }
     } else if (valuep->format == vpiSuppressVal) {
@@ -1789,19 +1789,19 @@ vpiHandle vpi_put_value(vpiHandle object, p_vpi_value valuep, p_vpi_time /*time_
         if (valuep->format == vpiVectorVal) {
             if (VL_UNLIKELY(!valuep->value.vector)) return nullptr;
             if (vop->varp()->vltype() == VLVT_UINT8) {
-                *(reinterpret_cast<CData*>(vop->varDatap()))
+                *(reinterpret_cast<CDataV*>(vop->varDatap()))
                     = valuep->value.vector[0].aval & vop->mask();
                 return object;
             } else if (vop->varp()->vltype() == VLVT_UINT16) {
-                *(reinterpret_cast<SData*>(vop->varDatap()))
+                *(reinterpret_cast<SDataV*>(vop->varDatap()))
                     = valuep->value.vector[0].aval & vop->mask();
                 return object;
             } else if (vop->varp()->vltype() == VLVT_UINT32) {
-                *(reinterpret_cast<IData*>(vop->varDatap()))
+                *(reinterpret_cast<IDataV*>(vop->varDatap()))
                     = valuep->value.vector[0].aval & vop->mask();
                 return object;
             } else if (vop->varp()->vltype() == VLVT_UINT64) {
-                *(reinterpret_cast<QData*>(vop->varDatap())) = _VL_SET_QII(
+                *(reinterpret_cast<QDataV*>(vop->varDatap())) = _VL_SET_QII(
                     valuep->value.vector[1].aval & vop->mask(), valuep->value.vector[0].aval);
                 return object;
             } else if (vop->varp()->vltype() == VLVT_WDATA) {
@@ -1816,7 +1816,7 @@ vpiHandle vpi_put_value(vpiHandle object, p_vpi_value valuep, p_vpi_time /*time_
         } else if (valuep->format == vpiBinStrVal) {
             int bits = vop->varp()->packed().elements();
             int len = strlen(valuep->value.str);
-            CData* datap = (reinterpret_cast<CData*>(vop->varDatap()));
+            CDataV* datap = (reinterpret_cast<CDataV*>(vop->varDatap()));
             for (int i = 0; i < bits; ++i) {
                 char set = (i < len) ? (valuep->value.str[len - i - 1] == '1') : 0;
                 // zero bits 7:1 of byte when assigning to bit 0, else
@@ -1832,7 +1832,7 @@ vpiHandle vpi_put_value(vpiHandle object, p_vpi_value valuep, p_vpi_time /*time_
             int chars = (vop->varp()->packed().elements() + 2) / 3;
             int bytes = VL_BYTES_I(vop->varp()->packed().elements());
             int len = strlen(valuep->value.str);
-            CData* datap = (reinterpret_cast<CData*>(vop->varDatap()));
+            CDataV* datap = (reinterpret_cast<CDataV*>(vop->varDatap()));
             div_t idx;
             datap[0] = 0;  // reset zero'th byte
             for (int i = 0; i < chars; ++i) {
@@ -1895,22 +1895,22 @@ vpiHandle vpi_put_value(vpiHandle object, p_vpi_value valuep, p_vpi_time /*time_
                                 VerilatedVpiError::strFromVpiVal(valuep->format), vop->fullname());
             }
             if (vop->varp()->vltype() == VLVT_UINT8) {
-                *(reinterpret_cast<CData*>(vop->varDatap())) = val & vop->mask();
+                *(reinterpret_cast<CDataV*>(vop->varDatap())) = val & vop->mask();
                 return object;
             } else if (vop->varp()->vltype() == VLVT_UINT16) {
-                *(reinterpret_cast<SData*>(vop->varDatap())) = val & vop->mask();
+                *(reinterpret_cast<SDataV*>(vop->varDatap())) = val & vop->mask();
                 return object;
             } else if (vop->varp()->vltype() == VLVT_UINT32) {
-                *(reinterpret_cast<IData*>(vop->varDatap())) = val & vop->mask();
+                *(reinterpret_cast<IDataV*>(vop->varDatap())) = val & vop->mask();
                 return object;
             } else if (vop->varp()->vltype() == VLVT_UINT64) {
-                *(reinterpret_cast<QData*>(vop->varDatap())) = val;
-                (reinterpret_cast<IData*>(vop->varDatap()))[1] &= vop->mask();
+                *(reinterpret_cast<QDataV*>(vop->varDatap())) = val;
+                (reinterpret_cast<IDataV*>(vop->varDatap()))[1] &= vop->mask();
                 return object;
             }
         } else if (valuep->format == vpiHexStrVal) {
             int chars = (vop->varp()->packed().elements() + 3) >> 2;
-            CData* datap = (reinterpret_cast<CData*>(vop->varDatap()));
+            CDataV* datap = (reinterpret_cast<CDataV*>(vop->varDatap()));
             char* val = valuep->value.str;
             // skip hex ident if one is detected at the start of the string
             if (val[0] == '0' && (val[1] == 'x' || val[1] == 'X')) val += 2;
@@ -1951,7 +1951,7 @@ vpiHandle vpi_put_value(vpiHandle object, p_vpi_value valuep, p_vpi_time /*time_
         } else if (valuep->format == vpiStringVal) {
             int bytes = VL_BYTES_I(vop->varp()->packed().elements());
             int len = strlen(valuep->value.str);
-            CData* datap = (reinterpret_cast<CData*>(vop->varDatap()));
+            CDataV* datap = (reinterpret_cast<CDataV*>(vop->varDatap()));
             for (int i = 0; i < bytes; ++i) {
                 // prepend with 0 values before placing string the least significant bytes
                 datap[i] = (i < len) ? valuep->value.str[len - i - 1] : 0;
@@ -1959,13 +1959,13 @@ vpiHandle vpi_put_value(vpiHandle object, p_vpi_value valuep, p_vpi_time /*time_
             return object;
         } else if (valuep->format == vpiIntVal) {
             if (vop->varp()->vltype() == VLVT_UINT8) {
-                *(reinterpret_cast<CData*>(vop->varDatap())) = vop->mask() & valuep->value.integer;
+                *(reinterpret_cast<CDataV*>(vop->varDatap())) = vop->mask() & valuep->value.integer;
                 return object;
             } else if (vop->varp()->vltype() == VLVT_UINT16) {
-                *(reinterpret_cast<SData*>(vop->varDatap())) = vop->mask() & valuep->value.integer;
+                *(reinterpret_cast<SDataV*>(vop->varDatap())) = vop->mask() & valuep->value.integer;
                 return object;
             } else if (vop->varp()->vltype() == VLVT_UINT32) {
-                *(reinterpret_cast<IData*>(vop->varDatap())) = vop->mask() & valuep->value.integer;
+                *(reinterpret_cast<IDataV*>(vop->varDatap())) = vop->mask() & valuep->value.integer;
                 return object;
             }
         }
