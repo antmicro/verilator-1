@@ -412,9 +412,38 @@ static void _vl_svPutBitArrElem(const svOpenArrayHandle d, svBit value, int narg
     }
 }
 
+static void* svGetArrElemConv(const svOpenArrayHandle h, void* datap)
+{
+    const VerilatedDpiOpenVar* varp = _vl_openhandle_varp(h);
+    switch (varp->vltype())
+    {
+        case VLVT_UINT8:
+        {
+            CDataV *vdatap = reinterpret_cast<CDataV*>(datap);
+            return vdatap->data();
+        }
+        case VLVT_UINT16:
+        {
+            SDataV *vdatap = reinterpret_cast<SDataV*>(datap);
+            return vdatap->data();
+        }
+        case VLVT_UINT32:
+        {
+            IDataV *vdatap = reinterpret_cast<IDataV*>(datap);
+            return vdatap->data();
+        }
+        case VLVT_UINT64:
+        {
+            QDataV *vdatap = reinterpret_cast<QDataV*>(datap);
+            return vdatap->data();
+        }
+        default:
+            return datap;
+    } 
+}
+
 //======================================================================
 // DPI accessors that simply call above functions
-
 void* svGetArrElemPtr(const svOpenArrayHandle h, int indx1, ...) {
     const VerilatedDpiOpenVar* varp = _vl_openhandle_varp(h);
     void* datap;
@@ -437,16 +466,17 @@ void* svGetArrElemPtr(const svOpenArrayHandle h, int indx1, ...) {
     default: datap = _vl_svGetArrElemPtr(h, -1, 0, 0, 0); break;  // Will error
     }
     va_end(ap);
-    return datap;
+    
+    return svGetArrElemConv(h, datap);
 }
 void* svGetArrElemPtr1(const svOpenArrayHandle h, int indx1) {
-    return _vl_svGetArrElemPtr(h, 1, indx1, 0, 0);
+    return svGetArrElemConv(h, _vl_svGetArrElemPtr(h, 1, indx1, 0, 0));
 }
 void* svGetArrElemPtr2(const svOpenArrayHandle h, int indx1, int indx2) {
-    return _vl_svGetArrElemPtr(h, 2, indx1, indx2, 0);
+    return svGetArrElemConv(h, _vl_svGetArrElemPtr(h, 2, indx1, indx2, 0));
 }
 void* svGetArrElemPtr3(const svOpenArrayHandle h, int indx1, int indx2, int indx3) {
-    return _vl_svGetArrElemPtr(h, 3, indx1, indx2, indx3);
+    return svGetArrElemConv(h, _vl_svGetArrElemPtr(h, 3, indx1, indx2, indx3));
 }
 
 void svPutBitArrElemVecVal(const svOpenArrayHandle d, const svBitVecVal* s, int indx1, ...) {
