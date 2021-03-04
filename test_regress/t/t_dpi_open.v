@@ -154,7 +154,7 @@ module t (/*AUTOARG*/);
          for (int b=-3; b<=3; b=b+1) begin
             `checkh(o_int_u2[a][b], ~i_int_u2[a][b]);
             for (int c=-4; c<=4; c=c+1) begin
-               `checkh(o_int_u3[a][b][c], ~i_int_u3[a][b][c]);
+              `checkh(o_int_u3[a][b][c], ~i_int_u3[a][b][c]);
             end
          end
       end

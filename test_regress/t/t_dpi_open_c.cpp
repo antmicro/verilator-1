@@ -19,6 +19,7 @@
 // clang-format off
 #if defined(VERILATOR)
 # include "Vt_dpi_open__Dpi.h"
+#include "verilated.h"
 #elif defined(VCS)
 # include "../vc_hdrs.h"
 #elif defined(NC)
@@ -266,33 +267,33 @@ static void _dpii_open_int_ux(int u, const svOpenArrayHandle i, const svOpenArra
 
     for (int a = svLow(i, 1); a <= svHigh(i, 1); ++a) {
         if (dim == 1) {
-            intptr_t ip = (intptr_t)svGetArrElemPtr(i, a);
-            intptr_t i2p = (intptr_t)svGetArrElemPtr1(i, a);
+            IDataV* ip = reinterpret_cast<IDataV*>(svGetArrElemPtr(i, a));
+            IDataV* i2p = reinterpret_cast<IDataV*>(svGetArrElemPtr1(i, a));
             CHECK_RESULT_HEX(ip, i2p);
             CHECK_RESULT_HEX_NE(ip, 0);
-            intptr_t op = (intptr_t)svGetArrElemPtr(o, a);
+            IDataV* op = reinterpret_cast<IDataV*>(svGetArrElemPtr(o, a));
             CHECK_RESULT_HEX_NE(op, 0);
-            *reinterpret_cast<int*>(op) = ~*reinterpret_cast<int*>(ip);
+            *op = ~(*ip);
         } else {
             for (int b = svLow(i, 2); b <= svHigh(i, 2); ++b) {
                 if (dim == 2) {
-                    intptr_t ip = (intptr_t)svGetArrElemPtr(i, a, b);
-                    intptr_t i2p = (intptr_t)svGetArrElemPtr2(i, a, b);
+                    IDataV* ip = reinterpret_cast<IDataV*>(svGetArrElemPtr(i, a, b));
+                    IDataV* i2p = reinterpret_cast<IDataV*>(svGetArrElemPtr2(i, a, b));
                     CHECK_RESULT_HEX(ip, i2p);
                     CHECK_RESULT_HEX_NE(ip, 0);
-                    intptr_t op = (intptr_t)svGetArrElemPtr(o, a, b);
+                    IDataV* op = reinterpret_cast<IDataV*>(svGetArrElemPtr(o, a, b));
                     CHECK_RESULT_HEX_NE(op, 0);
-                    *reinterpret_cast<int*>(op) = ~*reinterpret_cast<int*>(ip);
+                    *op = ~(*ip);
                 } else {
                     for (int c = svLow(i, 3); c <= svHigh(i, 3); ++c) {
                         if (dim == 3) {
-                            intptr_t ip = (intptr_t)svGetArrElemPtr(i, a, b, c);
-                            intptr_t i2p = (intptr_t)svGetArrElemPtr3(i, a, b, c);
+                            IDataV* ip = reinterpret_cast<IDataV*>(svGetArrElemPtr(i, a, b, c));
+                            IDataV* i2p = reinterpret_cast<IDataV*>(svGetArrElemPtr3(i, a, b, c));
                             CHECK_RESULT_HEX(ip, i2p);
                             CHECK_RESULT_HEX_NE(ip, 0);
-                            intptr_t op = (intptr_t)svGetArrElemPtr(o, a, b, c);
+                            IDataV* op = reinterpret_cast<IDataV*>(svGetArrElemPtr(o, a, b, c));
                             CHECK_RESULT_HEX_NE(op, 0);
-                            *reinterpret_cast<int*>(op) = ~*reinterpret_cast<int*>(ip);
+                            *op = ~(*ip);
                         }
                     }
                 }

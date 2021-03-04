@@ -2889,11 +2889,11 @@ vluint32_t VerilatedVarProps::entSize() const {
     vluint32_t size = 1;
     switch (vltype()) {
     case VLVT_PTR: size = sizeof(void*); break;
-    case VLVT_UINT8: size = sizeof(CData); break;
-    case VLVT_UINT16: size = sizeof(SData); break;
-    case VLVT_UINT32: size = sizeof(IData); break;
-    case VLVT_UINT64: size = sizeof(QData); break;
-    case VLVT_WDATA: size = VL_WORDS_I(packed().elements()) * sizeof(IData); break;
+    case VLVT_UINT8: size = sizeof(CDataV); break;
+    case VLVT_UINT16: size = sizeof(SDataV); break;
+    case VLVT_UINT32: size = sizeof(IDataV); break;
+    case VLVT_UINT64: size = sizeof(QDataV); break;
+    case VLVT_WDATA: size = VL_WORDS_I(packed().elements()) * sizeof(IDataV); break;
     default: size = 0; break;  // LCOV_EXCL_LINE
     }
     return size;
