@@ -1701,8 +1701,6 @@ void vl_get_value(const VerilatedVar* varp, void* varDatap, p_vpi_value valuep,
         } else {
             valuep->value.str = t_outStr;
             int bytes = VL_BYTES_I(varp->packed().elements());
-            CDataV* datap = (reinterpret_cast<CDataV*>(varDatap));
-            int i;
             if (bytes > t_outStrSz) {
                 // limit maximum size of output to size of buffer to prevent overrun.
                 _VL_VPI_WARNING(
@@ -1713,12 +1711,30 @@ void vl_get_value(const VerilatedVar* varp, void* varDatap, p_vpi_value valuep,
                     t_outStrSz, VL_MULS_MAX_WORDS, bytes);
                 bytes = t_outStrSz;
             }
-            for (i = 0; i < bytes; ++i) {
-                char val = datap[bytes - i - 1];
+            char* datap;
+            bool wdata = false;
+            if (bytes <= sizeof(CData))
+                datap = (char*)((CDataV*)varDatap)->data();
+            else if (bytes <= sizeof(SData))
+                datap = (char*)((SDataV*)varDatap)->data();
+            else if (bytes <= sizeof(IData))
+                datap = (char*)((IDataV*)varDatap)->data();
+            else if (bytes <= sizeof(QData))
+                datap = (char*)((QDataV*)varDatap)->data();
+            else
+                wdata=true;
+            for (int i = 0; i < bytes; ++i) {
+                int j = bytes - i - 1;
+                if (wdata) {
+                    if (i % sizeof(WData) == 0)
+                        datap = (char*)(((WDataV*)varDatap)[j / sizeof(WData)]).data();
+                    j = j % 4;
+                }
+                char val = datap[j];
                 // other simulators replace [leading?] zero chars with spaces, replicate here.
                 t_outStr[i] = val ? val : ' ';
             }
-            t_outStr[i] = '\0';
+            t_outStr[bytes] = '\0';
             return;
         }
     } else if (valuep->format == vpiIntVal) {
