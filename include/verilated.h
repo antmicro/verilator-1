@@ -431,11 +431,13 @@ public:
     }
 
     void assign(vluint64_t v) {
+        std::unique_lock<std::mutex> lck(m_mtx);
         m_value = (T)v;
         written();
     }
 
     void assign_no_notify(T v) {
+        std::unique_lock<std::mutex> lck(m_mtx);
         m_value = v;
     }
 
