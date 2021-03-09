@@ -1967,10 +1967,27 @@ vpiHandle vpi_put_value(vpiHandle object, p_vpi_value valuep, p_vpi_time /*time_
         } else if (valuep->format == vpiStringVal) {
             int bytes = VL_BYTES_I(vop->varp()->packed().elements());
             int len = strlen(valuep->value.str);
-            CDataV* datap = (reinterpret_cast<CDataV*>(vop->varDatap()));
+
+            char* datap;
+            bool wdata = false;
+            if (bytes <= sizeof(CData))
+                datap = (char*)((CDataV*)vop->varDatap())->data();
+            else if (bytes <= sizeof(SData))
+                datap = (char*)((SDataV*)vop->varDatap())->data();
+            else if (bytes <= sizeof(IData))
+                datap = (char*)((IDataV*)vop->varDatap())->data();
+            else if (bytes <= sizeof(QData))
+                datap = (char*)((QDataV*)vop->varDatap())->data();
+            else
+                wdata=true;
             for (int i = 0; i < bytes; ++i) {
-                // prepend with 0 values before placing string the least significant bytes
-                datap[i] = (i < len) ? valuep->value.str[len - i - 1] : 0;
+                int j = i;
+                if (wdata) {
+                    if (i % sizeof(WData) == 0)
+                        datap = (char*)(((WDataV*)vop->varDatap())[j / sizeof(WData)]).data();
+                    j = j % sizeof(WData);
+                }
+                datap[j] = (i < len) ? valuep->value.str[len - i - 1] : 0;
             }
             return object;
         } else if (valuep->format == vpiIntVal) {
