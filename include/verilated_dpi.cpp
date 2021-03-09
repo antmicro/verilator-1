@@ -439,7 +439,7 @@ static void* svGetArrElemConv(const svOpenArrayHandle h, void* datap)
         }
         default:
             return datap;
-    } 
+    }
 }
 
 //======================================================================
@@ -466,7 +466,6 @@ void* svGetArrElemPtr(const svOpenArrayHandle h, int indx1, ...) {
     default: datap = _vl_svGetArrElemPtr(h, -1, 0, 0, 0); break;  // Will error
     }
     va_end(ap);
-    
     return svGetArrElemConv(h, datap);
 }
 void* svGetArrElemPtr1(const svOpenArrayHandle h, int indx1) {
