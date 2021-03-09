@@ -1728,7 +1728,7 @@ void vl_get_value(const VerilatedVar* varp, void* varDatap, p_vpi_value valuep,
                 if (wdata) {
                     if (i % sizeof(WData) == 0)
                         datap = (char*)(((WDataV*)varDatap)[j / sizeof(WData)]).data();
-                    j = j % 4;
+                    j = j % sizeof(WData);
                 }
                 char val = datap[j];
                 // other simulators replace [leading?] zero chars with spaces, replicate here.
