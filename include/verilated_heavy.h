@@ -314,7 +314,7 @@ public:
     void shuffle() { std::shuffle(m_deque.begin(), m_deque.end(), VlURNG()); }
     VlQueue unique() const {
         VlQueue out;
-        std::unordered_set<T_Value> saw;
+        std::unordered_set<T_Value, MonitoredValueHash<T_Value>> saw;
         for (const auto& i : m_deque) {
             auto it = saw.find(i);
             if (it == saw.end()) {
@@ -324,10 +324,10 @@ public:
         }
         return out;
     }
-    VlQueue<IData> unique_index() const {
-        VlQueue<IData> out;
+    VlQueue<IDataV> unique_index() const {
+        VlQueue<IDataV> out;
         IData index = 0;
-        std::unordered_set<T_Value> saw;
+        std::unordered_set<T_Value, MonitoredValueHash<T_Value>> saw;
         for (const auto& i : m_deque) {
             auto it = saw.find(i);
             if (it == saw.end()) {
@@ -347,8 +347,8 @@ public:
         }
         return out;
     }
-    template <typename Func> VlQueue<IData> find_index(Func with_func) const {
-        VlQueue<IData> out;
+    template <typename Func> VlQueue<IDataV> find_index(Func with_func) const {
+        VlQueue<IDataV> out;
         IData index = 0;
         for (const auto& i : m_deque) {
             if (with_func(index, i)) out.push_back(index);
@@ -365,13 +365,13 @@ public:
         }
         return VlQueue{};
     }
-    template <typename Func> VlQueue<IData> find_first_index(Func with_func) const {
+    template <typename Func> VlQueue<IDataV> find_first_index(Func with_func) const {
         IData index = 0;
         for (const auto& i : m_deque) {
-            if (with_func(index, i)) return VlQueue<IData>::cons(index);
+            if (with_func(index, i)) return VlQueue<IDataV>::cons(index);
             ++index;
         }
-        return VlQueue<IData>{};
+        return VlQueue<IDataV>{};
     }
     template <typename Func> VlQueue find_last(Func with_func) const {
         IData index = m_deque.size() - 1;
@@ -381,13 +381,13 @@ public:
         }
         return VlQueue{};
     }
-    template <typename Func> VlQueue<IData> find_last_index(Func with_func) const {
+    template <typename Func> VlQueue<IDataV> find_last_index(Func with_func) const {
         IData index = m_deque.size() - 1;
         for (auto it = m_deque.rbegin(); it != m_deque.rend(); ++it) {
-            if (with_func(index, *it)) return VlQueue<IData>::cons(index);
+            if (with_func(index, *it)) return VlQueue<IDataV>::cons(index);
             --index;
         }
-        return VlQueue<IData>{};
+        return VlQueue<IDataV>{};
     }
 
     // Reduction operators

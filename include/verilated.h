@@ -479,6 +479,15 @@ private:
     }
 };
 
+template<typename T>
+class MonitoredValueHash { 
+public: 
+    size_t operator()(const T& t) const
+    {
+        return t.value(); 
+    }
+}; 
+
 class Monitor final {
 public:
     void off();
