@@ -1493,6 +1493,12 @@ static inline WDataOutP VL_ASSIGN_W(int obits, WDataOutP owp, WDataInP lwp) VL_M
     return owp;
 }
 
+static inline WDataOutP VL_ASSIGN_W(int obits, WDataOutP owp, WData* lwp) VL_MT_SAFE {
+    int words = VL_WORDS_I(obits);
+    for (int i = 0; i < words; ++i) owp[i] = lwp[i];
+    return owp;
+}
+
 // EMIT_RULE: VL_ASSIGNBIT:  rclean=clean;
 static inline void VL_ASSIGNBIT_II(int, int bit, CDataV& lhsr, IData rhs) VL_PURE {
     lhsr = ((lhsr & ~(VL_UL(1) << VL_BITBIT_I(bit))) | (rhs << VL_BITBIT_I(bit)));

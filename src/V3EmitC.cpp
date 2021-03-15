@@ -246,24 +246,13 @@ public:
         stable_sort(funcsp.begin(), funcsp.end(), CmpName());
 
         for (const AstCFunc* funcp : funcsp) {
-            ofp()->putsPrivate(funcp->declPrivate());
-            if (!funcp->ifdef().empty()) puts("#ifdef " + funcp->ifdef() + "\n");
-            if (funcp->isStatic().trueUnknown()) puts("static ");
-            if (funcp->isVirtual()) puts("virtual ");
-            if (!funcp->isConstructor() && !funcp->isDestructor()) {
-                puts(funcp->rtnTypeVoid());
-                puts(" ");
+            if (funcp->funcPublic()) {
+                emitPublicCFuncInt(modp,  funcp);
             }
-            puts(funcNameProtect(funcp, modp));
-
             if (funcp->proc())
-                puts("(" + cFuncArgs(funcp) + ", VerilatedThread* self)");
+                emitCFuncInt(modp, funcp, cFuncArgs(funcp) + ", VerilatedThread* self");
             else
-                puts("(" + cFuncArgs(funcp) + ")");
-            if (funcp->isConst().trueKnown()) puts(" const");
-            if (funcp->slow()) puts(" VL_ATTR_COLD");
-            puts(";\n");
-            if (!funcp->ifdef().empty()) puts("#endif  // " + funcp->ifdef() + "\n");
+                emitCFuncInt(modp, funcp, cFuncArgs(funcp));
         }
 
         if (methodFuncs && modp->isTop() && v3Global.opt.mtasks()) {
@@ -285,6 +274,46 @@ public:
             // No AstCFunc for this one, as it's synthetic. Just write it:
             puts("static void __Vmtask__final(bool even_cycle, void* symtab);\n");
         }
+    }
+    void emitPublicCFuncInt(AstNodeModule* modp, const AstCFunc* funcp) {
+        // Emits a public version for the CFunc if needed
+        // (if there are any output arguments)
+        string args = funcp->argTypes();
+        bool needed = false;
+        // Might be a user function with argument list.
+        for (auto* stmtp = funcp->argsp(); stmtp; stmtp = stmtp->nextp()) {
+            if (auto* portp = VN_CAST_CONST(stmtp, Var)) {
+                if (portp->isIO() && !portp->isFuncReturn()) {
+                    if (args != "") args += ", ";
+                    if (portp->direction() == VDirection::OUTPUT) {
+                        needed = true;
+                        args += portp->vlArgType(true, false, true);
+                    } else {
+                        args += portp->cPubArgType(true, false);
+                    }
+                }
+            }
+        }
+        if (needed) {
+            emitCFuncInt(modp, funcp, args);
+        }
+    }
+    void emitCFuncInt(AstNodeModule* modp, const AstCFunc* funcp, const std::string& args) {
+        ofp()->putsPrivate(funcp->declPrivate());
+        if (!funcp->ifdef().empty()) puts("#ifdef " + funcp->ifdef() + "\n");
+        if (funcp->isStatic().trueUnknown()) puts("static ");
+        if (funcp->isVirtual()) puts("virtual ");
+        if (!funcp->isConstructor() && !funcp->isDestructor()) {
+            puts(funcp->rtnTypeVoid());
+            puts(" ");
+        }
+        puts(funcNameProtect(funcp, modp));
+
+        puts('(' + args + ')');
+        if (funcp->isConst().trueKnown()) puts(" const");
+        if (funcp->slow()) puts(" VL_ATTR_COLD");
+        puts(";\n");
+        if (!funcp->ifdef().empty()) puts("#endif  // " + funcp->ifdef() + "\n");
     }
     void ccallIterateArgs(AstNodeCCall* nodep) {
         puts(nodep->argTypes());
@@ -375,18 +404,30 @@ public:
             if (!VN_IS(nodep->rhsp(), Const)) ofp()->putBreak();
             puts("= ");
         } else {
-            brace = true;
-            puts("{\n");
-            puts("std::unique_lock<std::mutex> lck(");
-            STASH_AND_SET(m_primitiveCast, false);
-            iterateAndNextNull(nodep->lhsp());
-            puts(".mtx());\n");
-            iterateAndNextNull(nodep->lhsp());
-            RESTORE(m_primitiveCast);
-            ofp()->blockInc();
-            decind = true;
-            if (!VN_IS(nodep->rhsp(), Const)) ofp()->putBreak();
-            puts(".assign_no_lock(");
+            auto* varrefp = VN_CAST(nodep->lhsp(), VarRef);
+            if (varrefp && varrefp->varp()->isIO()) {
+                paren = false;
+                STASH_AND_SET(m_primitiveCast, false);
+                iterateAndNextNull(nodep->lhsp());
+                RESTORE(m_primitiveCast);
+                ofp()->blockInc();
+                decind = true;
+                if (!VN_IS(nodep->rhsp(), Const)) ofp()->putBreak();
+                puts(" = ");
+            } else {
+                brace = true;
+                puts("{\n");
+                puts("std::unique_lock<std::mutex> lck(");
+                STASH_AND_SET(m_primitiveCast, false);
+                iterateAndNextNull(nodep->lhsp());
+                puts(".mtx());\n");
+                iterateAndNextNull(nodep->lhsp());
+                RESTORE(m_primitiveCast);
+                ofp()->blockInc();
+                decind = true;
+                if (!VN_IS(nodep->rhsp(), Const)) ofp()->putBreak();
+                puts(".assign_no_lock(");
+            }
         }
         iterateAndNextNull(nodep->rhsp());
         if (paren) puts(")");
@@ -1852,6 +1893,80 @@ class EmitCImp final : EmitCStmts {
 
         splitSizeInc(nodep);
 
+
+        if (nodep->funcPublic()) {
+            emitPublicCFunc(nodep);
+        }
+
+        if (!nodep->proc()) {
+            emitCFuncSignature(nodep, cFuncArgs(nodep));
+        } else {
+            emitCFuncSignature(nodep, cFuncArgs(nodep) + ", VerilatedThread* self");
+        }
+        puts(" {\n");
+        put_cfunc_body(nodep);
+        // puts("__Vm_activity = true;\n");
+        puts("}\n");
+        if (nodep->ifdef() != "") puts("#endif  // " + nodep->ifdef() + "\n");
+        m_funcp = nullptr;
+    }
+    void emitPublicCFunc(AstCFunc* nodep) {
+        // Emits a public version for the CFunc if needed
+        // (if there are any output arguments)
+        std::vector<const AstVar*> args;
+        std::vector<const AstVar*> outArgs;
+        for (auto* stmtp = nodep->argsp(); stmtp; stmtp = stmtp->nextp()) {
+            if (auto* portp = VN_CAST_CONST(stmtp, Var)) {
+                if (portp->isIO() && !portp->isFuncReturn()) {
+                    args.push_back(portp);
+                    if (portp->direction() == VDirection::OUTPUT)
+                        outArgs.push_back(portp);
+                }
+            }
+        }
+        if (!outArgs.empty()) {
+            string argsString = nodep->argTypes();
+            for (auto* portp : args) {
+                if (argsString != "") argsString += ", ";
+                if (portp->direction() == VDirection::OUTPUT)
+                    argsString += portp->vlArgType(true, false, true);
+                else
+                    argsString += portp->cPubArgType(true, false);
+            }
+            emitCFuncSignature(nodep, argsString);
+            puts(" {\n");
+            for (auto* portp : outArgs) {
+                puts(portp->cPubArgTypeNoRef() + ";\n");
+            }
+            if (nodep->rtnTypeVoid() != "void") puts("return ");
+            puts(funcNameProtect(nodep, m_modp) + "(");
+            for (auto* portp : args) {
+                if (portp != args.front()) puts(", ");
+                puts(portp->name());
+                if (portp->direction() == VDirection::OUTPUT) puts("_tmp");
+            }
+            puts(");\n");
+            for (auto* portp : outArgs) {
+                if (portp->isWide()) {
+                    for (int i = 0; i * 32 < portp->width(); i++) {
+                        puts(portp->name());
+                        puts("[" + cvtToStr(i) + "]");
+                        puts(" = ");
+                        puts(portp->name());
+                        puts("_tmp");
+                        puts("[" + cvtToStr(i) + "];\n");
+                    }
+                } else {
+                    puts(portp->name());
+                    puts(" = ");
+                    puts(portp->name());
+                    puts("_tmp;\n");
+                }
+            }
+            puts(" }\n");
+        }
+    }
+    void emitCFuncSignature(AstCFunc* nodep, const std::string& args) {
         puts("\n");
         if (nodep->ifdef() != "") puts("#ifdef " + nodep->ifdef() + "\n");
 
@@ -1863,11 +1978,9 @@ class EmitCImp final : EmitCStmts {
 
         if (nodep->isMethod()) puts(prefixNameProtect(m_modp) + "::");
         puts(funcNameProtect(nodep, m_modp));
-        if (!nodep->proc()) {
-            puts("(" + cFuncArgs(nodep) + ")");
-        } else {
-            puts("(" + cFuncArgs(nodep) + ", VerilatedThread* self)");
-        }
+
+        puts('(' + args + ')');
+
         if (nodep->isConst().trueKnown()) puts(" const");
 
         // TODO perhaps better to have a new AstCCtorInit so we can pass arguments
@@ -1876,15 +1989,6 @@ class EmitCImp final : EmitCStmts {
             puts(": ");
             puts(nodep->ctorInits());
         }
-
-        puts(" {\n");
-
-        put_cfunc_body(nodep);
-
-        // puts("__Vm_activity = true;\n");
-        puts("}\n");
-        if (nodep->ifdef() != "") puts("#endif  // " + nodep->ifdef() + "\n");
-        m_funcp = nullptr;
     }
 
     void emitChangeDet() {

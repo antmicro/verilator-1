@@ -455,6 +455,26 @@ string AstVar::cPubArgType(bool named, bool forReturn) const {
     return arg;
 }
 
+string AstVar::cPubArgTypeNoRef() const {
+    string arg;
+    if (widthMin() == 1) {
+        arg += "bool";
+    } else if (widthMin() <= VL_IDATASIZE) {
+        arg += "uint32_t";
+    } else if (widthMin() <= VL_QUADSIZE) {
+        arg += "vluint64_t";
+    } else {
+        arg += "uint32_t";  // []'s added later
+    }
+    if (isWide()) {
+        arg += " (" + name() + "_tmp";
+        arg += ")[" + cvtToStr(widthWords()) + "]";
+    } else {
+        arg += " " + name() + "_tmp";
+    }
+    return arg;
+}
+
 class dpiTypesToStringConverter VL_NOT_FINAL {
 public:
     virtual string openArray(const AstVar*) const { return "const svOpenArrayHandle"; }
