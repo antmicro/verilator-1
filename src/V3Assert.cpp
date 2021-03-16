@@ -389,6 +389,10 @@ private:
             m_modp->addStmtp(newp);
         } else if (nodep->displayType() == AstDisplayType::DT_STROBE) {
             nodep->displayType(AstDisplayType::DT_DISPLAY);
+            for (auto argp = nodep->fmtp()->exprsp(); argp; argp = argp->nextp()) {
+                if (auto* varrefp = VN_CAST(argp, VarRef))
+                    varrefp->useScheduledValue(true);
+            }
             // Need one-shot
             const auto fl = nodep->fileline();
             const auto varp
