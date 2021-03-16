@@ -480,13 +480,13 @@ private:
 };
 
 template<typename T>
-class MonitoredValueHash { 
-public: 
+class MonitoredValueHash final {
+public:
     size_t operator()(const T& t) const
     {
-        return t.value(); 
+        return t.value();
     }
-}; 
+};
 
 class Monitor final {
 public:
