@@ -40,10 +40,6 @@ constexpr int EMITC_NUM_CONSTW
 // Emit statements and math operators
 
 extern AstVarRef* getVarRefp(AstNode* nodep);
-#define STASH_AND_SET(var, value) \
-    auto varPre = var; \
-    var = value
-#define RESTORE(var) var = varPre
 
 class EmitCStmts VL_NOT_FINAL : public EmitCBaseVisitor {
 private:
@@ -407,22 +403,21 @@ public:
             auto* varrefp = VN_CAST(nodep->lhsp(), VarRef);
             if (varrefp && varrefp->varp()->isIO()) {
                 paren = false;
-                STASH_AND_SET(m_primitiveCast, false);
+                VL_RESTORER(m_primitiveCast);
+                m_primitiveCast = false;
                 iterateAndNextNull(nodep->lhsp());
-                RESTORE(m_primitiveCast);
                 ofp()->blockInc();
                 decind = true;
                 if (!VN_IS(nodep->rhsp(), Const)) ofp()->putBreak();
                 puts(" = ");
             } else {
                 brace = true;
-                puts("{\n");
-                puts("std::unique_lock<std::mutex> lck(");
-                STASH_AND_SET(m_primitiveCast, false);
+                VL_RESTORER(m_primitiveCast);
+                m_primitiveCast = false;
+                puts("{\nstd::unique_lock<std::mutex> lck(");
                 iterateAndNextNull(nodep->lhsp());
                 puts(".mtx());\n");
                 iterateAndNextNull(nodep->lhsp());
-                RESTORE(m_primitiveCast);
                 ofp()->blockInc();
                 decind = true;
                 if (!VN_IS(nodep->rhsp(), Const)) ofp()->putBreak();
@@ -439,10 +434,12 @@ public:
     virtual void visit_assigndly(AstNodeAssign* nodep, bool continuous) {
         if (VN_IS(nodep->lhsp(), VarRef) || VN_IS(nodep->lhsp(), ArraySel)
             || VN_IS(nodep->lhsp(), WordSel) || VN_IS(nodep->lhsp(), Sel)) {
-            STASH_AND_SET(m_primitiveCast, false);
-            puts("verilated_nba_ctrl.schedule(&");
-            iterateAndNextNull(nodep->lhsp());
-            RESTORE(m_primitiveCast);
+            {
+                VL_RESTORER(m_primitiveCast);
+                m_primitiveCast = false;
+                puts("verilated_nba_ctrl.schedule(&");
+                iterateAndNextNull(nodep->lhsp());
+            }
             puts(", ");
             if (continuous) {
                 puts("[vlTOPp,vlSymsp");
@@ -475,9 +472,11 @@ public:
     }
     virtual void visit(AstAlwaysPublic*) override {}
     virtual void visit(AstAssocSel* nodep) override {
-        STASH_AND_SET(m_primitiveCast, false);
-        iterateAndNextNull(nodep->fromp());
-        RESTORE(m_primitiveCast);
+        {
+            VL_RESTORER(m_primitiveCast);
+            m_primitiveCast = false;
+            iterateAndNextNull(nodep->fromp());
+        }
         putbs(".at(");
         AstAssocArrayDType* adtypep = VN_CAST(nodep->fromp()->dtypep(), AssocArrayDType);
         UASSERT_OBJ(adtypep, nodep, "Associative select on non-associative type");
@@ -544,14 +543,15 @@ public:
     }
     virtual void visit(AstNodeCCall* nodep) override { visit_call(nodep); }
     virtual void visit(AstCMethodHard* nodep) override {
-        bool primitiveCastPre = m_primitiveCast;
         // is there a return value that is wide convert to array?
         bool returnCArray = nodep->dtypep()->isWide()
             && (VN_IS(nodep->fromp()->dtypep(), QueueDType)
                 || VN_IS(nodep->fromp()->dtypep(), DynArrayDType));
-        if (returnCArray) m_primitiveCast = false; // do not cast array ptr to primitive
-        iterate(nodep->fromp());
-        m_primitiveCast = primitiveCastPre;
+        {
+            VL_RESTORER(m_primitiveCast);
+            if (returnCArray) m_primitiveCast = false; // do not cast array ptr to primitive
+            iterate(nodep->fromp());
+        }
         puts(".");
         puts(nodep->nameProtect());
         puts("(");
@@ -760,9 +760,9 @@ public:
     }
     virtual void visit(AstFGetS* nodep) override {
         checkMaxWords(nodep);
-        STASH_AND_SET(m_primitiveCast, false);
+        VL_RESTORER(m_primitiveCast);
+        m_primitiveCast = false;
         emitOpName(nodep, nodep->emitC(), nodep->lhsp(), nodep->rhsp(), nullptr);
-        RESTORE(m_primitiveCast);
     }
 
     void checkMaxWords(AstNode* nodep) {
@@ -897,14 +897,14 @@ public:
         putbs(",");
         puts(cvtToStr(array_size));
         putbs(", ");
-        bool primitiveCastPre = m_primitiveCast;
         if (!memory) {
+            VL_RESTORER(m_primitiveCast);
             puts("&(");
             m_primitiveCast = false;
-        }
-        iterateAndNextNull(nodep->memp());
-        m_primitiveCast = primitiveCastPre;
-        if (!memory) puts(")");
+            iterateAndNextNull(nodep->memp());
+            puts(")");
+        } else
+            iterateAndNextNull(nodep->memp());
         putbs(", ");
         iterateAndNextNull(nodep->filep());
         putbs(", ");
@@ -973,9 +973,9 @@ public:
     virtual void visit(AstTimingControl* nodep) override {
         puts("/* [@ statement] */\n");
         puts("self->wait_for(");
-        STASH_AND_SET(m_primitiveCast, false);
+        VL_RESTORER(m_primitiveCast);
+        m_primitiveCast = false;
         iterateAndNextNull(nodep->sensesp());
-        RESTORE(m_primitiveCast);
         puts(");\n");
         puts("if (self->should_exit()) return;\n");
         // XXX should we handle this too??
@@ -1018,7 +1018,8 @@ public:
                 return;
             }
         }
-        STASH_AND_SET(m_primitiveCast, false);
+        VL_RESTORER(m_primitiveCast);
+        m_primitiveCast = false;
         puts("self->wait_until(");
 
         std::unordered_map<AstVar*, size_t> varIndices;
@@ -1043,7 +1044,6 @@ public:
             iterateAndNextNull(p.second);
         }
         puts(");\n");
-        RESTORE(m_primitiveCast);
 
         puts("if (self->should_exit()) return;\n");
     }
@@ -1104,9 +1104,9 @@ public:
     virtual void visit(AstSenItem* nodep) override { iterateAndNextNull(nodep->sensp()); }
     virtual void visit(AstEventTrigger* nodep) override {
         puts("/* [ -> statement ] */\n");
-        STASH_AND_SET(m_primitiveCast, false);
+        VL_RESTORER(m_primitiveCast);
+        m_primitiveCast = false;
         iterateAndNextNull(nodep->trigger());
-        RESTORE(m_primitiveCast);
         puts(" = 1;\n");
         // Also mark the __Vtriggered variable
         auto* varp = VN_CAST(VN_CAST(nodep->trigger(), VarRef)->varp(), Var);
@@ -1306,7 +1306,8 @@ public:
         if (nodep->expr1p()->isWide()) {
             emitOpName(nodep, nodep->emitC(), nodep->condp(), nodep->expr1p(), nodep->expr2p());
         } else {
-            STASH_AND_SET(m_primitiveCast, true);
+            VL_RESTORER(m_primitiveCast);
+            m_primitiveCast = true;
             putbs("(");
             iterateAndNextNull(nodep->condp());
             putbs(" ? ");
@@ -1314,7 +1315,6 @@ public:
             putbs(" : ");
             iterateAndNextNull(nodep->expr2p());
             puts(")");
-            RESTORE(m_primitiveCast);
         }
     }
     virtual void visit(AstMemberSel* nodep) override {
@@ -2412,7 +2412,7 @@ void EmitCStmts::emitOpName(AstNode* nodep, const string& format, AstNode* lhsp,
                             AstNode* thsp) {
     bool useScheduledValue = false;
     auto* varrefp = getVarRefp(lhsp);
-    bool primitiveCastPre = m_primitiveCast;
+    VL_RESTORER(m_primitiveCast);
     if (varrefp && varrefp->useScheduledValue()) {
         useScheduledValue = true;
         varrefp->useScheduledValue(false);
@@ -2542,7 +2542,6 @@ void EmitCStmts::emitOpName(AstNode* nodep, const string& format, AstNode* lhsp,
         puts(")");
         varrefp->useScheduledValue(true);
     }
-    m_primitiveCast = primitiveCastPre;
 }
 
 //----------------------------------------------------------------------
@@ -2572,7 +2571,8 @@ struct EmitDispState {
 } emitDispState;
 
 void EmitCStmts::displayEmit(AstNode* nodep, bool isScan) {
-    STASH_AND_SET(m_primitiveCast, true);
+    VL_RESTORER(m_primitiveCast);
+    m_primitiveCast = true;
     if (emitDispState.m_format == ""
         && VN_IS(nodep, Display)) {  // not fscanf etc, as they need to return value
         // NOP
@@ -2629,7 +2629,7 @@ void EmitCStmts::displayEmit(AstNode* nodep, bool isScan) {
                 if (func != "") {
                     puts(func);
                 } else if (argp) {
-                    bool primitiveCastPre = m_primitiveCast;
+                    VL_RESTORER(m_primitiveCast);
                     if (isScan) {
                         puts("&(");
                         m_primitiveCast = false;
@@ -2638,7 +2638,6 @@ void EmitCStmts::displayEmit(AstNode* nodep, bool isScan) {
                         m_primitiveCast = false;
                     }
                     iterate(argp);
-                    m_primitiveCast = primitiveCastPre;
                     if (isScan) {
                         puts(")");
                     } else if (fmt == '@') {
@@ -2658,7 +2657,6 @@ void EmitCStmts::displayEmit(AstNode* nodep, bool isScan) {
         // Prep for next
         emitDispState.clear();
     }
-    RESTORE(m_primitiveCast);
 }
 
 void EmitCStmts::displayArg(AstNode* dispp, AstNode** elistp, bool isScan, const string& vfmt,

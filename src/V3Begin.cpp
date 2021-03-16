@@ -115,11 +115,11 @@ private:
     virtual void visit(AstBegin* nodep) override {
         // Begin blocks were only useful in variable creation, change names and delete
         UINFO(8, "  " << nodep << endl);
-        bool inFork = m_inFork;
-        m_inFork = false;
+        VL_RESTORER(m_inFork);
         VL_RESTORER(m_namedScope);
         VL_RESTORER(m_unnamedScope);
         {
+            m_inFork = false;
             UINFO(8, "nname " << m_namedScope << endl);
             if (nodep->name() != "") {  // Else unneeded unnamed block
                 // Create data for dotted variable resolution
@@ -144,8 +144,7 @@ private:
             UASSERT_OBJ(!nodep->genforp(), nodep, "GENFORs should have been expanded earlier");
 
             // Cleanup
-            if (inFork) {
-                m_inFork = inFork;
+            if (m_inFork) {
                 return;
             }
             AstNode* addsp = nullptr;
