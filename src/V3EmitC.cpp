@@ -670,8 +670,8 @@ public:
             displayNode(nodep, nodep->fmtp()->scopeNamep(), text, nodep->fmtp()->exprsp(), false);
     }
     virtual void visit(AstMonitorOff* nodep) override {
-        if (nodep->off()) puts("monitor.off();");
-        else puts("monitor.on();");
+        if (nodep->off()) puts("monitor.off();\n");
+        else puts("monitor.on();\n");
     }
     virtual void visit(AstDumpCtl* nodep) override {
         switch (nodep->ctlType()) {
