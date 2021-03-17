@@ -2126,15 +2126,17 @@ private:
     bool m_unnamed;  // Originally unnamed (name change does not affect this)
 public:
     AstNodeBlock(AstType t, FileLine* fl, const string& name, AstNode* stmtsp)
-        : AstNode{t, fl}
-        , m_name{name} {
+        : AstNode{t, fl} {
+        this->name(name);
         addNOp1p(stmtsp);
-        m_unnamed = (name == "");
     }
     ASTNODE_BASE_FUNCS(NodeBlock)
     virtual void dump(std::ostream& str) const override;
     virtual string name() const override { return m_name; }  // * = Block name
-    virtual void name(const string& name) override { m_name = name; }
+    virtual void name(const string& name) override {
+        m_name = name;
+        m_unnamed = (name == "");
+    }
     // op1 = Statements
     AstNode* stmtsp() const { return op1p(); }  // op1 = List of statements
     void addStmtsp(AstNode* nodep) { addNOp1p(nodep); }
