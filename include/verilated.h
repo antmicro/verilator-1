@@ -179,11 +179,11 @@ private:
     }
 
     // This function is needed to create MonitoredValueCallbacks in place (as arguments) instead of copying/moving them
-    void wait_internal(MonitoredValueCallback&&...) {
+    void wait_internal(std::atomic_bool& done, MonitoredValueCallback&&...) {
         std::unique_lock<std::mutex> lck(m_mtx);
         set_idle(true);
-        m_cv.wait(lck);
-        set_idle(false);
+        while (!should_exit() && !done)
+            m_cv.wait(lck);
     }
 
     void set_idle(bool idle) {
@@ -267,12 +267,16 @@ public:
 
     template <typename P, typename... Ts>
     void wait_until(P pred, MonitoredValue<Ts>&... mon_vals) {
-        auto p = [this, pred, &mon_vals...]() {
-            if (pred(std::forward_as_tuple(mon_vals...)))
+        std::atomic_bool done(false);
+        auto f = [this, &done, pred, &mon_vals...]() {
+            if (pred(std::forward_as_tuple(mon_vals...))) {
+                done = true;
                 m_cv.notify_all();
+                set_idle(false);
+            }
         };
         if (!pred(std::forward_as_tuple(mon_vals...)))
-            wait_internal(MonitoredValueCallback(&mon_vals, p)...);
+            wait_internal(done, MonitoredValueCallback(&mon_vals, f)...);
     }
 
     void wait_for_time(VerilatedSyms* symsp, vluint64_t time);
@@ -314,7 +318,7 @@ private:
     MonitoredValueBase* m_mon_val = nullptr;
 
     template<typename T>
-    friend  class MonitoredValue;
+    friend class MonitoredValue;
 };
 
 template <typename T> class MonitoredValue final : public MonitoredValueBase {
