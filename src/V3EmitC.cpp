@@ -972,6 +972,10 @@ public:
     }
     virtual void visit(AstTimingControl* nodep) override {
         puts("/* [@ statement] */\n");
+        for (auto* itemp = nodep->sensesp()->sensesp(); itemp; itemp = VN_CAST(itemp->nextp(), SenItem)) {
+            visit(itemp);
+            puts(".assign_no_notify(0);\n");
+        }
         puts("self->wait_for(");
         VL_RESTORER(m_primitiveCast);
         m_primitiveCast = false;
