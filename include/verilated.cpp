@@ -1527,7 +1527,7 @@ void VL_FCLOSE_I(IData fdi) VL_MT_SAFE {
     VerilatedImp::fdClose(fdi);
 }
 
-void VL_SFORMAT_X(int obits, CData& destr, const char* formatp, ...) VL_MT_SAFE {
+void VL_SFORMAT_X(int obits, CDataV& destr, const char* formatp, ...) VL_MT_SAFE {
     static VL_THREAD_LOCAL std::string t_output;  // static only for speed
     t_output = "";
     va_list ap;
@@ -1538,7 +1538,7 @@ void VL_SFORMAT_X(int obits, CData& destr, const char* formatp, ...) VL_MT_SAFE 
     _VL_STRING_TO_VINT(obits, &destr, t_output.length(), t_output.c_str());
 }
 
-void VL_SFORMAT_X(int obits, SData& destr, const char* formatp, ...) VL_MT_SAFE {
+void VL_SFORMAT_X(int obits, SDataV& destr, const char* formatp, ...) VL_MT_SAFE {
     static VL_THREAD_LOCAL std::string t_output;  // static only for speed
     t_output = "";
     va_list ap;
@@ -1549,7 +1549,7 @@ void VL_SFORMAT_X(int obits, SData& destr, const char* formatp, ...) VL_MT_SAFE 
     _VL_STRING_TO_VINT(obits, &destr, t_output.length(), t_output.c_str());
 }
 
-void VL_SFORMAT_X(int obits, IData& destr, const char* formatp, ...) VL_MT_SAFE {
+void VL_SFORMAT_X(int obits, IDataV& destr, const char* formatp, ...) VL_MT_SAFE {
     static VL_THREAD_LOCAL std::string t_output;  // static only for speed
     t_output = "";
     va_list ap;
@@ -1560,7 +1560,7 @@ void VL_SFORMAT_X(int obits, IData& destr, const char* formatp, ...) VL_MT_SAFE 
     _VL_STRING_TO_VINT(obits, &destr, t_output.length(), t_output.c_str());
 }
 
-void VL_SFORMAT_X(int obits, QData& destr, const char* formatp, ...) VL_MT_SAFE {
+void VL_SFORMAT_X(int obits, QDataV& destr, const char* formatp, ...) VL_MT_SAFE {
     static VL_THREAD_LOCAL std::string t_output;  // static only for speed
     t_output = "";
     va_list ap;
@@ -1569,6 +1569,17 @@ void VL_SFORMAT_X(int obits, QData& destr, const char* formatp, ...) VL_MT_SAFE 
     va_end(ap);
 
     _VL_STRING_TO_VINT(obits, &destr, t_output.length(), t_output.c_str());
+}
+
+void VL_SFORMAT_X(int obits, WDataV* destr, const char* formatp, ...) VL_MT_SAFE {
+    static VL_THREAD_LOCAL std::string t_output;  // static only for speed
+    t_output = "";
+    va_list ap;
+    va_start(ap, formatp);
+    _vl_vsformat(t_output, formatp, ap);
+    va_end(ap);
+
+    _VL_STRING_TO_VINT(obits, destr, t_output.length(), t_output.c_str());
 }
 
 void VL_SFORMAT_X(int obits, void* destp, const char* formatp, ...) VL_MT_SAFE {

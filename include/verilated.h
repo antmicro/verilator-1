@@ -1271,6 +1271,7 @@ extern void VL_SFORMAT_X(int obits, CDataV& destr, const char* formatp, ...);
 extern void VL_SFORMAT_X(int obits, SDataV& destr, const char* formatp, ...);
 extern void VL_SFORMAT_X(int obits, IDataV& destr, const char* formatp, ...);
 extern void VL_SFORMAT_X(int obits, QDataV& destr, const char* formatp, ...);
+extern void VL_SFORMAT_X(int obits, WDataV* destr, const char* formatp, ...);
 extern void VL_SFORMAT_X(int obits, void* destp, const char* formatp, ...);
 
 extern IData VL_SYSTEM_IW(int lhswords, WDataInP lhsp);

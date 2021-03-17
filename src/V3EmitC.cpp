@@ -2611,6 +2611,8 @@ void EmitCStmts::displayEmit(AstNode* nodep, bool isScan) {
             isStmt = true;
             puts("VL_SFORMAT_X(");
             puts(cvtToStr(dispp->lhsp()->widthMin()));
+            VL_RESTORER(m_primitiveCast);
+            m_primitiveCast = false;
             putbs(",");
             iterate(dispp->lhsp());
             putbs(",");
