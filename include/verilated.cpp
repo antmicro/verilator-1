@@ -404,27 +404,14 @@ void VL_DBG_MSGF(const char* formatp, ...) VL_MT_SAFE {
 }
 
 #ifdef VL_THREADED
-static std::mutex __vl_printf_mtx;
 void VL_PRINTF_MT(const char* formatp, ...) VL_MT_SAFE {
     va_list ap;
     va_start(ap, formatp);
     std::string out = _vl_string_vprintf(formatp, ap);
     va_end(ap);
-    /* XXX it looks as though the verilated message queue is NOT correctly used
-     * with our threads - all seem to go the "print immediately" way.
-     *
-     * Substitute the mechanism with a simple mutex for now.
-     */
-#if 0
     VerilatedThreadMsgQueue::post(VerilatedMsg([=]() {  //
         VL_PRINTF("%s", out.c_str());
     }));
-#else
-    {
-        std::unique_lock<std::mutex> lck(__vl_printf_mtx);
-        VL_PRINTF("%s", out.c_str());
-    }
-#endif
 }
 #endif
 
