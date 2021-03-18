@@ -12,8 +12,6 @@
   <map from="PSfqS0" to="__PVT__t__DOT__secret_inst"/>
   <map from="PS8pOJ" to="__Vclklast__TOP__clk"/>
   <map from="PSx9Nt" to="__Vconfigure"/>
-  <map from="PSrjMj" to="__Vdly__secret_cyc"/>
-  <map from="PSAW38" to="__Vdly__t__DOT__secret_inst2__DOT__secret_cyc"/>
   <map from="PS4o5S" to="__Vdpiexp_dpix_a_func_TOP__t__DOT__secret_inst"/>
   <map from="PStVA8" to="__Vdpiexp_dpix_a_task_TOP__t__DOT__secret_inst"/>
   <map from="PSxbIE" to="__Vdpiimwrap_dpii_a_func_TOP__t__DOT__secret_inst"/>
@@ -21,6 +19,7 @@
   <map from="PS76My" to="__Vfunc_dpii_a_func__0__Vfuncout"/>
   <map from="PSEGxK" to="__Vscope_t__secret_inst"/>
   <map from="PS25fg" to="__Vtask_dpix_a_task__1__i"/>
+  <map from="PS7gX2" to="__eval_change_counter"/>
   <map from="PSHuZZ" to="_change_request"/>
   <map from="PS75kd" to="_change_request_1"/>
   <map from="PSyTg5" to="_ctor_var_reset"/>
