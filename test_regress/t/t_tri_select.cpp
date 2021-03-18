@@ -18,9 +18,9 @@ bool check() {
 #endif
 
     int Y = ((tb->OE1) & (!tb->OE2))
-                ? tb->A1
+                ? tb->A1.value()
                 : ((!tb->OE1) & (tb->OE2))
-                      ? tb->A2
+                      ? tb->A2.value()
                       : ((tb->OE1) & (tb->OE2)) ? (tb->A1 | tb->A2) : 3;  // pullup
 
     int W = (((tb->OE2) ? (tb->A2 & 0x1) : 0) << tb->A1)
@@ -38,7 +38,8 @@ bool check() {
     if (verbose)
         printf("Read: OE1=%d OE2=%d A1=0x%x A2=0x%x Y1=0x%x Y2=0x%x Y3=0x%x W=0x%x  Expected: "
                "Y1=Y2=Y3=%d and W=0x%x\n",
-               tb->OE1, tb->OE2, tb->A1, tb->A2, tb->Y1, tb->Y2, tb->Y3, tb->W, Y, W);
+               tb->OE1.value(), tb->OE2.value(), tb->A1.value(), tb->A2.value(),
+               tb->Y1.value(), tb->Y2.value(), tb->Y3.value(), tb->W.value(), Y, W);
     return pass;
 }
 

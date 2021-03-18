@@ -292,7 +292,7 @@ class MonitoredValueBase VL_NOT_FINAL {
 public:
     virtual void release(){};
     virtual void assign(vluint64_t){};
-    virtual vluint64_t value() const = 0;
+    virtual vluint64_t value_u64() const = 0;
     virtual void subscribe(MonitoredValueCallback& callback) = 0;
     virtual void unsubscribe(MonitoredValueCallback& callback) = 0;
 };
@@ -467,7 +467,9 @@ public:
 
     T* data() { return &m_value; }
 
-    virtual vluint64_t value() const { return m_value; }
+    T value() const { return m_value; }
+
+    virtual vluint64_t value_u64() const { return m_value; }
 
 private:
     T m_value;
@@ -578,7 +580,7 @@ public:
     vluint64_t get_scheduled(MonitoredValueBase* var) {
         auto it = data.find(var);
         if (it != data.end()) { return it->second; }
-        return var->value();
+        return var->value_u64();
     }
 
     void schedule(MonitoredValueBase* var, vluint64_t val) {
@@ -589,7 +591,10 @@ public:
 
     // XXX support get_scheduled for edata?
     //void schedule(MonitoredValueBase* var, std::function<vluint64_t()> expr) { edata[var] = expr; }
-    void schedule(std::function<void()> expr) { edata.push_back(expr); }
+    void schedule(std::function<void()> expr) {
+        std::unique_lock<std::mutex> lck(mtx);
+        edata.push_back(expr);
+    }
 
     void assign() {
         std::unique_lock<std::mutex> lck(mtx);
