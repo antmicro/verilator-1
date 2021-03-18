@@ -568,8 +568,10 @@ extern std::vector<VerilatedThread*> verilated_threads;
 class VerilatedNBACtrl final {
 private:
     std::map<MonitoredValueBase*, vluint64_t> data;
-    // For continuous assignments
-    std::map<MonitoredValueBase*, std::function<vluint64_t()>> edata;
+    // For continuous assignments, AstSel etc.
+    // XXX support get_scheduled for edata?
+    //std::map<MonitoredValueBase*, std::function<vluint64_t()>> edata;
+    std::vector<std::function<void()>> edata;
     std::mutex mtx;
 
 public:
@@ -585,7 +587,9 @@ public:
         data[var] = val;
     }
 
-    void schedule(MonitoredValueBase* var, std::function<vluint64_t()> expr) { edata[var] = expr; }
+    // XXX support get_scheduled for edata?
+    //void schedule(MonitoredValueBase* var, std::function<vluint64_t()> expr) { edata[var] = expr; }
+    void schedule(std::function<void()> expr) { edata.push_back(expr); }
 
     void assign() {
         std::unique_lock<std::mutex> lck(mtx);
@@ -593,7 +597,8 @@ public:
         for (auto const& v : data) { v.first->assign(v.second); }
         data.clear();
 
-        for (auto const& v : edata) { v.first->assign(v.second()); }
+        //for (auto const& v : edata) { v.first->assign(v.second()); }
+        for (auto const& f : edata) { f(); }
         edata.clear();
     }
 };

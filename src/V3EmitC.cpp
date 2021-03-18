@@ -437,11 +437,14 @@ public:
             {
                 VL_RESTORER(m_primitiveCast);
                 m_primitiveCast = false;
-                puts("verilated_nba_ctrl.schedule(&");
-                iterateAndNextNull(nodep->lhsp());
+                puts("verilated_nba_ctrl.schedule(");
+                if (!continuous && !VN_IS(nodep->lhsp(), Sel)) {
+                    puts("&");
+                    iterateAndNextNull(nodep->lhsp());
+                    puts(", ");
+                }
             }
-            puts(", ");
-            if (continuous) {
+            if (continuous || VN_IS(nodep->lhsp(), Sel)) {
                 puts("[vlTOPp,vlSymsp");
                 if (m_funcp) {
                     if (m_funcp->isStatic().falseKnown()) puts(",this");
@@ -452,10 +455,11 @@ public:
                         }
                     }
                 }
-                puts("] { return (");
-            }
-            iterateAndNextNull(nodep->rhsp());
-            if (continuous) puts("); }");
+                puts("] { ");
+                visit_generic_assign(nodep);
+                puts("; }");
+            } else
+                iterateAndNextNull(nodep->rhsp());
             puts(");\n");
         } else {
             nodep->v3warn(E_UNSUPPORTED, "Unsupported: delayed assignment type");
