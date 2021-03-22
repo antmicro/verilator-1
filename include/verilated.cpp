@@ -2179,7 +2179,7 @@ void VlWriteMem::print(QData addr, bool addrstamp, const void* valuep) {
     }
     m_addr = addr + 1;
     if (m_bits <= 8) {
-        const CData* datap = reinterpret_cast<const CData*>(valuep);
+        const CDataV* datap = reinterpret_cast<const CDataV*>(valuep);
         if (m_hex) {
             fprintf(m_fp, memhFormat(m_bits), VL_MASK_I(m_bits) & *datap);
             fprintf(m_fp, "\n");
@@ -2187,7 +2187,7 @@ void VlWriteMem::print(QData addr, bool addrstamp, const void* valuep) {
             fprintf(m_fp, "%s\n", formatBinary(m_bits, *datap));
         }
     } else if (m_bits <= 16) {
-        const SData* datap = reinterpret_cast<const SData*>(valuep);
+        const SDataV* datap = reinterpret_cast<const SDataV*>(valuep);
         if (m_hex) {
             fprintf(m_fp, memhFormat(m_bits), VL_MASK_I(m_bits) & *datap);
             fprintf(m_fp, "\n");
@@ -2195,7 +2195,7 @@ void VlWriteMem::print(QData addr, bool addrstamp, const void* valuep) {
             fprintf(m_fp, "%s\n", formatBinary(m_bits, *datap));
         }
     } else if (m_bits <= 32) {
-        const IData* datap = reinterpret_cast<const IData*>(valuep);
+        const IDataV* datap = reinterpret_cast<const IDataV*>(valuep);
         if (m_hex) {
             fprintf(m_fp, memhFormat(m_bits), VL_MASK_I(m_bits) & *datap);
             fprintf(m_fp, "\n");
@@ -2203,7 +2203,7 @@ void VlWriteMem::print(QData addr, bool addrstamp, const void* valuep) {
             fprintf(m_fp, "%s\n", formatBinary(m_bits, *datap));
         }
     } else if (m_bits <= 64) {
-        const QData* datap = reinterpret_cast<const QData*>(valuep);
+        const QDataV* datap = reinterpret_cast<const QDataV*>(valuep);
         vluint64_t value = VL_MASK_Q(m_bits) & *datap;
         vluint32_t lo = value & 0xffffffff;
         vluint32_t hi = value >> 32;
