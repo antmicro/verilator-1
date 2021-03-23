@@ -434,6 +434,15 @@ public:
     virtual void visit_assigndly(AstNodeAssign* nodep, bool continuous) {
         if (VN_IS(nodep->lhsp(), VarRef) || VN_IS(nodep->lhsp(), ArraySel)
             || VN_IS(nodep->lhsp(), WordSel) || VN_IS(nodep->lhsp(), Sel)) {
+            std::unordered_map<AstVar*, AstVarRef*> varrefps;
+            if (VN_IS(nodep->lhsp(), Sel)) {
+                findVarRefps(nodep, varrefps);
+                for (auto p : varrefps) {
+                    puts("auto __Vdlytmp__" + p.first->name() + " = ");
+                    iterateAndNextNull(p.second);
+                    puts(";\n");
+                }
+            }
             {
                 VL_RESTORER(m_primitiveCast);
                 m_primitiveCast = false;
@@ -455,6 +464,11 @@ public:
                         }
                     }
                 }
+
+                for (auto p : varrefps) {
+                    puts(",__Vdlytmp__" + p.first->name());
+                }
+                if (!varrefps.empty()) replaceVarRefps(nodep);
                 puts("] { ");
                 visit_generic_assign(nodep);
                 puts("; }");
@@ -1013,6 +1027,20 @@ public:
             if (nodep->op2p()) replaceVarRefps(nodep->op2p(), indices);
             if (nodep->op3p()) replaceVarRefps(nodep->op3p(), indices);
             if (nodep->op4p()) replaceVarRefps(nodep->op4p(), indices);
+        }
+    }
+    void replaceVarRefps(AstNode* nodep) {
+        if (auto* varrefp = VN_CAST(nodep, VarRef)) {
+            auto* newp
+                = new AstCStmt(nodep->fileline(), "__Vdlytmp__" + varrefp->varp()->name());
+            newp->dtypep(nodep->dtypep());
+            nodep->replaceWith(newp);
+            VL_DO_DANGLING(nodep->deleteTree(), nodep);
+        } else {
+            if (nodep->op1p()) replaceVarRefps(nodep->op1p());
+            if (nodep->op2p()) replaceVarRefps(nodep->op2p());
+            if (nodep->op3p()) replaceVarRefps(nodep->op3p());
+            if (nodep->op4p()) replaceVarRefps(nodep->op4p());
         }
     }
     virtual void visit(AstWait* nodep) override {

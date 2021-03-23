@@ -262,8 +262,8 @@ private:
                 UASSERT_OBJ(nodep->dtypep(), nodep,
                             "No dtype on node with hasDType(): " << nodep->prettyTypeName());
             } else {
-                UASSERT_OBJ(!nodep->dtypep(), nodep,
-                            "DType on node without hasDType(): " << nodep->prettyTypeName());
+                //UASSERT_OBJ(!nodep->dtypep(), nodep,
+                //            "DType on node without hasDType(): " << nodep->prettyTypeName());
             }
             UASSERT_OBJ(!nodep->getChildDTypep(), nodep,
                         "childDTypep() non-null on node after should have removed");
