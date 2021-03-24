@@ -42,6 +42,7 @@
 #include "V3Depth.h"
 #include "V3DepthBlock.h"
 #include "V3Descope.h"
+#include "V3DynamicScheduler.h"
 #include "V3EmitC.h"
 #include "V3EmitCMain.h"
 #include "V3EmitCMake.h"
@@ -366,6 +367,7 @@ static void process() {
         // This creates lots of duplicate ACTIVES so ActiveTop needs to be after this step
         V3Delayed::delayedAll(v3Global.rootp());
 #endif
+        V3DynamicScheduler::dynSched(v3Global.rootp());
 
         // Make Active's on the top level.
         // Differs from V3Active, because identical clocks may be pushed
