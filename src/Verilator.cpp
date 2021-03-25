@@ -326,9 +326,10 @@ static void process() {
         V3Active::activeAll(v3Global.rootp());
 
         // Split single ALWAYS blocks into multiple blocks for better ordering chances
+#if 0
         if (v3Global.opt.oSplit()) V3Split::splitAlwaysAll(v3Global.rootp());
         V3SplitAs::splitAsAll(v3Global.rootp());
-
+#endif
         // Create tracing sample points, before we start eliminating signals
         if (v3Global.opt.trace()) V3TraceDecl::traceDeclAll(v3Global.rootp());
 
@@ -357,7 +358,9 @@ static void process() {
         }
 
         // Reorder assignments in pipelined blocks
+#if 0
         if (v3Global.opt.oReorder()) V3Split::splitReorderAll(v3Global.rootp());
+#endif
 
             // XXX leaving this here to remember to restore it later with a switch
             // for the static scheduler
