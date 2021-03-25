@@ -521,6 +521,11 @@ private:
         if (m_logicVertexp) m_logicVertexp->setConsumed("eventTrigger");
     }
 
+    virtual void visit(AstDelay* nodep) VL_OVERRIDE {
+        iterateChildren(nodep);
+        m_logicVertexp->setConsumed("AstDelay");
+    }
+
     //--------------------
     virtual void visit(AstNode* nodep) override {
         iterateChildren(nodep);
