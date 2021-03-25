@@ -1017,42 +1017,21 @@ public:
     }
     virtual void visit(AstWait* nodep) override {
         puts("/* [wait statement] */\n");
-
-        std::unordered_map<AstVar*, AstVarRef*> varrefps;
-        {
-            findVarRefps(nodep->condp(), varrefps);
-            if (varrefps.empty()) {
-                puts("/* No variables in wait condition. Skipping */");
-                return;
-            }
+        if (!nodep->varrefps()) {
+            puts("/* No variables in wait condition. Skipping */");
+            return;
         }
         VL_RESTORER(m_primitiveCast);
         m_primitiveCast = false;
         puts("self->wait_until(");
-
-        std::unordered_map<AstVar*, size_t> varIndices;
-        {
-            size_t index = 0;
-            for (auto p : varrefps) {
-                varIndices.insert(std::make_pair(p.first, index++));
-            }
-        }
-
         puts("[](auto&& values) -> bool {\nreturn ");
-        {
-            auto* nodeClonep = nodep->cloneTree(false);
-            replaceVarRefps(nodeClonep->condp(), varIndices);
-            iterateAndNextNull(nodeClonep->condp());
-            VL_DO_DANGLING(nodeClonep->deleteTree(), nodeClonep);
-        }
+        iterateAndNextNull(nodep->condp());
         puts(";\n}");
-
-        for (auto p : varrefps) {
+        for (auto* varrefp = nodep->varrefps(); varrefp; varrefp = VN_CAST(varrefp->nextp(), VarRef)) {
             puts(", ");
-            iterateAndNextNull(p.second);
+            visit(varrefp);
         }
         puts(");\n");
-
         puts("if (self->should_exit()) return;\n");
     }
     virtual void visit(AstFork* nodep) override {

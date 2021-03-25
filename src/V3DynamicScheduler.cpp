@@ -26,7 +26,7 @@
 
 //######################################################################
 
-class DynamicSchedulerVisitor final : public AstNVisitor {
+class DynamicSchedulerAssignDlyVisitor final : public AstNVisitor {
 private:
     // NODE STATE
     // AstAssignDly::user1()      -> bool.  Set true if already processed
@@ -210,8 +210,67 @@ private:
 
 public:
     // CONSTRUCTORS
-    explicit DynamicSchedulerVisitor(AstNetlist* nodep) { iterate(nodep); }
-    virtual ~DynamicSchedulerVisitor() override {}
+    explicit DynamicSchedulerAssignDlyVisitor(AstNetlist* nodep) { iterate(nodep); }
+    virtual ~DynamicSchedulerAssignDlyVisitor() override {}
+};
+
+//######################################################################
+
+class DynamicSchedulerWaitVisitor final : public AstNVisitor {
+private:
+    // STATE
+    std::unordered_map<AstVar*, size_t> m_indices;
+    std::unordered_map<AstVar*, AstVarRef*> m_varrefps;
+
+    // METHODS
+    VL_DEBUG_FUNC;  // Declare debug()
+
+    enum { SKIP, NOTE, REPLACE } m_mode = SKIP;
+
+    // VISITORS
+    virtual void visit(AstWait* nodep) override {
+        VL_RESTORER(m_mode);
+        {
+            m_mode = NOTE;
+            iterateAndNextNull(nodep->condp());
+            m_mode = REPLACE;
+            iterateAndNextNull(nodep->condp());
+            AstVarRef* varrefps = nullptr;
+            for (auto p : m_varrefps) {
+                auto* varrefp = p.second;
+                if (varrefps) varrefps->addNext(varrefp);
+                else varrefps = varrefp;
+            }
+            nodep->varrefps(varrefps);
+            m_indices.clear();
+            m_varrefps.clear();
+        }
+    }
+    virtual void visit(AstVarRef* nodep) override {
+        if (m_mode == NOTE) {
+            if (m_varrefps.find(nodep->varp()) == m_varrefps.end()) {
+                m_varrefps.insert(std::make_pair(nodep->varp(),
+                                                 new AstVarRef(nodep->fileline(),
+                                                               nodep->varScopep(),
+                                                               nodep->access())));
+                m_indices.insert(std::make_pair(nodep->varp(), m_indices.size()));
+            }
+        } else if (m_mode == REPLACE) {
+            auto* newp = new AstCMath(nodep->fileline(),
+                                      "std::get<" + cvtToStr(m_indices[nodep->varp()]) + ">(values)", 0);
+            newp->dtypep(nodep->dtypep());
+            nodep->replaceWith(newp);
+            VL_DO_DANGLING(nodep->deleteTree(), nodep);
+        }
+    }
+
+    //--------------------
+    virtual void visit(AstNode* nodep) override { iterateChildren(nodep); }
+
+public:
+    // CONSTRUCTORS
+    explicit DynamicSchedulerWaitVisitor(AstNetlist* nodep) { iterate(nodep); }
+    virtual ~DynamicSchedulerWaitVisitor() override {}
 };
 
 //######################################################################
@@ -219,6 +278,7 @@ public:
 
 void V3DynamicScheduler::dynSched(AstNetlist* nodep) {
     UINFO(2, __FUNCTION__ << ": " << endl);
-    { DynamicSchedulerVisitor visitor(nodep); }  // Destruct before checking
+    { DynamicSchedulerAssignDlyVisitor visitor(nodep); }
+    { DynamicSchedulerWaitVisitor visitor(nodep); }  // Destruct before checking
     V3Global::dumpCheckGlobalTree("dynsched", 0, v3Global.opt.dumpTreeLevel(__FILE__) >= 3);
 }

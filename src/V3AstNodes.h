@@ -4547,6 +4547,8 @@ public:
     virtual V3Hash sameHash() const { return V3Hash(); }
     AstNode* condp() const { return op2p(); }
     AstNode* bodysp() const { return op3p(); }  // op3 = body of loop
+    void varrefps(AstVarRef* nodep) { addNOp4p(nodep); }
+    AstVarRef* varrefps() const { return VN_CAST(op4p(), VarRef); }
 };
 
 class AstWhile final : public AstNodeStmt {
