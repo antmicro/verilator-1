@@ -52,7 +52,6 @@ private:
     int m_labelNum;  // Next label number
     int m_splitSize;  // # of cfunc nodes placed into output file
     int m_splitFilenum;  // File number being created, 0 = primary
-    bool m_primitiveCast = false;
 
 protected:
     AstCFunc* m_funcp;  // Function we're in now
@@ -403,8 +402,6 @@ public:
             auto* varrefp = VN_CAST(nodep->lhsp(), VarRef);
             if (varrefp && varrefp->varp()->isIO()) {
                 paren = false;
-                VL_RESTORER(m_primitiveCast);
-                m_primitiveCast = false;
                 iterateAndNextNull(nodep->lhsp());
                 ofp()->blockInc();
                 decind = true;
@@ -412,8 +409,6 @@ public:
                 puts(" = ");
             } else {
                 brace = true;
-                VL_RESTORER(m_primitiveCast);
-                m_primitiveCast = false;
                 puts("{\nstd::unique_lock<std::mutex> lck(");
                 iterateAndNextNull(nodep->lhsp());
                 puts(".mtx());\n");
@@ -435,8 +430,6 @@ public:
         if (VN_IS(nodep->lhsp(), VarRef) || VN_IS(nodep->lhsp(), ArraySel)
             || VN_IS(nodep->lhsp(), WordSel) || VN_IS(nodep->lhsp(), Sel)) {
             {
-                VL_RESTORER(m_primitiveCast);
-                m_primitiveCast = false;
                 puts("verilated_nba_ctrl.schedule(");
                 if (!continuous && !VN_IS(nodep->lhsp(), Sel)) {
                     puts("&");
@@ -476,11 +469,7 @@ public:
     }
     virtual void visit(AstAlwaysPublic*) override {}
     virtual void visit(AstAssocSel* nodep) override {
-        {
-            VL_RESTORER(m_primitiveCast);
-            m_primitiveCast = false;
-            iterateAndNextNull(nodep->fromp());
-        }
+        iterateAndNextNull(nodep->fromp());
         putbs(".at(");
         AstAssocArrayDType* adtypep = VN_CAST(nodep->fromp()->dtypep(), AssocArrayDType);
         UASSERT_OBJ(adtypep, nodep, "Associative select on non-associative type");
@@ -551,11 +540,7 @@ public:
         bool returnCArray = nodep->dtypep()->isWide()
             && (VN_IS(nodep->fromp()->dtypep(), QueueDType)
                 || VN_IS(nodep->fromp()->dtypep(), DynArrayDType));
-        {
-            VL_RESTORER(m_primitiveCast);
-            if (returnCArray) m_primitiveCast = false; // do not cast array ptr to primitive
-            iterate(nodep->fromp());
-        }
+        iterate(nodep->fromp());
         puts(".");
         puts(nodep->nameProtect());
         puts("(");
@@ -764,8 +749,6 @@ public:
     }
     virtual void visit(AstFGetS* nodep) override {
         checkMaxWords(nodep);
-        VL_RESTORER(m_primitiveCast);
-        m_primitiveCast = false;
         emitOpName(nodep, nodep->emitC(), nodep->lhsp(), nodep->rhsp(), nullptr);
     }
 
@@ -902,9 +885,7 @@ public:
         puts(cvtToStr(array_size));
         putbs(", ");
         if (!memory) {
-            VL_RESTORER(m_primitiveCast);
             puts("&(");
-            m_primitiveCast = false;
             iterateAndNextNull(nodep->memp());
             puts(")");
         } else
@@ -981,8 +962,6 @@ public:
             puts(".assign_no_notify(0);\n");
         }
         puts("self->wait_for(");
-        VL_RESTORER(m_primitiveCast);
-        m_primitiveCast = false;
         iterateAndNextNull(nodep->sensesp());
         puts(");\n");
         puts("if (self->should_exit()) return;\n");
@@ -1021,8 +1000,6 @@ public:
             puts("/* No variables in wait condition. Skipping */");
             return;
         }
-        VL_RESTORER(m_primitiveCast);
-        m_primitiveCast = false;
         puts("self->wait_until(");
         puts("[](auto&& values) -> bool {\nreturn ");
         iterateAndNextNull(nodep->condp());
@@ -1091,8 +1068,6 @@ public:
     virtual void visit(AstSenItem* nodep) override { iterateAndNextNull(nodep->sensp()); }
     virtual void visit(AstEventTrigger* nodep) override {
         puts("/* [ -> statement ] */\n");
-        VL_RESTORER(m_primitiveCast);
-        m_primitiveCast = false;
         iterateAndNextNull(nodep->trigger());
         puts(" = 1;\n");
         // Also mark the __Vtriggered variable
@@ -1278,6 +1253,13 @@ public:
             puts(")");
         }
     }
+    void emitPrimitiveCast(AstNode* nodep) {
+        if (nodep->isDouble()) puts("(double)");
+        else if (nodep->width() <= VL_BYTESIZE)  puts("(CData)");
+        else if (nodep->width() <= VL_SHORTSIZE) puts("(SData)");
+        else if (nodep->width() <= VL_IDATASIZE) puts("(IData)");
+        else puts("(QData)");
+    }
     virtual void visit(AstCCast* nodep) override {
         // Extending a value of the same word width is just a NOP.
         if (nodep->size() <= VL_IDATASIZE) {
@@ -1293,15 +1275,17 @@ public:
         if (nodep->expr1p()->isWide()) {
             emitOpName(nodep, nodep->emitC(), nodep->condp(), nodep->expr1p(), nodep->expr2p());
         } else {
-            VL_RESTORER(m_primitiveCast);
-            m_primitiveCast = true;
             putbs("(");
             iterateAndNextNull(nodep->condp());
             putbs(" ? ");
+            emitPrimitiveCast(nodep->expr1p());
+            puts("(");
             iterateAndNextNull(nodep->expr1p());
-            putbs(" : ");
+            putbs(") : ");
+            emitPrimitiveCast(nodep->expr2p());
+            puts("(");
             iterateAndNextNull(nodep->expr2p());
-            puts(")");
+            puts("))");
         }
     }
     virtual void visit(AstMemberSel* nodep) override {
@@ -1408,24 +1392,8 @@ public:
         puts(")");
     }
     // Terminals
-    void emitPrimitiveCast(AstNodeDType* dtypep) {
-        if (dtypep->isDouble()) {
-            puts("(double)");
-        } else if (!dtypep->isString()) {
-            int width = dtypep->width();
-            if (!width) return;
-            puts("(");
-            if (width <= 8) puts("vluint8_t");
-            else if (width <= 16) puts("vluint16_t");
-            else if (width <= 32) puts("vluint32_t");
-            else if (width <= 64) puts("vluint64_t");
-            else puts("vluint32_t"); // wide signal, array of uint32
-            puts(")");
-        }
-    }
     virtual void visit(AstVarRef* nodep) override {
         AstNodeDType* dtypep = nodep->varp()->dtypep();
-        if (!dtypep->isWide() && m_primitiveCast) emitPrimitiveCast(dtypep);
         if (nodep->useScheduledValue()) puts("verilated_nba_ctrl.get_scheduled(&");
         puts(nodep->hiernameProtect());
         puts(nodep->varp()->nameProtect());
@@ -2399,16 +2367,10 @@ void EmitCStmts::emitOpName(AstNode* nodep, const string& format, AstNode* lhsp,
                             AstNode* thsp) {
     bool useScheduledValue = false;
     auto* varrefp = getVarRefp(lhsp);
-    VL_RESTORER(m_primitiveCast);
     if (varrefp && varrefp->useScheduledValue()) {
         useScheduledValue = true;
         varrefp->useScheduledValue(false);
         puts("verilated_nba_ctrl.get_scheduled(&");
-        m_primitiveCast = false;
-    }
-    if (VN_IS(nodep, NodeSel) && m_primitiveCast) {
-        emitPrimitiveCast(getVarRefp(nodep)->varp()->dtypep());
-        m_primitiveCast = false;
     }
     // Look at emitOperator() format for term/uni/dual/triops,
     // and write out appropriate text.
@@ -2558,8 +2520,6 @@ struct EmitDispState {
 } emitDispState;
 
 void EmitCStmts::displayEmit(AstNode* nodep, bool isScan) {
-    VL_RESTORER(m_primitiveCast);
-    m_primitiveCast = true;
     if (emitDispState.m_format == ""
         && VN_IS(nodep, Display)) {  // not fscanf etc, as they need to return value
         // NOP
@@ -2594,8 +2554,6 @@ void EmitCStmts::displayEmit(AstNode* nodep, bool isScan) {
             isStmt = true;
             puts("VL_SFORMAT_X(");
             puts(cvtToStr(dispp->lhsp()->widthMin()));
-            VL_RESTORER(m_primitiveCast);
-            m_primitiveCast = false;
             putbs(",");
             iterate(dispp->lhsp());
             putbs(",");
@@ -2618,13 +2576,12 @@ void EmitCStmts::displayEmit(AstNode* nodep, bool isScan) {
                 if (func != "") {
                     puts(func);
                 } else if (argp) {
-                    VL_RESTORER(m_primitiveCast);
                     if (isScan) {
                         puts("&(");
-                        m_primitiveCast = false;
                     } else if (fmt == '@') {
                         puts("&(");
-                        m_primitiveCast = false;
+                    } else {
+                        emitPrimitiveCast(argp);
                     }
                     iterate(argp);
                     if (isScan) {
