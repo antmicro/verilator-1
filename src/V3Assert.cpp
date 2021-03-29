@@ -391,7 +391,7 @@ private:
             nodep->displayType(AstDisplayType::DT_DISPLAY);
             for (auto argp = nodep->fmtp()->exprsp(); argp; argp = argp->nextp()) {
                 if (auto* varrefp = VN_CAST(argp, VarRef))
-                    varrefp->useScheduledValue(true);
+                    varrefp->useDelayedValue(true);
             }
             // Need one-shot
             const auto fl = nodep->fileline();

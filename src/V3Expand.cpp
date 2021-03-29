@@ -37,18 +37,6 @@
 //######################################################################
 // Expand state, as a visitor of each AstNode
 
-AstVarRef* getVarRefp(AstNode* nodep) {
-    if (auto* refp = VN_CAST(nodep, VarRef)) {
-        return refp;
-    } else if (auto* selp = VN_CAST(nodep, NodeSel)) {
-        return getVarRefp(selp->lhsp());
-    } else if (auto* methp = VN_CAST(nodep, CMethodHard)) {
-        return getVarRefp(methp->fromp());
-    } else {
-        return nullptr;
-    }
-}
-
 class ExpandVisitor final : public AstNVisitor {
 private:
     // NODE STATE
@@ -468,6 +456,18 @@ private:
         }
     }
 
+    static void useDelayedValue(AstNode* nodep) {
+        if (auto* varrefp = VN_CAST(nodep, VarRef)) {
+            varrefp->useDelayedValue(true);
+        } else if (auto* selp = VN_CAST(nodep, NodeSel)) {
+            useDelayedValue(selp->fromp());
+        } else {
+            if (nodep->op1p()) useDelayedValue(nodep->op1p());
+            if (nodep->op2p()) useDelayedValue(nodep->op2p());
+            if (nodep->op3p()) useDelayedValue(nodep->op3p());
+            if (nodep->op4p()) useDelayedValue(nodep->op4p());
+        }
+    }
     bool expandLhs(AstNodeAssign* nodep, AstSel* lhsp) {
         // Possibilities
         //      destp: wide or narrow
@@ -496,7 +496,7 @@ private:
                         // else we would just be setting it to the same exact value
                         AstNode* oldvalp = newAstWordSelClone(destp, w);
                         fixCloneLvalue(oldvalp);
-                        getVarRefp(oldvalp)->useScheduledValue(dly);
+                        if (dly) useDelayedValue(oldvalp);
                         if (!ones) {
                             oldvalp
                                 = new AstAnd(lhsp->fileline(),
@@ -518,7 +518,7 @@ private:
                 }
                 AstNode* oldvalp = destp->cloneTree(true);
                 fixCloneLvalue(oldvalp);
-                getVarRefp(oldvalp)->useScheduledValue(dly);
+                if (dly) useDelayedValue(oldvalp);
                 if (!ones) {
                     oldvalp = new AstAnd(lhsp->fileline(), new AstConst(lhsp->fileline(), maskold),
                                          oldvalp);
@@ -542,7 +542,7 @@ private:
                 AstNode* oldvalp
                     = newWordSel(lhsp->fileline(), destp->cloneTree(true), lhsp->lsbp(), 0);
                 fixCloneLvalue(oldvalp);
-                getVarRefp(oldvalp)->useScheduledValue(dly);
+                if (dly) useDelayedValue(oldvalp);
                 if (!ones) {
                     oldvalp = new AstAnd(
                         lhsp->fileline(),
@@ -590,7 +590,7 @@ private:
                 AstNode* destp = lhsp->fromp()->unlinkFrBack();
                 AstNode* oldvalp = destp->cloneTree(true);
                 fixCloneLvalue(oldvalp);
-                getVarRefp(oldvalp)->useScheduledValue(dly);
+                if (dly) useDelayedValue(oldvalp);
 
                 V3Number maskwidth(nodep, destp->widthMin());
                 for (int bit = 0; bit < lhsp->widthConst(); bit++) maskwidth.setBit(bit, 1);

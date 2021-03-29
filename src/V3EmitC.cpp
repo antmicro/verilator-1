@@ -39,8 +39,6 @@ constexpr int EMITC_NUM_CONSTW
 //######################################################################
 // Emit statements and math operators
 
-extern AstVarRef* getVarRefp(AstNode* nodep);
-
 class EmitCStmts VL_NOT_FINAL : public EmitCBaseVisitor {
 private:
     typedef std::vector<const AstVar*> VarVec;
@@ -1366,12 +1364,28 @@ public:
         puts(")");
     }
     // Terminals
+    static bool useDelayedValue(AstVarRef* nodep) {
+        if (!nodep->useDelayedValue()) return false;
+        auto* backp = nodep->backp();
+        if (auto* selp = VN_CAST(backp, NodeSel)) return selp->lhsp() != nodep;
+        if (auto* methp = VN_CAST(backp, CMethodHard)) return methp->fromp() != nodep;
+        return true;
+    }
+    static bool useDelayedValue(AstNode* nodep) {
+        if (auto* selp = VN_CAST(nodep->backp(), NodeSel)) return selp->fromp() != nodep;
+        for (AstNodeSel* selp = VN_CAST(nodep, NodeSel); selp; selp = VN_CAST(selp->fromp(), NodeSel)) {
+            if (auto* varrefp = VN_CAST(selp->fromp(), VarRef)) return varrefp->useDelayedValue();
+        }
+        if (auto* varrefp = VN_CAST(nodep, VarRef)) return useDelayedValue(varrefp);
+        return false;
+    }
     virtual void visit(AstVarRef* nodep) override {
         AstNodeDType* dtypep = nodep->varp()->dtypep();
-        if (nodep->useScheduledValue()) puts("verilated_nba_ctrl.get_scheduled(&");
+        bool useDly = useDelayedValue(nodep);
+        if (useDly) puts("verilated_nba_ctrl.get_scheduled(&");
         puts(nodep->hiernameProtect());
         puts(nodep->varp()->nameProtect());
-        if (nodep->useScheduledValue()) puts(")");
+        if (useDly) puts(")");
     }
     void emitCvtPackStr(AstNode* nodep) {
         if (const AstConst* constp = VN_CAST(nodep, Const)) {
@@ -2339,13 +2353,8 @@ bool EmitCStmts::emitSimpleOk(AstNodeMath* nodep) {
 
 void EmitCStmts::emitOpName(AstNode* nodep, const string& format, AstNode* lhsp, AstNode* rhsp,
                             AstNode* thsp) {
-    bool useScheduledValue = false;
-    auto* varrefp = getVarRefp(lhsp);
-    if (varrefp && varrefp->useScheduledValue()) {
-        useScheduledValue = true;
-        varrefp->useScheduledValue(false);
-        puts("verilated_nba_ctrl.get_scheduled(&");
-    }
+    bool useDly = useDelayedValue(nodep);
+    if (useDly) puts("verilated_nba_ctrl.get_scheduled(&");
     // Look at emitOperator() format for term/uni/dual/triops,
     // and write out appropriate text.
     //  %n*     node
@@ -2461,10 +2470,7 @@ void EmitCStmts::emitOpName(AstNode* nodep, const string& format, AstNode* lhsp,
             puts(s);
         }
     }
-    if (useScheduledValue) {
-        puts(")");
-        varrefp->useScheduledValue(true);
-    }
+    if (useDly) puts(")");
 }
 
 //----------------------------------------------------------------------
