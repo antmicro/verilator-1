@@ -2556,19 +2556,14 @@ void EmitCStmts::displayEmit(AstNode* nodep, bool isScan) {
                 if (func != "") {
                     puts(func);
                 } else if (argp) {
-                    if (isScan) {
-                        puts("&(");
-                    } else if (fmt == '@') {
-                        puts("&(");
-                    } else {
+                    if (isScan || fmt == '@') {
+                        puts("&");
+                    } else if (argp->dtypep() && VN_IS(argp->dtypep()->skipRefp(), BasicDType)) {
                         emitPrimitiveCast(argp);
                     }
+                    puts("(");
                     iterate(argp);
-                    if (isScan) {
-                        puts(")");
-                    } else if (fmt == '@') {
-                        puts(")");
-                    }
+                    puts(")");
                 }
                 ofp()->indentDec();
             }
