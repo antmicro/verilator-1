@@ -3037,14 +3037,14 @@ private:
     }
     AstVar* getCreateTriggeredVar(AstNode* nodep) {
         auto* varp = VN_CAST(nodep, VarRef)->varp();
-        if (varp->triggeredVarp()) return varp->triggeredVarp();
+        if (varp->triggeredVarRefp()) return varp->triggeredVarRefp()->varp();
         string triggeredVarName = nodep->name() + string("__Vtriggered");
         auto* triggeredVarFileline = nodep->fileline();
         while (!VN_CAST(nodep, NodeModule)) nodep = nodep->backp();
         auto* modp = VN_CAST(nodep, NodeModule);
         auto* newvarp = new AstVar(triggeredVarFileline, AstVarType::MODULETEMP, triggeredVarName,
                                 VFlagLogicPacked(), 1);
-        varp->triggeredVarp(newvarp);
+        varp->triggeredVarRefp(new AstVarRef(triggeredVarFileline, newvarp, VAccess::READWRITE));
         modp->addStmtp(newvarp);
         return newvarp;
     }

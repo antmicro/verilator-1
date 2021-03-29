@@ -1615,6 +1615,12 @@ void AstVar::dump(std::ostream& str) const {
     if (!lifetime().isNone()) str << " [" << lifetime().ascii() << "] ";
     str << " " << varType();
 }
+void AstVar::triggeredVarRefp(AstVarRef* varrefp) {
+    setOp2p(varrefp);
+}
+AstVarRef* AstVar::triggeredVarRefp() {
+    return VN_CAST(op2p(), VarRef);
+}
 void AstScope::dump(std::ostream& str) const {
     this->AstNode::dump(str);
     str << " [abovep=" << reinterpret_cast<const void*>(aboveScopep()) << "]";

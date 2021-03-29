@@ -1043,9 +1043,13 @@ public:
         iterateAndNextNull(nodep->trigger());
         puts(" = 1;\n");
         // Also mark the __Vtriggered variable
+        // TODO: find a better way to do this
         auto* varp = VN_CAST(VN_CAST(nodep->trigger(), VarRef)->varp(), Var);
-        if (auto* triggeredVarp = varp->triggeredVarp())
-            puts("vlTOPp->" + triggeredVarp->name() + " = 1;\n");
+        if (varp->triggeredVarRefp()) {
+            puts("vlTOPp->");
+            iterateAndNextNull(varp->triggeredVarRefp());
+            puts(" = 1;\n");
+        }
     }
     virtual void visit(AstWhile* nodep) override {
         iterateAndNextNull(nodep->precondsp());
@@ -2201,7 +2205,6 @@ class EmitCImp final : EmitCStmts {
         return "";
     }
 
-    void emitVarSetToZero(AstVar* nodep);
     void emitCellCtors(AstNodeModule* modp);
     void emitSensitives();
     // Medium level
@@ -3066,25 +3069,24 @@ void EmitCImp::emitSensitives() {
     }
 }
 
-void EmitCImp::emitVarSetToZero(AstVar* nodep) {
-    puts("vlSymsp->TOPp->");
-    puts(protect(nodep->name()));
-    puts(".assign_no_notify(0);\n");
-}
-
 void EmitCImp::emitSettleLoop(AstNodeModule* modp, const std::string& eval_call, bool initial) {
     putsDecoration("// Evaluate till stable\n");
     puts("int __VclockLoop = 0;\n");
     puts("QData __Vchange = 1;\n");
     puts("do {\n");
     // Reset events and their __Vtriggered vars
+    // TODO: find a better way to do this
     for (auto* nodep = modp->stmtsp(); nodep; nodep = nodep->nextp()) {
         if (auto* varp = VN_CAST(nodep, Var)) {
             if (nodep->dtypep() && nodep->dtypep()->basicp()
                 && nodep->dtypep()->basicp()->isEventValue()) {
-                emitVarSetToZero(varp);
-                if (auto* triggeredVarp = varp->triggeredVarp()) {
-                    emitVarSetToZero(triggeredVarp);
+                puts("vlSymsp->TOPp->");
+                puts(nodep->nameProtect());
+                puts(".assign_no_notify(0);\n");
+                if (auto* varrefp = varp->triggeredVarRefp()) {
+                    puts("vlSymsp->TOPp->");
+                    puts(varrefp->varp()->nameProtect());
+                    puts(".assign_no_notify(0);\n");
                 }
             }
         }
