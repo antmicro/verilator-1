@@ -129,15 +129,18 @@ VerilatedThreadPool::~VerilatedThreadPool() {
     for (auto* thread : m_threads) { delete thread; }
 }
 
-void VerilatedThreadPool::run_once(std::function<void(VerilatedThread*)> func) {
+VerilatedThread* VerilatedThreadPool::run_once(std::function<void(VerilatedThread*)> func) {
     std::unique_lock<std::mutex> lck(m_mtx);
     if (!m_free_threads.empty()) {
-        m_free_threads.back()->func(func);
-        m_free_threads.back()->kick();
+        auto* thread = m_free_threads.back();
+        thread->func(func);
+        thread->kick();
         m_free_threads.pop_back();
+        return thread;
     } else {
         m_threads.push_back(new VerilatedThread(func, this));
         m_threads.back()->kick();
+        return m_threads.back();
     }
 }
 
@@ -234,6 +237,7 @@ VerilatedThread::VerilatedThread(std::function<void(VerilatedThread*)> func,
             wait_for_ready();
             if (!should_exit()) m_func(this);
             ready(false);
+            pool->free(this);
         } while (!Verilated::gotFinish() && !should_exit());
         idle(true);
     });

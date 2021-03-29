@@ -117,7 +117,7 @@ private:
 
 public:
     ~VerilatedThreadPool();
-    void run_once(std::function<void(VerilatedThread*)> func);
+    VerilatedThread* run_once(std::function<void(VerilatedThread*)> func);
     void free(VerilatedThread* thread);
 };
 

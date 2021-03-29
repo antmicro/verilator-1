@@ -504,29 +504,25 @@ public:
         AstCFunc* funcp = nodep->funcp();
         if (funcp->proc()) {
             if (!nodep->funcp()->oneshot()) puts("if (!Verilated::gotFinish()) {\n");
-            puts("static VerilatedThread ");
-            puts(funcp->nameProtect() + "__thread(");
-            puts("[vlTOPp,");
-            ccallIterateArgs(nodep);
-            puts("] (VerilatedThread* self) {");
-            puts(nodep->hiernameProtect());
-            puts(funcp->nameProtect() + "(");
-            ccallIterateArgs(nodep);
-            puts(", self); ");
-            puts("},");
-            puts(nodep->funcp()->oneshot() ? "true" : "false");
-            puts(", \"" + funcp->nameProtect() + "\");\n");
+            // TODO: make the 'triggered_' var a non-static class field
             if (nodep->funcp()->oneshot()) {
                 puts("static bool triggered_" + funcp->nameProtect() + ";\n");
                 puts("if (!triggered_" + funcp->nameProtect() + ") {\n");
             }
-            puts(funcp->nameProtect() + "__thread.kick();\n");
+            puts("auto* " + funcp->nameProtect() + "__thread = ");
+            puts("thread_pool.run_once([vlTOPp,");
+            ccallIterateArgs(nodep);
+            puts("] (VerilatedThread* self) {\n");
+            puts(nodep->hiernameProtect());
+            puts(funcp->nameProtect() + "(");
+            ccallIterateArgs(nodep);
+            puts(", self);\n});\n");
             if (nodep->funcp()->oneshot()) {
                 puts("triggered_" + funcp->nameProtect() + " = true;\n");
                 puts("}\n");
             }
             if (!funcp->oneshot()) {
-                puts(funcp->nameProtect() + "__thread.wait_for_idle();\n}\n");
+                puts(funcp->nameProtect() + "__thread->wait_for_idle();\n}\n");
             }
         } else {
             visit_call(nodep);
@@ -1028,7 +1024,7 @@ public:
         if (!nodep->joinType().joinNone()) puts("if (self->should_exit()) return;\n}\n");
     }
     virtual void visit(AstThreadSync* nodep) override {
-        puts("thread_registry.wait_for_idle();");
+        puts("thread_registry.wait_for_idle();\n");
         puts("if (Verilated::gotFinish()) return;\n");
     }
     virtual void visit(AstSenTree* nodep) override {
