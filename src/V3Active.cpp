@@ -499,6 +499,10 @@ private:
             //UASSERT_OBJ(!oldsensesp->sensesp()->nextp(), nodep,
             //            "Never senitem should be alone, else the never should be eliminated.");
             //VL_DO_DANGLING(nodep->unlinkFrBack()->deleteTree(), nodep);
+            AstActive* wantactivep = nullptr;
+            wantactivep = m_namer.getActive(nodep->fileline(), oldsensesp);
+            nodep->unlinkFrBack();
+            wantactivep->addStmtsp(nodep);
             return;
         }
 

@@ -72,15 +72,13 @@ private:
         UASSERT_OBJ(sensesp, nodep, "nullptr");
         if (sensesp->sensesp() && VN_IS(sensesp->sensesp(), SenItem)
             && VN_CAST(sensesp->sensesp(), SenItem)->isNever()) {
-            // TODO commenting out since the always block shouldn't be removed
-            // will be fix later
             // Never executing.  Kill it.
-           // UASSERT_OBJ(!sensesp->sensesp()->nextp(), nodep,
-           //             "Never senitem should be alone, else the never should be eliminated.");
-           // //VL_DO_DANGLING(nodep->unlinkFrBack()->deleteTree(), nodep);
+            UASSERT_OBJ(!sensesp->sensesp()->nextp(), nodep,
+                        "Never senitem should be alone, else the never should be eliminated.");
+            VL_DO_DANGLING(nodep->unlinkFrBack()->deleteTree(), nodep);
             return;
         }
-        // Copy combo tree to settlement tree with duplicated statements
+        //Copy combo tree to settlement tree with duplicated statements
         if (sensesp->hasCombo()) {
             AstSenTree* newsentreep = new AstSenTree(
                 nodep->fileline(), new AstSenItem(nodep->fileline(), AstSenItem::Settle()));
