@@ -968,32 +968,6 @@ public:
         // XXX should we handle this too??
         // iterateAndNextNull(nodep->stmtsp());
     }
-
-    void findVarRefps(AstNode* nodep, std::unordered_map<AstVar*, AstVarRef*>& found) {
-        if (auto* varrefp = VN_CAST(nodep, VarRef)) {
-            found.insert(std::make_pair(varrefp->varp(), varrefp));
-        } else {
-            if (nodep->op1p()) findVarRefps(nodep->op1p(), found);
-            if (nodep->op2p()) findVarRefps(nodep->op2p(), found);
-            if (nodep->op3p()) findVarRefps(nodep->op3p(), found);
-            if (nodep->op4p()) findVarRefps(nodep->op4p(), found);
-        }
-    }
-    void replaceVarRefps(AstNode* nodep, std::unordered_map<AstVar*, size_t>& indices) {
-        if (auto* varrefp = VN_CAST(nodep, VarRef)) {
-            auto* newp
-                = new AstCStmt(nodep->fileline(), "std::get<" + cvtToStr(indices[varrefp->varp()])
-                                                      + ">(values)");
-            newp->dtypep(nodep->dtypep());
-            nodep->replaceWith(newp);
-            VL_DO_DANGLING(nodep->deleteTree(), nodep);
-        } else {
-            if (nodep->op1p()) replaceVarRefps(nodep->op1p(), indices);
-            if (nodep->op2p()) replaceVarRefps(nodep->op2p(), indices);
-            if (nodep->op3p()) replaceVarRefps(nodep->op3p(), indices);
-            if (nodep->op4p()) replaceVarRefps(nodep->op4p(), indices);
-        }
-    }
     virtual void visit(AstWait* nodep) override {
         puts("/* [wait statement] */\n");
         if (!nodep->varrefps()) {
