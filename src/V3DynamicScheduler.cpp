@@ -39,6 +39,10 @@ private:
     typedef std::unordered_map<const AstVarScope*, int> ScopeVecMap;
     ScopeVecMap m_scopeVecMap;  // Next var number for each scope
 
+    std::map<std::pair<int, int>, AstVarScope*> m_dimVars;
+    std::unordered_map<int, AstVarScope*> m_lsbVars;
+    std::unordered_map<AstNodeDType*, AstVarScope*> m_valVars;
+
     // METHODS
     VL_DEBUG_FUNC;  // Declare debug()
 
@@ -110,10 +114,16 @@ private:
             if (VN_IS(dimp, Const)) {  // bit = const, can just use it
                 dimreadps.push_front(dimp);
             } else {
-                string bitvarname = (string("__Vdlyvdim") + cvtToStr(dimension) + "__"
-                                     + oldvarp->shortName() + "__v" + cvtToStr(modVecNum));
-                AstVarScope* bitvscp
-                    = createVarSc(varrefp->varScopep(), bitvarname, dimp->width(), nullptr);
+                string bitvarname = "__Vdlyvdim" + cvtToStr(dimension) + "__"
+                                     + cvtToStr(dimp->width()) + "bit__v" + cvtToStr(modVecNum);
+                AstVarScope* bitvscp;
+                auto it = m_dimVars.find(std::make_pair(dimension, dimp->width()));
+                if (it != m_dimVars.end())
+                    bitvscp = it->second;
+                else {
+                    bitvscp = createVarSc(varrefp->varScopep(), bitvarname, dimp->width(), nullptr);
+                    m_dimVars.insert(std::make_pair(std::make_pair(dimension, dimp->width()), bitvscp));
+                }
                 AstAssign* bitassignp = new AstAssign(
                     nodep->fileline(), new AstVarRef(nodep->fileline(), bitvscp, VAccess::WRITE),
                     dimp);
@@ -131,10 +141,16 @@ private:
                 // vlsb = constant, can just push constant into where we use it
                 bitreadp = lsbvaluep;
             } else {
-                string bitvarname = (string("__Vdlyvlsb__") + oldvarp->shortName() + "__v"
-                                     + cvtToStr(modVecNum));
-                AstVarScope* bitvscp
-                    = createVarSc(varrefp->varScopep(), bitvarname, lsbvaluep->width(), nullptr);
+                string bitvarname = "__Vdlyvlsb__" + cvtToStr(lsbvaluep->width())
+                                     + "bit__v" + cvtToStr(modVecNum);
+                AstVarScope* bitvscp;
+                auto it = m_lsbVars.find(lsbvaluep->width());
+                if (it != m_lsbVars.end())
+                    bitvscp = it->second;
+                else {
+                    bitvscp = createVarSc(varrefp->varScopep(), bitvarname, lsbvaluep->width(), nullptr);
+                    m_lsbVars.insert(std::make_pair(lsbvaluep->width(), bitvscp));
+                }
                 AstAssign* bitassignp = new AstAssign(
                     nodep->fileline(), new AstVarRef(nodep->fileline(), bitvscp, VAccess::WRITE),
                     lsbvaluep);
@@ -149,10 +165,20 @@ private:
             // vval = constant, can just push constant into where we use it
             valreadp = nodep->rhsp()->unlinkFrBack();
         } else {
-            string valvarname
-                = (string("__Vdlyvval__") + oldvarp->shortName() + "__v" + cvtToStr(modVecNum));
-            AstVarScope* valvscp
-                = createVarSc(varrefp->varScopep(), valvarname, 0, nodep->rhsp()->dtypep());
+            auto* dtypep = nodep->rhsp()->dtypep();
+            string valvarname = dtypep->name();
+            for (int i = 0; i < valvarname.length(); i++)
+                if (valvarname[i] == '.') valvarname[i] = '_';
+            valvarname = "__Vdlyvval__" + valvarname
+                   + cvtToStr(dtypep->width()) + "__v" + cvtToStr(modVecNum);
+            AstVarScope* valvscp;
+            auto it = m_valVars.find(dtypep);
+            if (it != m_valVars.end())
+                valvscp = it->second;
+            else {
+                valvscp = createVarSc(varrefp->varScopep(), valvarname, 0, dtypep);
+                m_valVars.insert(std::make_pair(dtypep, valvscp));
+            }
             valreadp = new AstVarRef(nodep->fileline(), valvscp, VAccess::READ);
             auto* valassignp = new AstAssign(nodep->fileline(),
                                              new AstVarRef(nodep->fileline(), valvscp, VAccess::WRITE),
@@ -186,6 +212,9 @@ private:
         }
     }
     virtual void visit(AstActive* nodep) override {
+        m_dimVars.clear();
+        m_lsbVars.clear();
+        m_valVars.clear();
         iterateChildren(nodep);
     }
     virtual void visit(AstAssignDly* nodep) override {
