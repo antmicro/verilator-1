@@ -196,7 +196,7 @@ VerilatedThread::VerilatedThread(std::function<void(VerilatedThread*)> func, boo
     : m_func(func)
     , m_ready(false)
     , m_oneshot(oneshot)
-    , m_started(false)
+    , m_joined(false)
     , m_should_exit(false)
     , m_idle(false)
     , m_name(name) {
@@ -226,7 +226,7 @@ VerilatedThread::VerilatedThread(std::function<void(VerilatedThread*)> func,
     : m_func(func)
     , m_ready(false)
     , m_oneshot(false)
-    , m_started(false)
+    , m_joined(false)
     , m_should_exit(false)
     , m_idle(false)
     , m_name("forked_thread") {

@@ -157,7 +157,7 @@ private:
     std::function<void(VerilatedThread*)> m_func;
     std::atomic<bool> m_ready;
     std::atomic<bool> m_oneshot;
-    std::atomic<bool> m_started;
+    std::atomic<bool> m_joined;
 
     std::atomic<bool> m_should_exit;
     std::atomic<bool> m_idle;
@@ -198,6 +198,8 @@ public:
     VerilatedThread(std::function<void(VerilatedThread*)> func, bool oneshot, std::string name);
 
     VerilatedThread(std::function<void(VerilatedThread*)> func, VerilatedThreadPool* pool);
+
+    ~VerilatedThread() { exit(); }
 
     bool should_exit() { return m_should_exit; }
 
@@ -243,7 +245,11 @@ public:
         m_func = func;
     }
 
-    void join() { m_thr.join(); }
+    void join() {
+        if (!m_joined)
+            m_thr.join();
+        m_joined = true;
+    }
 
     void exit() {
         should_exit(true);
