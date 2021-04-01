@@ -589,7 +589,7 @@ static void verilate(const string& argString) {
 
     // Read first filename
     v3Global.readFiles();
-
+    verilator_unlink_objects=true;
     // Link, etc, if needed
     if (!v3Global.opt.preprocOnly()) {  //
         process();

@@ -28,6 +28,7 @@
 
 //######################################################################
 // V3 Class -- top level
+bool verilator_unlink_objects = false;
 
 AstNetlist* V3Global::makeNetlist() {
     AstNetlist* newp = new AstNetlist();

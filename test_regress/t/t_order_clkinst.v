@@ -49,7 +49,7 @@ module t (/*AUTOARG*/
            // should reach the normal '$finish' below on the next cycle.
            if (c1_count!=32'h3) $stop;
            if (s2_count!=32'h3) $stop;
-           if (c3_count!=32'h5) $stop;
+           if (c3_count!=32'h6) $stop; // the same result is obtained when tested with vivado
         end
         8'd03: begin
            $write("*-* All Finished *-*\n");

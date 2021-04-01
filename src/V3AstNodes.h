@@ -6770,7 +6770,7 @@ public:
         out.opOr(lhs, rhs);
     }
     virtual string emitVerilog() override { return "%k(%l %f| %r)"; }
-    virtual string emitC() override { return "VL_OR_%lq(%lW, %P, %li, %ri)"; }
+    virtual string emitC() override { return "VL_OR_%lq(%rW, %P, %li, %ri)"; }
     virtual string emitSimpleOperator() override { return "|"; }
     virtual bool cleanOut() const override { V3ERROR_NA_RETURN(false); }
     virtual bool cleanLhs() const override { return false; }

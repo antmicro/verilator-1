@@ -44,6 +44,7 @@ private:
     typedef std::vector<const AstVar*> VarVec;
     typedef std::map<int, VarVec> VarSortMap;  // Map size class to VarVec
 
+    bool m_wrapVarRefsInsdieIf = false;
     bool m_suppressSemi;
     AstVarRef* m_wideTempRefp;  // Variable that _WW macros should be setting
     VarVec m_ctorVarsVec;  // All variables in constructor order
@@ -1053,12 +1054,19 @@ public:
         puts("}\n");
     }
     virtual void visit(AstNodeIf* nodep) override {
+
         puts("if (");
         if (!nodep->branchPred().unknown()) {
             puts(nodep->branchPred().ascii());
             puts("(");
         }
-        iterateAndNextNull(nodep->condp());
+        {
+            VL_RESTORER(m_wrapVarRefsInsdieIf);
+            if(nodep->condp()->isWide()){
+                m_wrapVarRefsInsdieIf = true;
+            }
+            iterateAndNextNull(nodep->condp());
+        }
         if (!nodep->branchPred().unknown()) puts(")");
         puts(") {\n");
         iterateAndNextNull(nodep->ifsp());
@@ -1380,8 +1388,16 @@ public:
         AstNodeDType* dtypep = nodep->varp()->dtypep();
         bool useDly = useDelayedValue(nodep);
         if (useDly) puts("verilated_nba_ctrl.get_scheduled(&");
+        if(m_wrapVarRefsInsdieIf)
+        {
+            ofp()->printf("VL_OR_S(%d,\n", nodep->widthWords());
+        }
         puts(nodep->hiernameProtect());
         puts(nodep->varp()->nameProtect());
+        if(m_wrapVarRefsInsdieIf)
+        {
+            puts(")");
+        }
         if (useDly) puts(")");
     }
     void emitCvtPackStr(AstNode* nodep) {
@@ -2433,9 +2449,9 @@ void EmitCStmts::emitOpName(AstNode* nodep, const string& format, AstNode* lhsp,
                     needComma = true;
                     break;
                 case 'W':
-                    if (lhsp->isWide()) {
+                    if (detailp->isWide()) {
                         COMMA;
-                        puts(cvtToStr(lhsp->widthWords()));
+                        puts(cvtToStr(detailp->widthWords()));
                         needComma = true;
                     }
                     break;

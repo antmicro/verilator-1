@@ -2056,6 +2056,21 @@ static inline WDataOutP VL_OR_W(int words, WDataOutP owp, WDataInP lwp, WDataInP
     for (int i = 0; (i < words); ++i) owp[i] = (lwp[i] | rwp[i]);
     return owp;
 }
+
+// EMIT_RULE: VL_OR_I:
+static inline IData VL_OR_I(int words, IData data, WDataInP rwp) VL_MT_SAFE {
+    IData out = 0x0;
+    for (int i = 0; (i < words); ++i) out = (out | rwp[i]);
+    return out | data;
+}
+
+// EMIT_RULE: VL_OR_S:
+static inline IData VL_OR_S(int words, WDataInP rwp) VL_MT_SAFE {
+    IData out = 0x0;
+    for (int i = 0; (i < words); ++i) out = (out | rwp[i]);
+    return out;
+}
+
 // EMIT_RULE: VL_CHANGEXOR:  oclean=1; obits=32; lbits==rbits;
 static inline IData VL_CHANGEXOR_W(int words, WDataInP lwp, WDataInP rwp) VL_MT_SAFE {
     IData od = 0;

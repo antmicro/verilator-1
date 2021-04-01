@@ -345,8 +345,9 @@ void GraphAcyc::simplifyOut(GraphAcycVertex* avertexp) {
                 nextp = inEdgep->inNextp();
                 V3GraphVertex* inVertexp = inEdgep->fromp();
                 if (inVertexp == avertexp) {
-                    // cutting of the cycles, exactly in the first node causing a cycle
+                    // cutting off the cycles, exactly in the first node causing a cycle
                     // the method for choosing the node to be cut should be changed
+                    // TODO psagan -> add optional cut only when appropriate
                     avertexp->origVertexp()->unlinkDelete(m_origGraphp);
                     return;
                 }

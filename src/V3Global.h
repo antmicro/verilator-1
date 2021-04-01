@@ -36,6 +36,10 @@
 class AstNetlist;
 class V3HierBlockPlan;
 
+//The global variable is used to signalize when the cycles should be started cutting off
+//TODO substitute the flag with reimplementation of the v3 graph class where cycles are checked
+//the implementation to fix is placed inside the v3GraphAlg.cpp
+extern bool verilator_unlink_objects;
 //======================================================================
 // Restorer
 
