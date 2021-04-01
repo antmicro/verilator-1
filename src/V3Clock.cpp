@@ -66,14 +66,16 @@ private:
     AstVarScope* getCreateLastClk(AstVarScope* vscp) {
         if (vscp->user1p()) return static_cast<AstVarScope*>(vscp->user1p());
         AstVar* varp = vscp->varp();
-       // if (!varp->width1()) {
-       //     varp->v3warn(E_UNSUPPORTED, "Unsupported: Clock edge on non-single bit signal: "
-       //                                     << varp->prettyNameQ());
-       // }
+        if (!varp->width1()) {
+           // TODO psagan
+          //  varp->v3warn(E_UNSUPPORTED, "Unsupported: Clock edge on non-single bit signal: "
+          //                                  << varp->prettyNameQ());
+          //return vscp;
+        }
         string newvarname
             = (string("__Vclklast__") + vscp->scopep()->nameDotless() + "__" + varp->name());
         AstVar* newvarp = new AstVar(vscp->fileline(), AstVarType::MODULETEMP, newvarname,
-                                     VFlagLogicPacked(), 1);
+                                     VFlagLogicPacked(), varp->width());
         newvarp->noReset(true);  // Reset by below assign
         m_modp->addStmtp(newvarp);
         AstVarScope* newvscp = new AstVarScope(vscp->fileline(), m_scopep, newvarp);
