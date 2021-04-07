@@ -1096,6 +1096,7 @@ public:
         puts(", ");
         puts(cvtToStr(nodep->fileline()->lineno()));
         puts(", \"\");\n");
+        puts("return;\n");
     }
     virtual void visit(AstPrintTimeScale* nodep) override {
         puts("VL_PRINTTIMESCALE(");
