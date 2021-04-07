@@ -590,7 +590,7 @@ struct MonitoredValueCharPtr {
     }
 
     unsigned char* operator++(int) {
-        unsigned char* ptr = &(*this[1]);
+        unsigned char* ptr = &((*this)[0]);
         offset++;
         return ptr;
     }
@@ -627,7 +627,7 @@ struct MonitoredValueBaseCharPtr {
     }
 
     unsigned char* operator++(int) {
-        unsigned char* ptr = &(*this[1]);
+        unsigned char* ptr = &((*this)[0]);
         ptr += offset % type_size;
         offset++;
         return ptr;
