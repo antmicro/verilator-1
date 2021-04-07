@@ -579,18 +579,19 @@ struct MonitoredValueCharPtr {
         return base + offset;
     }
 
-    unsigned char& operator[](int i) {
-        unsigned char* ptr = (unsigned char*) base[(offset+i)/sizeof(T)].data();
+    // Potential TODO: a class that acts like a MonitoredValue<CData>& to support locking
+    vluint8_t& operator[](int i) {
+        vluint8_t* ptr = (vluint8_t*) base[(offset+i)/sizeof(T)].data();
         ptr += (offset+i) % sizeof(T);
         return *ptr;
     }
 
-    unsigned char& operator*() {
+    vluint8_t& operator*() {
         return *this[0];
     }
 
-    unsigned char* operator++(int) {
-        unsigned char* ptr = &((*this)[0]);
+    vluint8_t* operator++(int) {
+        vluint8_t* ptr = &((*this)[0]);
         offset++;
         return ptr;
     }
@@ -614,20 +615,20 @@ struct MonitoredValueBaseCharPtr {
     }
 
     // Potential TODO: a class that acts like a MonitoredValue<CData>& to support locking
-    unsigned char& operator[](int i) {
-        unsigned char* ptr = (unsigned char*) base;
+    vluint8_t& operator[](int i) {
+        vluint8_t* ptr = (vluint8_t*) base;
         ptr += ((offset+i)/type_size)*inst_size;
         ptr = ((MonitoredValueBase*) ptr)->data_u8();
         ptr += (offset+i) % type_size;
         return *ptr;
     }
 
-    unsigned char& operator*() {
+    vluint8_t& operator*() {
         return *this[0];
     }
 
-    unsigned char* operator++(int) {
-        unsigned char* ptr = &((*this)[0]);
+    vluint8_t* operator++(int) {
+        vluint8_t* ptr = &((*this)[0]);
         ptr += offset % type_size;
         offset++;
         return ptr;

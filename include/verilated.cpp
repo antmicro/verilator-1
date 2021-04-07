@@ -1191,7 +1191,7 @@ static inline WDataCharPtr _vl_vsss_read_bin(FILE* fp, int& floc, WDataInP fromp
     // whitespace). In the fp case, except descriptor to have been opened in binary mode.
     while (n-- > 0) {
         const int c = _vl_vsss_peek(fp, floc, fromp, fstr);
-        if (c == EOF) return {nullptr};
+        if (c == EOF) return nullptr;
         if (!inhibit) *beginp++ = c;
         _vl_vsss_advance(fp, floc);
     }
@@ -1389,7 +1389,7 @@ IData _vl_vsscanf(FILE* fp,  // If a fscanf
                 case 'u': {
                     // Read packed 2-value binary data
                     const int bytes = VL_BYTES_I(obits);
-                    WDataCharPtr out {owp};
+                    WDataCharPtr out = owp;
                     //char* out = reinterpret_cast<char*>(owp);
                     if (!_vl_vsss_read_bin(fp, floc, fromp, fstr, out, bytes)) goto done;
                     const int last = bytes % 4;
@@ -1400,7 +1400,7 @@ IData _vl_vsscanf(FILE* fp,  // If a fscanf
                 }
                 case 'z': {
                     // Read packed 4-value binary data
-                    WDataCharPtr out{owp};
+                    WDataCharPtr out = owp;
                     int bytes = VL_BYTES_I(obits);
                     while (bytes > 0) {
                         const int abytes = std::min(4, bytes);
