@@ -70,7 +70,7 @@ int main(int argc, char** argv, char** env) {
             int varBits = varLeft + 1;
 
             // First expect an incrementing byte pattern
-            vluint8_t* varData = reinterpret_cast<vluint8_t*>(varp->datap());
+            AnyDataCharPtr varData = reinterpret_cast<MonitoredValueBase*>(varp->datap());
             for (int i = 0; i < varBits / 8; i++) {
 #ifdef TEST_VERBOSE
                 VL_PRINTF("%02x ", varData[i]);
@@ -130,7 +130,7 @@ int main(int argc, char** argv, char** env) {
             const VerilatedVar* varp = &(varname.second);
             int varLeft = varp->packed().left();
             int varBits = varLeft + 1;
-            vluint8_t* varData = reinterpret_cast<vluint8_t*>(varp->datap());
+            AnyDataCharPtr varData = reinterpret_cast<MonitoredValueBase*>(varp->datap());
 
             // Check that all bits are high now
             for (int i = 0; i < varBits / 8; i++) {

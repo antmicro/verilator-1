@@ -301,6 +301,9 @@ public:
     virtual vluint64_t value_u64() const = 0;
     virtual void subscribe(MonitoredValueCallback& callback) = 0;
     virtual void unsubscribe(MonitoredValueCallback& callback) = 0;
+    virtual std::size_t type_size() const = 0;
+    virtual std::size_t size() const = 0;
+    virtual vluint8_t* data_u8() = 0;
 };
 
 class MonitoredValueCallback final {
@@ -476,6 +479,9 @@ public:
     T value() const { return m_value; }
 
     virtual vluint64_t value_u64() const { return m_value; }
+    virtual std::size_t type_size() const { return sizeof(T); }
+    virtual std::size_t size() const { return sizeof(*this); }
+    virtual vluint8_t* data_u8() { return (vluint8_t*) &m_value; }
 
 private:
     T m_value;
@@ -558,6 +564,85 @@ typedef WDataV* WDataOutP;  ///< Array output from a function
 
 typedef const WDataV* WDataInPV;  ///< Array input to a function
 typedef WDataV* WDataOutPV;  ///< Array output from a function
+
+template<typename T>
+struct MonitoredValueCharPtr {
+    MonitoredValue<T>* base;
+    std::size_t offset;
+
+    MonitoredValueCharPtr(MonitoredValue<T>* _base, std::size_t _offset = 0) {
+        base = _base;
+        offset = _offset;
+    }
+
+    operator bool() {
+        return base + offset;
+    }
+
+    unsigned char& operator[](int i) {
+        unsigned char* ptr = (unsigned char*) base[(offset+i)/sizeof(T)].data();
+        ptr += (offset+i) % sizeof(T);
+        return *ptr;
+    }
+
+    unsigned char& operator*() {
+        return *this[0];
+    }
+
+    unsigned char* operator++(int) {
+        unsigned char* ptr = &(*this[1]);
+        offset++;
+        return ptr;
+    }
+};
+
+struct MonitoredValueBaseCharPtr {
+    MonitoredValueBase* base;
+    std::size_t offset;
+    std::size_t type_size;
+    std::size_t inst_size;
+
+    MonitoredValueBaseCharPtr(MonitoredValueBase* _base, std::size_t _offset = 0) {
+        base = _base;
+        offset = _offset;
+        type_size = base->type_size();
+        inst_size = base->size();
+    }
+
+    operator bool() {
+        return base + offset;
+    }
+
+    // Potential TODO: a class that acts like a MonitoredValue<CData>& to support locking
+    unsigned char& operator[](int i) {
+        unsigned char* ptr = (unsigned char*) base;
+        ptr += ((offset+i)/type_size)*inst_size;
+        ptr = ((MonitoredValueBase*) ptr)->data_u8();
+        ptr += (offset+i) % type_size;
+        return *ptr;
+    }
+
+    unsigned char& operator*() {
+        return *this[0];
+    }
+
+    unsigned char* operator++(int) {
+        unsigned char* ptr = &(*this[1]);
+        ptr += offset % type_size;
+        offset++;
+        return ptr;
+    }
+};
+
+typedef MonitoredValueCharPtr<CData> CDataCharPtr;
+typedef MonitoredValueCharPtr<SData> SDataCharPtr;
+typedef MonitoredValueCharPtr<IData> IDataCharPtr;
+typedef MonitoredValueCharPtr<QData> QDataCharPtr;
+typedef MonitoredValueCharPtr<WData> WDataCharPtr;
+typedef MonitoredValueBaseCharPtr AnyDataCharPtr;
+
+// Override parts of stdlib to make this class more transparent?
+extern AnyDataCharPtr memset(AnyDataCharPtr dest, int ch, std::size_t count);
 
 class VerilatedEvalMsgQueue;
 class VerilatedScopeNameMap;

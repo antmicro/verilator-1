@@ -258,6 +258,13 @@ void VerilatedThread::wait_for_time(VerilatedSyms* symsp, vluint64_t time) {
     set_idle(false);
 }
 
+// Override parts of stdlib to make this class more transparent?
+AnyDataCharPtr memset(AnyDataCharPtr dest, int ch, std::size_t count) {
+    for (int i = 0; i < count; i++)
+        dest[i] = ch;
+    return dest;
+}
+
 #ifndef VL_USER_FINISH  ///< Define this to override this function
 void vl_finish(const char* filename, int linenum, const char* hier) VL_MT_UNSAFE {
     if (false && hier) {}
@@ -1177,25 +1184,6 @@ static inline void _vl_vsss_read_str(FILE* fp, int& floc, WDataInP fromp, const 
     *cp++ = '\0';
     // VL_DBG_MSGF(" _read got='"<<tmpp<<"'\n");
 }
-struct WDataCharPtr {
-    WDataV* wdata;
-    std::size_t offset = 0;
-
-    operator bool() {
-        return wdata;
-    }
-    char& operator*() {
-        char* ptr = (char*)&wdata[offset/4];
-        ptr += offset % 4;
-        return *ptr;
-    }
-    char* operator++(int) {
-        char* ptr = (char*)wdata[offset/4].data();
-        ptr += offset % 4;
-        offset++;
-        return ptr;
-    }
-};
 static inline WDataCharPtr _vl_vsss_read_bin(FILE* fp, int& floc, WDataInP fromp, const std::string& fstr,
                                       WDataCharPtr beginp, std::size_t n, bool inhibit = false) {
     // Variant of _vl_vsss_read_str using the same underlying I/O functions but optimized
