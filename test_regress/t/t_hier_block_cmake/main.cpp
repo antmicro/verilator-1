@@ -12,6 +12,8 @@
 #include <memory>
 #include "Vt_hier_block.h"
 
+double sc_time_stamp() { return 0.0; }
+
 int main(int argc, char *argv[]) {
     std::unique_ptr<Vt_hier_block> top{new Vt_hier_block("top")};
     Verilated::commandArgs(argc, argv);
