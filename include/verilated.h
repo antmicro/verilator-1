@@ -1446,6 +1446,7 @@ static inline QData VL_CVT_Q_D(double lhs) VL_PURE {
 // clang-format on
 
 /// Return double from lhs (numeric) unsigned
+double VL_ITOR_D_W(int lbits, WData* lwp) VL_PURE;
 double VL_ITOR_D_W(int lbits, WDataInP lwp) VL_PURE;
 static inline double VL_ITOR_D_I(int, IData lhs) VL_PURE {
     return static_cast<double>(static_cast<vluint32_t>(lhs));
@@ -1454,16 +1455,17 @@ static inline double VL_ITOR_D_Q(int, QData lhs) VL_PURE {
     return static_cast<double>(static_cast<vluint64_t>(lhs));
 }
 /// Return double from lhs (numeric) signed
+double VL_ISTOR_D_W(int lbits, WData* lwp) VL_PURE;
 double VL_ISTOR_D_W(int lbits, WDataInP lwp) VL_PURE;
-static inline double VL_ISTOR_D_I(int lbits, IDataV lhs) VL_PURE {
+static inline double VL_ISTOR_D_I(int lbits, IData lhs) VL_PURE {
     if (lbits == 32) return static_cast<double>(static_cast<vlsint32_t>(lhs));
-    WDataV lwp[VL_WQ_WORDS_E];
+    WData lwp[VL_WQ_WORDS_E];
     VL_SET_WI(lwp, lhs);
     return VL_ISTOR_D_W(lbits, lwp);
 }
-static inline double VL_ISTOR_D_Q(int lbits, QDataV lhs) VL_PURE {
+static inline double VL_ISTOR_D_Q(int lbits, QData lhs) VL_PURE {
     if (lbits == 64) return static_cast<double>(static_cast<vlsint64_t>(lhs));
-    WDataV lwp[VL_WQ_WORDS_E];
+    WData lwp[VL_WQ_WORDS_E];
     VL_SET_WQ(lwp, lhs);
     return VL_ISTOR_D_W(lbits, lwp);
 }
@@ -1577,6 +1579,11 @@ double vl_time_multiplier(int scale);
 
 // EMIT_RULE: VL_ASSIGNCLEAN:  oclean=clean; obits==lbits;
 #define VL_ASSIGNCLEAN_W(obits, owp, lwp) VL_CLEAN_WW((obits), (obits), (owp), (lwp))
+static inline WData* _VL_CLEAN_INPLACE_W(int obits, WData* owp) VL_MT_SAFE {
+    int words = VL_WORDS_I(obits);
+    owp[words - 1] &= VL_MASK_E(obits);
+    return owp;
+}
 static inline WDataOutP _VL_CLEAN_INPLACE_W(int obits, WDataOutP owp) VL_MT_SAFE {
     int words = VL_WORDS_I(obits);
     owp[words - 1] &= VL_MASK_E(obits);
@@ -2153,6 +2160,14 @@ static inline int _VL_CMPS_W(int lbits, WDataInP lwp, WDataInP rwp) VL_MT_SAFE {
 // Math
 
 // Output NOT clean
+static inline WData* VL_NEGATE_W(int words, WData* owp, const WData* lwp) VL_MT_SAFE {
+    EData carry = 1;
+    for (int i = 0; i < words; ++i) {
+        owp[i] = ~lwp[i] + carry;
+        carry = (owp[i] < ~lwp[i]);
+    }
+    return owp;
+}
 static inline WDataOutP VL_NEGATE_W(int words, WDataOutP owp, WDataInP lwp) VL_MT_SAFE {
     EData carry = 1;
     for (int i = 0; i < words; ++i) {
