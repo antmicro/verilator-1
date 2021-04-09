@@ -1373,7 +1373,8 @@ public:
         return true;
     }
     static bool useDelayedValue(AstNode* nodep) {
-        if (auto* selp = VN_CAST(nodep->backp(), NodeSel)) return selp->fromp() != nodep;
+        if (auto* selp = VN_CAST(nodep->backp(), NodeSel))
+            if (selp->fromp() == nodep) return false; // only use delayed value on root select
         for (AstNodeSel* selp = VN_CAST(nodep, NodeSel); selp; selp = VN_CAST(selp->fromp(), NodeSel)) {
             if (auto* varrefp = VN_CAST(selp->fromp(), VarRef)) return varrefp->useDelayedValue();
         }
