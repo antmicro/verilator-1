@@ -445,7 +445,7 @@ public:
 
     void assign(vluint64_t v) {
         std::unique_lock<std::mutex> lck(m_mtx);
-        m_value = (T)v;
+        m_value = reinterpret_cast<T&>(v);
         written();
     }
 
@@ -675,10 +675,19 @@ public:
         return var->value_u64();
     }
 
-    void schedule(MonitoredValueBase* var, vluint64_t val) {
+    template<typename T>
+    void schedule(MonitoredValueBase* var, const MonitoredValue<T>& val) {
+        schedule(var, (T) val);
+    }
+    template<typename T>
+    void schedule(MonitoredValueBase* var, T val) {
         std::unique_lock<std::mutex> lck(mtx);
-
-        data[var] = val;
+        union {
+            T true_val;
+            vluint64_t abstract_val;
+        };
+        true_val = val;
+        data[var] = abstract_val;
     }
 
     // XXX support get_scheduled for edata?
