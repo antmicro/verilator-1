@@ -100,10 +100,12 @@ class CMakeEmitter final {
         *of << "\n### Compiler flags...\n";
 
         *of << "# User CFLAGS (from -CFLAGS on Verilator command line)\n";
-        cmake_set_raw(*of, name + "_USER_CFLAGS", cmake_list(v3Global.opt.cFlags()));
+        // XXX always enable VL_THREADED for now, use switch in future
+        cmake_set_raw(*of, name + "_USER_CFLAGS", "\"-DVL_THREADED\" " + cmake_list(v3Global.opt.cFlags()));
 
         *of << "# User LDLIBS (from -LDFLAGS on Verilator command line)\n";
-        cmake_set_raw(*of, name + "_USER_LDLIBS", cmake_list(v3Global.opt.ldLibs()));
+        // XXX always link pthreads for now, use switch in future
+        cmake_set_raw(*of, name + "_USER_LDLIBS", "\"-lpthread\" " + cmake_list(v3Global.opt.ldLibs()));
 
         *of << "\n### Switches...\n";
 
