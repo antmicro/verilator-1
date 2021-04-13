@@ -241,6 +241,10 @@ inline VerilatedSerialize& operator<<(VerilatedSerialize& os, std::string& rhs) 
     os << len;
     return os.write(rhs.data(), len);
 }
+template<typename T>
+inline VerilatedSerialize& operator<<(VerilatedSerialize& os, const MonitoredValue<T>& rhs) {
+    return os << rhs.value();
+}
 inline VerilatedDeserialize& operator>>(VerilatedDeserialize& os, std::string& rhs) {
     vluint32_t len = 0;
     os >> len;
