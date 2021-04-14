@@ -425,37 +425,31 @@ public:
     }
     virtual void visit(AstNodeAssign* nodep) override { visit_generic_assign(nodep); }
     virtual void visit_assigndly(AstNodeAssign* nodep, bool continuous) {
-        if (VN_IS(nodep->lhsp(), VarRef) || VN_IS(nodep->lhsp(), ArraySel)
-            || VN_IS(nodep->lhsp(), WordSel) || VN_IS(nodep->lhsp(), Sel)) {
-            {
-                puts("verilated_nba_ctrl.schedule(");
-                if (!continuous && !VN_IS(nodep->lhsp(), Sel)) {
-                    puts("&");
-                    iterateAndNextNull(nodep->lhsp());
-                    puts(", ");
-                }
-            }
-            if (continuous || VN_IS(nodep->lhsp(), Sel)) {
-                puts("[vlTOPp,vlSymsp");
-                if (m_funcp) {
-                    if (m_funcp->isStatic().falseKnown()) puts(",this");
-                    for (auto* nodep = m_funcp->initsp(); nodep; nodep = nodep->nextp()) {
-                        if (auto* varp = VN_CAST(nodep, Var)) {
-                            puts(",\n");
-                            puts(varp->name());
-                        }
+        bool lambda = continuous || VN_IS(nodep->lhsp(), Sel)
+            || VN_IS(nodep->lhsp(), AssocSel) || nodep->lhsp()->dtypep()->isString();
+        puts("verilated_nba_ctrl.schedule(");
+        if (!lambda) {
+            puts("&");
+            iterateAndNextNull(nodep->lhsp());
+            puts(", ");
+        }
+        if (lambda) {
+            puts("[vlTOPp,vlSymsp");
+            if (m_funcp) {
+                if (m_funcp->isStatic().falseKnown()) puts(",this");
+                for (auto* nodep = m_funcp->initsp(); nodep; nodep = nodep->nextp()) {
+                    if (auto* varp = VN_CAST(nodep, Var)) {
+                        puts(",\n");
+                        puts(varp->name());
                     }
                 }
-                puts("] { ");
-                visit_generic_assign(nodep);
-                puts("; }");
-            } else
-                iterateAndNextNull(nodep->rhsp());
-            puts(");\n");
-        } else {
-            nodep->v3warn(E_UNSUPPORTED, "Unsupported: delayed assignment type");
-            nodep->dumpTree(cout, "    ");
-        }
+            }
+            puts("] { ");
+            visit_generic_assign(nodep);
+            puts("; }");
+        } else
+            iterateAndNextNull(nodep->rhsp());
+        puts(");\n");
     }
     virtual void visit(AstAssignDly* nodep) override { visit_assigndly(nodep, false); }
     virtual void visit(AstAssignW* nodep) override {
