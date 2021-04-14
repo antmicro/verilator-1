@@ -425,15 +425,16 @@ public:
     }
     virtual void visit(AstNodeAssign* nodep) override { visit_generic_assign(nodep); }
     virtual void visit_assigndly(AstNodeAssign* nodep, bool continuous) {
-        bool lambda = continuous || VN_IS(nodep->lhsp(), Sel)
-            || VN_IS(nodep->lhsp(), AssocSel) || nodep->lhsp()->dtypep()->isString();
         puts("verilated_nba_ctrl.schedule(");
-        if (!lambda) {
+        if (!continuous
+            && !VN_IS(nodep->lhsp(), Sel)
+            && !VN_IS(nodep->lhsp(), AssocSel)
+            && !nodep->lhsp()->dtypep()->isString()) {
             puts("&");
             iterateAndNextNull(nodep->lhsp());
             puts(", ");
-        }
-        if (lambda) {
+            iterateAndNextNull(nodep->rhsp());
+        } else {
             puts("[vlTOPp,vlSymsp");
             if (m_funcp) {
                 if (m_funcp->isStatic().falseKnown()) puts(",this");
@@ -447,8 +448,7 @@ public:
             puts("] { ");
             visit_generic_assign(nodep);
             puts("; }");
-        } else
-            iterateAndNextNull(nodep->rhsp());
+        }
         puts(");\n");
     }
     virtual void visit(AstAssignDly* nodep) override { visit_assigndly(nodep, false); }
