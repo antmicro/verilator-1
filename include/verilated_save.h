@@ -194,62 +194,66 @@ public:
 
 //=============================================================================
 
-inline VerilatedSerialize& operator<<(VerilatedSerialize& os, vluint64_t& rhs) {
+inline VerilatedSerialize& operator<<(VerilatedSerialize& os, const vluint64_t& rhs) {
     return os.write(&rhs, sizeof(rhs));
 }
 inline VerilatedDeserialize& operator>>(VerilatedDeserialize& os, vluint64_t& rhs) {
     return os.read(&rhs, sizeof(rhs));
 }
-inline VerilatedSerialize& operator<<(VerilatedSerialize& os, vluint32_t& rhs) {
+inline VerilatedSerialize& operator<<(VerilatedSerialize& os, const vluint32_t& rhs) {
     return os.write(&rhs, sizeof(rhs));
 }
 inline VerilatedDeserialize& operator>>(VerilatedDeserialize& os, vluint32_t& rhs) {
     return os.read(&rhs, sizeof(rhs));
 }
-inline VerilatedSerialize& operator<<(VerilatedSerialize& os, vluint16_t& rhs) {
+inline VerilatedSerialize& operator<<(VerilatedSerialize& os, const vluint16_t& rhs) {
     return os.write(&rhs, sizeof(rhs));
 }
 inline VerilatedDeserialize& operator>>(VerilatedDeserialize& os, vluint16_t& rhs) {
     return os.read(&rhs, sizeof(rhs));
 }
-inline VerilatedSerialize& operator<<(VerilatedSerialize& os, vluint8_t& rhs) {
+inline VerilatedSerialize& operator<<(VerilatedSerialize& os, const vluint8_t& rhs) {
     return os.write(&rhs, sizeof(rhs));
 }
 inline VerilatedDeserialize& operator>>(VerilatedDeserialize& os, vluint8_t& rhs) {
     return os.read(&rhs, sizeof(rhs));
 }
-inline VerilatedSerialize& operator<<(VerilatedSerialize& os, bool& rhs) {
+inline VerilatedSerialize& operator<<(VerilatedSerialize& os, const bool& rhs) {
     return os.write(&rhs, sizeof(rhs));
 }
 inline VerilatedDeserialize& operator>>(VerilatedDeserialize& os, bool& rhs) {
     return os.read(&rhs, sizeof(rhs));
 }
-inline VerilatedSerialize& operator<<(VerilatedSerialize& os, double& rhs) {
+inline VerilatedSerialize& operator<<(VerilatedSerialize& os, const double& rhs) {
     return os.write(&rhs, sizeof(rhs));
 }
 inline VerilatedDeserialize& operator>>(VerilatedDeserialize& os, double& rhs) {
     return os.read(&rhs, sizeof(rhs));
 }
-inline VerilatedSerialize& operator<<(VerilatedSerialize& os, float& rhs) {
+inline VerilatedSerialize& operator<<(VerilatedSerialize& os, const float& rhs) {
     return os.write(&rhs, sizeof(rhs));
 }
 inline VerilatedDeserialize& operator>>(VerilatedDeserialize& os, float& rhs) {
     return os.read(&rhs, sizeof(rhs));
 }
-inline VerilatedSerialize& operator<<(VerilatedSerialize& os, std::string& rhs) {
+inline VerilatedSerialize& operator<<(VerilatedSerialize& os, const std::string& rhs) {
     vluint32_t len = rhs.length();
     os << len;
     return os.write(rhs.data(), len);
-}
-template<typename T>
-inline VerilatedSerialize& operator<<(VerilatedSerialize& os, const MonitoredValue<T>& rhs) {
-    return os << rhs.value();
 }
 inline VerilatedDeserialize& operator>>(VerilatedDeserialize& os, std::string& rhs) {
     vluint32_t len = 0;
     os >> len;
     rhs.resize(len);
     return os.read((void*)rhs.data(), len);
+}
+template<typename T>
+inline VerilatedSerialize& operator<<(VerilatedSerialize& os, const MonitoredValue<T>& rhs) {
+    return os << rhs.value();
+}
+template<typename T>
+inline VerilatedDeserialize& operator>>(VerilatedDeserialize& os, MonitoredValue<T>& rhs) {
+    return os >> *rhs.data();
 }
 template <class T_Key, class T_Value>
 VerilatedSerialize& operator<<(VerilatedSerialize& os, VlAssocArray<T_Key, T_Value>& rhs) {
