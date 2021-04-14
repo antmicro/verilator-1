@@ -100,6 +100,7 @@ private:
     std::condition_variable m_idle_cv;
 
 public:
+    ~VerilatedThreadRegistry();
     void put(VerilatedThread* thread);
     void idle(bool w);
     void wait_for_idle();

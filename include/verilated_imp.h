@@ -216,7 +216,9 @@ public:
     std::condition_variable m_cv;
 
     VerilatedTimedQueue() {}
-    ~VerilatedTimedQueue() {}
+    ~VerilatedTimedQueue() {
+        m_cv.notify_all();
+    }
 
     // METHODS
     bool empty() const { return m_timeq.empty(); }

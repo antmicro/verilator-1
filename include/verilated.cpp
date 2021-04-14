@@ -149,6 +149,10 @@ void VerilatedThreadPool::free(VerilatedThread* thread) {
     m_free_threads.push_back(thread);
 }
 
+VerilatedThreadRegistry::~VerilatedThreadRegistry() {
+    exit();
+}
+
 void VerilatedThreadRegistry::put(VerilatedThread* thread) {
     std::unique_lock<std::mutex> lck(m_mtx);
     m_threads.push_back(thread);
@@ -2899,19 +2903,12 @@ VerilatedSyms::VerilatedSyms() {
 #ifdef VL_THREADED
     __Vm_evalMsgQp = new VerilatedEvalMsgQueue;
 #endif
-    //__Vm_timedQp = new VerilatedTimedQueue;
 }
 VerilatedSyms::~VerilatedSyms() {
     thread_registry.should_exit(true);
-
-    __Vm_timedQp.m_cv.notify_all();
-
-    thread_registry.exit();
-
 #ifdef VL_THREADED
     delete __Vm_evalMsgQp;
 #endif
-    // delete __Vm_timedQp;
 }
 VerilatedTimedQueue VerilatedSyms::__Vm_timedQp;
 
