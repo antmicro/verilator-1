@@ -78,7 +78,7 @@ private:
             VL_DO_DANGLING(nodep->unlinkFrBack()->deleteTree(), nodep);
             return;
         }
-        //Copy combo tree to settlement tree with duplicated statements
+        // Copy combo tree to settlement tree with duplicated statements
         if (sensesp->hasCombo()) {
             AstSenTree* newsentreep = new AstSenTree(
                 nodep->fileline(), new AstSenItem(nodep->fileline(), AstSenItem::Settle()));

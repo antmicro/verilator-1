@@ -195,41 +195,10 @@ void VerilatedThreadRegistry::exit() {
     m_idle_counter=0;
 }
 
-VerilatedThread::VerilatedThread(std::function<void(VerilatedThread*)> func, bool oneshot,
-                                 std::string name)
-    : m_func(func)
-    , m_ready(false)
-    , m_oneshot(oneshot)
-    , m_joined(false)
-    , m_should_exit(false)
-    , m_idle(false)
-    , m_name(name) {
-    thread_registry.put(this);
-
-    if (m_oneshot) {
-        m_thr = std::thread([this]() {
-            wait_for_ready();
-            if (!should_exit()) m_func(this);
-            ready(false);
-            idle(true);
-        });
-    } else {
-        m_thr = std::thread([this]() {
-            do {
-                wait_for_ready();
-                if (!should_exit()) m_func(this);
-                ready(false);
-            } while (!Verilated::gotFinish() && !should_exit());
-            idle(true);
-        });
-    }
-}
-
 VerilatedThread::VerilatedThread(std::function<void(VerilatedThread*)> func,
                                  VerilatedThreadPool* pool)
     : m_func(func)
     , m_ready(false)
-    , m_oneshot(false)
     , m_joined(false)
     , m_should_exit(false)
     , m_idle(false)

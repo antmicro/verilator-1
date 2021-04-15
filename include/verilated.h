@@ -35,6 +35,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+
+// Dynamic scheduler-related includes
 #include <vector>
 #include <list>
 #include <map>
@@ -49,6 +51,11 @@
 // <iostream> avoided to reduce compile time
 // <map> avoided and instead in verilated_heavy.h to reduce compile time
 // <string> avoided and instead in verilated_heavy.h to reduce compile time
+#ifdef VL_THREADED
+# include <atomic>
+# include <mutex>
+# include <thread>
+#endif
 
 // Allow user to specify their own include file
 #ifdef VL_VERILATED_INCLUDE
@@ -157,7 +164,6 @@ public:
 private:
     std::function<void(VerilatedThread*)> m_func;
     std::atomic<bool> m_ready;
-    std::atomic<bool> m_oneshot;
     std::atomic<bool> m_joined;
 
     std::atomic<bool> m_should_exit;
@@ -196,8 +202,6 @@ private:
     }
 
 public:
-    VerilatedThread(std::function<void(VerilatedThread*)> func, bool oneshot, std::string name);
-
     VerilatedThread(std::function<void(VerilatedThread*)> func, VerilatedThreadPool* pool);
 
     ~VerilatedThread() { exit(); }

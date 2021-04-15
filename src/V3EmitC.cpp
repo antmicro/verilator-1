@@ -475,7 +475,7 @@ public:
             puts(".data()");  // Access returned std::array as C array
         }
     }
-    virtual void visit_call(AstNodeCCall* nodep) {
+    virtual void visit(AstNodeCCall* nodep) {
         if (AstCMethodCall* ccallp = VN_CAST(nodep, CMethodCall)) {
             // make this a Ast type for future opt
             iterate(ccallp->fromp());
@@ -519,15 +519,10 @@ public:
                 puts(funcp->nameProtect() + "__thread->wait_for_idle();\n}\n");
             }
         } else {
-            visit_call(nodep);
+            visit((AstNodeCCall*) nodep);
         }
     }
-    virtual void visit(AstNodeCCall* nodep) override { visit_call(nodep); }
     virtual void visit(AstCMethodHard* nodep) override {
-        // is there a return value that is wide convert to array?
-        bool returnCArray = nodep->dtypep()->isWide()
-            && (VN_IS(nodep->fromp()->dtypep(), QueueDType)
-                || VN_IS(nodep->fromp()->dtypep(), DynArrayDType));
         iterate(nodep->fromp());
         puts(".");
         puts(nodep->nameProtect());
@@ -544,7 +539,11 @@ public:
             comma = true;
         }
         puts(")");
-        if (returnCArray) puts(".data()");  // Access returned std::array as C array
+        if (nodep->dtypep()->isWide()
+            && (VN_IS(nodep->fromp()->dtypep(), QueueDType)
+                || VN_IS(nodep->fromp()->dtypep(), DynArrayDType))) {
+            puts(".data()");  // Access returned std::array as C array
+        }
         // Some are statements some are math.
         if (nodep->isStatement()) puts(";\n");
         UASSERT_OBJ(!nodep->isStatement() || VN_IS(nodep->dtypep(), VoidDType), nodep,

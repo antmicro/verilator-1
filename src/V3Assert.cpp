@@ -368,7 +368,7 @@ private:
                    || nodep->displayType() == AstDisplayType::DT_FATAL) {
             replaceDisplay(nodep, "%%Error");
         } else if (nodep->displayType() == AstDisplayType::DT_MONITOR) {
-            return;
+            return; // $monitor is handled by Monitor class in verilated.h
             nodep->displayType(AstDisplayType::DT_DISPLAY);
             const auto fl = nodep->fileline();
             const auto monNum = ++m_monitorNum;
