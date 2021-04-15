@@ -58,6 +58,7 @@ void make_and_destroy() {
     }
 
     VL_DO_DANGLING(delete topp, topp);
+    thread_registry.exit();
 }
 
 int main(int argc, char* argv[]) {
