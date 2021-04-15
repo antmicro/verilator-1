@@ -510,7 +510,9 @@ public:
             puts(nodep->hiernameProtect());
             puts(funcp->nameProtect() + "(");
             ccallIterateArgs(nodep);
-            puts(", self);\n});\n");
+            puts(", self);\n}, \"");
+            puts(funcp->nameProtect());
+            puts("\");\n");
             if (nodep->funcp()->oneshot()) {
                 puts("triggered_" + funcp->nameProtect() + " = true;\n");
                 puts("}\n");
