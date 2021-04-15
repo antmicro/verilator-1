@@ -3125,8 +3125,9 @@ void EmitCImp::emitWrapEval(AstNodeModule* modp) {
     puts(protect("_eval_debug_assertions") + "();\n");
     puts("#endif  // VL_DEBUG\n");
     putsDecoration("// Initialize\n");
-    puts("if (VL_UNLIKELY(!vlSymsp->__Vm_didInit)) " + protect("_eval_initial_loop")
+    puts("if (VL_UNLIKELY(!vlSymsp->__Vm_didInit)) {\n" + protect("_eval_initial_loop")
          + "(vlSymsp);\n");
+    puts("thread_registry.wait_for_idle();\n}\n");
     if (v3Global.opt.inhibitSim()) puts("if (VL_UNLIKELY(__Vm_inhibitSim)) return;\n");
     puts("Verilated::timedQActivate(vlSymsp, VL_TIME_Q());\n");
 
