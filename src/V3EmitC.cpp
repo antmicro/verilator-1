@@ -425,13 +425,12 @@ public:
         if (brace) puts("}\n");
     }
     virtual void visit(AstNodeAssign* nodep) override { visit_generic_assign(nodep); }
-    virtual void visit_assigndly(AstNodeAssign* nodep, bool continuous) {
+    virtual void visit_assigndly(AstNodeAssign* nodep, bool delayedEval) {
         puts("verilated_nba_ctrl.schedule(");
-        if (!continuous
+        if (!delayedEval && !nodep->isWide()
             && !VN_IS(nodep->lhsp(), Sel)
             && !VN_IS(nodep->lhsp(), AssocSel)
             && !nodep->lhsp()->dtypep()->isString()) {
-            puts("&");
             iterateAndNextNull(nodep->lhsp());
             puts(", ");
             iterateAndNextNull(nodep->rhsp());
@@ -452,7 +451,7 @@ public:
         }
         puts(");\n");
     }
-    virtual void visit(AstAssignDly* nodep) override { visit_assigndly(nodep, false); }
+    virtual void visit(AstAssignDly* nodep) override { visit_assigndly(nodep, nodep->delayedEval()); }
     virtual void visit(AstAssignW* nodep) override {
         // Immediatelly assign the current value
         visit_generic_assign(nodep);
@@ -645,6 +644,10 @@ public:
                 }
             }
             puts(");\n");
+        } else if (nodep->displayType() == AstDisplayType::DT_STROBE) {
+            puts("strobe.push([vlSymsp, vlTOPp] () {\n");
+            displayNode(nodep, nodep->fmtp()->scopeNamep(), text, nodep->fmtp()->exprsp(), false);
+            puts("});\n");
         } else
             displayNode(nodep, nodep->fmtp()->scopeNamep(), text, nodep->fmtp()->exprsp(), false);
     }
@@ -1368,26 +1371,8 @@ public:
         puts(")");
     }
     // Terminals
-    static bool useDelayedValue(AstVarRef* nodep) {
-        if (!nodep->useDelayedValue()) return false;
-        auto* backp = nodep->backp();
-        if (auto* selp = VN_CAST(backp, NodeSel)) return selp->lhsp() != nodep;
-        if (auto* methp = VN_CAST(backp, CMethodHard)) return methp->fromp() != nodep;
-        return true;
-    }
-    static bool useDelayedValue(AstNode* nodep) {
-        if (auto* selp = VN_CAST(nodep->backp(), NodeSel))
-            if (selp->fromp() == nodep) return false; // only use delayed value on root select
-        for (AstNodeSel* selp = VN_CAST(nodep, NodeSel); selp; selp = VN_CAST(selp->fromp(), NodeSel)) {
-            if (auto* varrefp = VN_CAST(selp->fromp(), VarRef)) return varrefp->useDelayedValue();
-        }
-        if (auto* varrefp = VN_CAST(nodep, VarRef)) return useDelayedValue(varrefp);
-        return false;
-    }
     virtual void visit(AstVarRef* nodep) override {
         AstNodeDType* dtypep = nodep->varp()->dtypep();
-        bool useDly = useDelayedValue(nodep);
-        if (useDly) puts("verilated_nba_ctrl.get_scheduled(&");
         if(m_wrapVarRefsInsdieIf)
         {
             ofp()->printf("VL_OR_S(%d,\n", nodep->widthWords());
@@ -1398,7 +1383,6 @@ public:
         {
             puts(")");
         }
-        if (useDly) puts(")");
     }
     void emitCvtPackStr(AstNode* nodep) {
         if (const AstConst* constp = VN_CAST(nodep, Const)) {
@@ -2365,8 +2349,6 @@ bool EmitCStmts::emitSimpleOk(AstNodeMath* nodep) {
 
 void EmitCStmts::emitOpName(AstNode* nodep, const string& format, AstNode* lhsp, AstNode* rhsp,
                             AstNode* thsp) {
-    bool useDly = useDelayedValue(nodep);
-    if (useDly) puts("verilated_nba_ctrl.get_scheduled(&");
     // Look at emitOperator() format for term/uni/dual/triops,
     // and write out appropriate text.
     //  %n*     node
@@ -2482,7 +2464,6 @@ void EmitCStmts::emitOpName(AstNode* nodep, const string& format, AstNode* lhsp,
             puts(s);
         }
     }
-    if (useDly) puts(")");
 }
 
 //----------------------------------------------------------------------
@@ -3109,6 +3090,7 @@ void EmitCImp::emitSettleLoop(AstNodeModule* modp, const std::string& eval_call,
     puts("} while (!Verilated::gotFinish() && vlSymsp->TOPp->");
     puts(protect("__eval_change_counter"));
     puts(" != 0);\n");
+    puts("strobe.display();\n");
     puts("if (VL_UNLIKELY(++__VclockLoop > " + cvtToStr(v3Global.opt.convergeLimit()) + ")) {\n");
     puts("// About to fail, so enable debug to see what's not settling.\n");
     puts("// Note you must run make with OPT=-DVL_DEBUG for debug prints.\n");

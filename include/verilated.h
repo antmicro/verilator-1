@@ -302,8 +302,6 @@ public:
 class MonitoredValueBase VL_NOT_FINAL {
 public:
     virtual void release(){};
-    virtual void assign(vluint64_t){};
-    virtual vluint64_t value_u64() const = 0;
     virtual void subscribe(MonitoredValueCallback& callback) = 0;
     virtual void unsubscribe(MonitoredValueCallback& callback) = 0;
     virtual std::size_t type_size() const = 0;
@@ -448,12 +446,6 @@ public:
         return m_value <= b;
     }
 
-    void assign(vluint64_t v) {
-        std::unique_lock<std::mutex> lck(m_mtx);
-        m_value = reinterpret_cast<T&>(v);
-        written();
-    }
-
     void assign_no_notify(T v) {
         std::unique_lock<std::mutex> lck(m_mtx);
         m_value = v;
@@ -483,7 +475,6 @@ public:
 
     T value() const { return m_value; }
 
-    virtual vluint64_t value_u64() const { return m_value; }
     virtual std::size_t type_size() const { return sizeof(T); }
     virtual std::size_t size() const { return sizeof(*this); }
     virtual vluint8_t* data_u8() { return (vluint8_t*) &m_value; }
@@ -540,6 +531,24 @@ private:
 };
 
 extern Monitor monitor;
+
+class Strobe final {
+public:
+    template <typename F>
+    void push(F func) {
+        m_strobes.push_back(func);
+    }
+
+    void display() {
+        for (auto& strobe : m_strobes) strobe();
+        m_strobes.clear();
+    }
+
+private:
+    std::vector<std::function<void()>> m_strobes;
+};
+
+extern Strobe strobe;
 
 // clang-format off
 //                   P          // Packed data of bit type (C/S/I/Q/W)
@@ -666,51 +675,34 @@ extern std::vector<VerilatedThread*> verilated_threads;
 
 class VerilatedNBACtrl final {
 private:
-    std::map<MonitoredValueBase*, vluint64_t> data;
-    // For continuous assignments, AstSel etc.
-    // XXX support get_scheduled for edata?
-    //std::map<MonitoredValueBase*, std::function<vluint64_t()>> edata;
-    std::vector<std::function<void()>> edata;
+    // XXX make this whole mechanism faster
+    std::vector<std::function<void()>> assignments;
     std::mutex mtx;
 
 public:
-    vluint64_t get_scheduled(MonitoredValueBase* var) {
-        auto it = data.find(var);
-        if (it != data.end()) { return it->second; }
-        return var->value_u64();
+    template<typename T, typename U>
+    void schedule(MonitoredValue<T>& lhs, const MonitoredValue<U>& rhs) {
+        schedule(lhs, (U) rhs);
     }
 
-    template<typename T>
-    void schedule(MonitoredValueBase* var, const MonitoredValue<T>& val) {
-        schedule(var, (T) val);
-    }
-    template<typename T>
-    void schedule(MonitoredValueBase* var, T val) {
+    template<typename T, typename U>
+    void schedule(MonitoredValue<T>& lhs, U rhs) {
         std::unique_lock<std::mutex> lck(mtx);
-        union {
-            T true_val;
-            vluint64_t abstract_val;
-        };
-        true_val = val;
-        data[var] = abstract_val;
+        assignments.push_back([&lhs, rhs]() {
+            lhs.assign_no_lock(rhs);
+        });
     }
 
-    // XXX support get_scheduled for edata?
-    //void schedule(MonitoredValueBase* var, std::function<vluint64_t()> expr) { edata[var] = expr; }
     void schedule(std::function<void()> expr) {
         std::unique_lock<std::mutex> lck(mtx);
-        edata.push_back(expr);
+        assignments.push_back(expr);
     }
 
     void assign() {
         std::unique_lock<std::mutex> lck(mtx);
-
-        for (auto const& v : data) { v.first->assign(v.second); }
-        data.clear();
-
-        //for (auto const& v : edata) { v.first->assign(v.second()); }
-        for (auto const& f : edata) { f(); }
-        edata.clear();
+        for (auto const& assignment : assignments)
+            assignment();
+        assignments.clear();
     }
 };
 

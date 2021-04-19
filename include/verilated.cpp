@@ -99,6 +99,7 @@ VerilatedNBACtrl verilated_nba_ctrl;
 VerilatedThreadPool thread_pool;
 VerilatedThreadRegistry thread_registry;
 Monitor monitor;
+Strobe strobe;
 
 //===========================================================================
 // User definable functions

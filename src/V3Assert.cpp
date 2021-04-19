@@ -388,11 +388,8 @@ private:
             AstNode* newp = new AstAlwaysPostponed{fl, ifp};
             m_modp->addStmtp(newp);
         } else if (nodep->displayType() == AstDisplayType::DT_STROBE) {
+            return; // $strobe is handled by Strobe class in verilated.h
             nodep->displayType(AstDisplayType::DT_DISPLAY);
-            for (auto argp = nodep->fmtp()->exprsp(); argp; argp = argp->nextp()) {
-                if (auto* varrefp = VN_CAST(argp, VarRef))
-                    varrefp->useDelayedValue(true);
-            }
             // Need one-shot
             const auto fl = nodep->fileline();
             const auto varp

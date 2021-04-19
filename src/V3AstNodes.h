@@ -2401,7 +2401,6 @@ public:
 
 class AstVarRef final : public AstNodeVarRef {
 private:
-    bool m_useDelayedValue = false;
     // A reference to a variable (lvalue or rvalue)
 public:
     AstVarRef(FileLine* fl, const string& name, const VAccess& access)
@@ -2448,8 +2447,6 @@ public:
     virtual string emitVerilog() override { V3ERROR_NA_RETURN(""); }
     virtual string emitC() override { V3ERROR_NA_RETURN(""); }
     virtual bool cleanOut() const override { return true; }
-    void useDelayedValue(bool u) { m_useDelayedValue = u; }
-    bool useDelayedValue() { return m_useDelayedValue; }
 };
 
 class AstVarXRef final : public AstNodeVarRef {
@@ -3421,6 +3418,9 @@ public:
 };
 
 class AstAssignDly final : public AstNodeAssign {
+private:
+    bool m_delayedEval = false; // Delay eval of RHS until NBA region?
+
 public:
     AstAssignDly(FileLine* fl, AstNode* lhsp, AstNode* rhsp)
         : ASTGEN_SUPER(fl, lhsp, rhsp) {}
@@ -3431,6 +3431,8 @@ public:
     virtual bool isGateOptimizable() const override { return false; }
     virtual string verilogKwd() const override { return "<="; }
     virtual bool brokeLhsMustBeLvalue() const override { return true; }
+    void delayedEval(bool delayed) { m_delayedEval = delayed; }
+    bool delayedEval() const { return m_delayedEval; }
 };
 
 class AstAssignW final : public AstNodeAssign {
