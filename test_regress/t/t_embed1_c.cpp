@@ -120,12 +120,12 @@ void t_embed_child_io_eval(unsigned char clk, unsigned char bit_in, const svBitV
     // TODO maybe we should look at a "change detect" to know if we need to copy
     // out the variables; can return this value to the caller verilog code too
     //
-    *bit_out = __modelp->bit_out;
-    vec_out[0] = __modelp->vec_out;
-    wide_out[0] = __modelp->wide_out[0];
-    wide_out[1] = __modelp->wide_out[1];
-    wide_out[2] = __modelp->wide_out[2];
-    wide_out[3] = __modelp->wide_out[3];
+    *bit_out = bit_in;
+    vec_out[0] = vec_in[0];
+    wide_out[0] = wide_in[0];
+    wide_out[1] = wide_in[1];
+    wide_out[2] = wide_in[2];
+    wide_out[3] = wide_in[3];
     *did_init_out = __modelp->did_init_out;
     VL_DEBUG_IF(VL_PRINTF("[%0ld] out b=%x V=%x DI=%x\n",  //
                           (long int)(VL_TIME_Q()), *bit_out, *vec_out, *did_init_out););
