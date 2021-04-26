@@ -94,7 +94,8 @@ class VerilatedFst;
 class VerilatedFstC;
 class VerilatedThread;
 class VerilatedSyms;
-template <typename T> class MonitoredValue;
+template<typename T, typename Enable = void> class MonitoredValue;
+template<typename T> class MonitoredPointer;
 class MonitoredValueCallback;
 
 class VerilatedThreadRegistry final {
@@ -301,12 +302,22 @@ public:
 
 class MonitoredValueBase VL_NOT_FINAL {
 public:
-    virtual void release(){};
-    virtual void subscribe(MonitoredValueCallback& callback) = 0;
-    virtual void unsubscribe(MonitoredValueCallback& callback) = 0;
     virtual std::size_t type_size() const = 0;
     virtual std::size_t size() const = 0;
     virtual vluint8_t* data_u8() = 0;
+
+    void subscribe(MonitoredValueCallback& callback);
+    void unsubscribe(MonitoredValueCallback& callback);
+
+    std::mutex& mtx() const { return m_mtx; }
+
+    void written();
+
+protected:
+    mutable std::mutex m_mtx;
+
+    std::vector<MonitoredValueCallback*> m_callbacks;
+
 };
 
 class MonitoredValueCallback final {
@@ -325,38 +336,344 @@ public:
     ~MonitoredValueCallback();
     void operator()();
 
-private:
-    std::function<void()> m_callback;
     MonitoredValueBase* m_mon_val = nullptr;
 
-    template<typename T>
-    friend class MonitoredValue;
+private:
+    std::function<void()> m_callback;
 };
 
-template <typename T> class MonitoredValue final : public MonitoredValueBase {
+template<typename T, typename Enable = void>
+class MonitoredReference final {
 public:
-    MonitoredValue()
-        : m_value()
-        , m_mtx() {}
+    MonitoredReference(MonitoredValueBase* m, T* p) : mon_val(m), ptr(p) {}
 
-    template <class U>
-    MonitoredValue(U v)
-        : m_mtx() {
-        std::unique_lock<std::mutex> lck(m_mtx);
-        m_value = (T)v;
+    operator T() const { return *ptr; }
+
+    MonitoredReference& operator=(const MonitoredReference& other) {
+        *ptr = *other.ptr;
     }
 
-    MonitoredValue(const MonitoredValue& o) {
+    template <class U>
+    MonitoredReference operator=(U&& rhs) {
+        std::unique_lock<std::mutex> lck(mon_val->mtx());
+        *ptr = rhs;
+        mon_val->written();
+        return *this;
+    }
+
+    template <class U>
+    MonitoredReference operator&=(U&& rhs) {
+        std::unique_lock<std::mutex> lck(mon_val->mtx());
+        *ptr &= rhs;
+        mon_val->written();
+        return *this;
+    }
+
+    template <class U>
+    MonitoredReference operator|=(U&& rhs) {
+        std::unique_lock<std::mutex> lck(mon_val->mtx());
+        *ptr |= rhs;
+        mon_val->written();
+        return *this;
+    }
+
+    template <class U>
+    MonitoredReference operator^=(U&& rhs) {
+        std::unique_lock<std::mutex> lck(mon_val->mtx());
+        *ptr ^= rhs;
+        mon_val->written();
+        return *this;
+    }
+
+    template <class U>
+    MonitoredReference operator+=(U&& rhs) {
+        std::unique_lock<std::mutex> lck(mon_val->mtx());
+        *ptr += rhs;
+        mon_val->written();
+        return *this;
+    }
+
+    template <class U>
+    MonitoredReference operator-=(U&& rhs) {
+        std::unique_lock<std::mutex> lck(mon_val->mtx());
+        *ptr -= rhs;
+        mon_val->written();
+        return *this;
+    }
+
+    template <class U>
+    MonitoredReference operator*=(U&& rhs) {
+        std::unique_lock<std::mutex> lck(mon_val->mtx());
+        *ptr *= rhs;
+        mon_val->written();
+        return *this;
+    }
+
+
+    template <class U>
+    MonitoredReference operator>>=(int s) {
+        std::unique_lock<std::mutex> lck(mon_val->mtx());
+        *ptr >>= s;
+        mon_val->written();
+        return *this;
+    }
+
+    template <class U>
+    MonitoredReference operator--() {
+        std::unique_lock<std::mutex> lck(mon_val->mtx());
+        --*ptr;
+        mon_val->written();
+        return *this;
+    }
+
+    T operator--(int) {
+        std::unique_lock<std::mutex> lck(mon_val->mtx());
+        T v = *ptr--;
+        mon_val->written();
+        return v;
+    }
+
+    MonitoredReference operator++() {
+        std::unique_lock<std::mutex> lck(mon_val->mtx());
+        ++*ptr;
+        mon_val->written();
+        return *this;
+    }
+
+    T operator++(int) {
+        std::unique_lock<std::mutex> lck(mon_val->mtx());
+        T v = *ptr--;
+        mon_val->written();
+        return v;
+    }
+
+    template <class U> bool operator==(const U& b) {
+        return *ptr == b;
+    }
+    template <class U> bool operator>(const U& b) {
+        return *ptr > b;
+    }
+    template <class U> bool operator>=(const U& b) {
+        return *ptr >= b;
+    }
+    template <class U> bool operator<(const U& b) {
+        return *ptr < b;
+    }
+    template <class U> bool operator<=(const U& b) {
+        return *ptr <= b;
+    }
+
+    void assign_no_notify(T v) {
+        std::unique_lock<std::mutex> lck(mon_val->mtx());
+        *ptr = v;
+    }
+
+    void assign_no_lock(T v) {
+        *ptr = v;
+        mon_val->written();
+    }
+
+    MonitoredPointer<T> operator&() {
+        return MonitoredPointer<T>(mon_val, ptr);
+    }
+
+    MonitoredPointer<const T> operator&() const {
+        return MonitoredPointer<T>(mon_val, ptr);
+    }
+
+    T* data() { return ptr; }
+    const T* data() const { return ptr; }
+
+    T value() const { return *ptr; }
+
+private:
+    MonitoredValueBase* mon_val;
+    T* ptr;
+};
+
+template<typename T>
+class MonitoredPointer final {
+public:
+    template<typename U = T, typename = typename std::enable_if<std::is_const<U>::value>::type>
+    MonitoredPointer(const MonitoredPointer<typename std::remove_const<T>::type>& copied) : mon_val(copied.monitored_value()), ptr(copied.data()) {}
+    MonitoredPointer(const MonitoredPointer<T> &copied) : mon_val(copied.monitored_value()), ptr(copied.data()) {}
+    MonitoredPointer(MonitoredValue<T>* m) : mon_val(m), ptr(m->data()) {}
+    template<typename U>
+    explicit MonitoredPointer(const MonitoredPointer<U> &copied) : mon_val(copied.monitored_value()), ptr((T*)copied.data()) {}
+    MonitoredPointer(MonitoredValueBase* m) : mon_val(m), ptr((T*)m->data_u8()) {}
+    MonitoredPointer(MonitoredValueBase* m, T* p) : mon_val(m), ptr(p) {}
+    MonitoredPointer(std::nullptr_t) : mon_val(nullptr), ptr(nullptr) {}
+
+    template<typename U = T, typename = typename std::enable_if<std::is_const<U>::value>::type>
+    MonitoredPointer& operator=(const MonitoredPointer<typename std::remove_const<T>::type>& copied) { mon_val = copied.monitored_value(); ptr = copied.data(); return *this; }
+
+    MonitoredReference<T> operator[](int i) {
+        return {mon_val, ptr + i};
+    }
+
+    MonitoredReference<const T> operator[](int i) const {
+        return {mon_val, ptr + i};
+    }
+
+    MonitoredReference<T> operator*() {
+        return {mon_val, ptr};
+    }
+
+    MonitoredValue<T>* operator->() {
+        return (MonitoredValue<T>*) mon_val;
+    }
+
+    MonitoredReference<const T> operator*() const {
+        return {mon_val, ptr};
+    }
+
+    operator bool() const { return mon_val != nullptr; }
+    operator void*() { return ptr; }
+    operator const void*() const { return ptr; }
+
+    T* data() const { return ptr; } // XXX fix const correctness
+
+    MonitoredValueBase* monitored_value() const { return mon_val; } // XXX fix const correctness
+
+    bool operator==(std::nullptr_t) const { return mon_val == nullptr; }
+
+    MonitoredPointer operator+(int i) const {
+        return {mon_val, ptr + i};
+    }
+
+    MonitoredPointer& operator+=(int i) {
+        ptr += i;
+        return *this;
+    }
+
+    MonitoredPointer operator++(int) {
+        MonitoredPointer ptr2(mon_val, ptr);
+        ptr++;
+        return ptr2;
+    }
+
+private:
+    mutable MonitoredValueBase* mon_val;
+    mutable T* ptr;
+};
+
+template<>
+class MonitoredPointer<void> final {
+public:
+    template<typename U>
+    MonitoredPointer(const MonitoredPointer<U> &copied) : mon_val(copied.monitored_value()), ptr(copied.data()) {}
+    template<typename U>
+    explicit MonitoredPointer(MonitoredValue<U>& m) : mon_val(&m), ptr(m.data()) {}
+    MonitoredPointer(MonitoredValueBase* m) : mon_val(m), ptr(m->data_u8()) {}
+    template<typename U = void, typename = typename std::enable_if<std::is_array<U>::value>::type>
+    MonitoredPointer(MonitoredValueBase& m) : mon_val(&m), ptr(m.data_u8()) {}
+    MonitoredPointer(MonitoredValueBase* m, void* p) : mon_val(m), ptr(p) {}
+    MonitoredPointer(std::nullptr_t) : mon_val(nullptr), ptr(nullptr) {}
+
+    operator bool() const { return mon_val != nullptr; }
+    operator void*() { return ptr; }
+    operator const void*() const { return ptr; }
+
+    void* data() const { return ptr; } // XXX fix const correctness
+
+    MonitoredValueBase* monitored_value() const { return mon_val; } // XXX fix const correctness
+
+    bool operator==(std::nullptr_t) const { return mon_val == nullptr; }
+
+private:
+    mutable MonitoredValueBase* mon_val;
+    mutable void* ptr;
+};
+
+template<>
+class MonitoredPointer<const void> final {
+public:
+    template<typename U>
+    MonitoredPointer(const MonitoredPointer<U> &copied) : mon_val(copied.monitored_value()), ptr(copied.data()) {}
+    // XXX fix const correctness:
+    MonitoredPointer(const MonitoredValueBase* m) : mon_val((MonitoredValueBase*)m), ptr(((MonitoredValueBase*)m)->data_u8()) {}
+    MonitoredPointer(std::nullptr_t) : mon_val(nullptr), ptr(nullptr) {}
+
+    operator bool() { return mon_val != nullptr; }
+    operator const void*() const { return ptr; }
+
+    const void* data() const { return ptr; } // XXX fix const correctness
+
+    MonitoredValueBase* monitored_value() const { return mon_val; } // XXX fix const correctness
+
+    bool operator==(std::nullptr_t) const { return mon_val == nullptr; }
+
+private:
+    mutable MonitoredValueBase* mon_val;
+    const void* ptr;
+};
+
+typedef MonitoredPointer<void> VoidP;
+typedef MonitoredPointer<void> VoidInP;
+typedef MonitoredPointer<void> VoidOutP;
+
+template<typename T>
+class MonitoredReference<T, typename std::enable_if<std::is_array<T>::value>::type> final {
+public:
+    MonitoredReference(MonitoredValueBase* m, T* p) : mon_val(m), ptr(p) {}
+
+    MonitoredReference<typename std::remove_extent<T>::type> operator[](int i) {
+        return {mon_val, &(*ptr)[i]};
+    }
+
+    operator MonitoredPointer<typename std::remove_extent<T>::type>() {
+        return {mon_val, *ptr};
+    }
+    operator MonitoredPointer<const typename std::remove_extent<T>::type>() {
+        return {mon_val, *ptr};
+    }
+
+    MonitoredPointer<T> operator&() {
+        return MonitoredPointer<T>(mon_val, ptr);
+    }
+    MonitoredPointer<const T> operator&() const {
+        return MonitoredPointer<T>(mon_val, ptr);
+    }
+
+    T* data() { return ptr; }
+    const T* data() const { return ptr; }
+
+private:
+    mutable MonitoredValueBase* mon_val;
+    T* ptr;
+
+};
+
+template<typename T, typename Enable> class MonitoredValue final : public MonitoredValueBase {
+public:
+    MonitoredValue()
+        : m_value() {}
+
+    MonitoredValue(const MonitoredValue& copied)
+        : m_value(copied.m_value) {
+    }
+
+    MonitoredValue& operator=(const MonitoredValue& assigned) {
+        m_value = assigned.m_value;
+        return *this;
+    }
+
+    template <class U>
+    MonitoredValue(U v) {
         std::unique_lock<std::mutex> lck(m_mtx);
-        m_value = (T)o;
+        m_value = (T)v;
     }
 
     operator T() const { return m_value; }
 
-    MonitoredValue& operator=(const MonitoredValue& v) {
+    operator MonitoredReference<T>() {
+        return {this, &m_value};
+    }
+
+    template <class U>
+    MonitoredValue& operator=(U&& rhs) {
         std::unique_lock<std::mutex> lck(m_mtx);
-        // Assign just the m_value
-        m_value = (T)v;
+        m_value = rhs;
         written();
         return *this;
     }
@@ -456,22 +773,9 @@ public:
         written();
     }
 
-    virtual void subscribe(MonitoredValueCallback& callback) {
-        std::unique_lock<std::mutex> lck(m_mtx);
-        callback.m_mon_val = this;
-        m_callbacks.push_back(&callback);
-    }
-
-    virtual void unsubscribe(MonitoredValueCallback& callback) {
-        std::unique_lock<std::mutex> lck(m_mtx);
-        callback.m_mon_val = nullptr;
-        auto it = std::remove(m_callbacks.begin(), m_callbacks.end(), &callback);
-        m_callbacks.erase(it, m_callbacks.end());
-    }
-
-    std::mutex& mtx() { return m_mtx; }
-
     T* data() { return &m_value; }
+
+    const T* data() const { return &m_value; }
 
     T value() const { return m_value; }
 
@@ -481,16 +785,58 @@ public:
 
 private:
     T m_value;
+};
 
-    mutable std::mutex m_mtx;
-
-    std::vector<MonitoredValueCallback*> m_callbacks;
-
-    void written() {
-        for (auto callback : m_callbacks) {
-            (*callback)();
-        }
+template<typename T>
+class MonitoredValue<T, typename std::enable_if<std::is_array<T>::value>::type> final : public MonitoredValueBase {
+public:
+    MonitoredValue() {
+        std::memset(m_value, 0, sizeof(T));
     }
+
+    MonitoredValue(const MonitoredValue& copied) {
+        std::memcpy(m_value, copied.m_value, sizeof(T));
+    }
+
+    MonitoredValue(const MonitoredReference<T>& copied) {
+        std::memcpy(m_value, copied.data(), sizeof(T));
+    }
+
+    MonitoredValue& operator=(const MonitoredValue& assigned) {
+        std::memcpy(m_value, assigned.m_value, sizeof(T));
+        return *this;
+    }
+
+    MonitoredValue& operator=(const MonitoredReference<T>& assigned) {
+        std::memcpy(m_value, assigned.ptr, sizeof(T));
+        return *this;
+    }
+
+    MonitoredReference<typename std::remove_extent<T>::type> operator[](int i) {
+        return {this, &m_value[i]};
+    }
+
+    MonitoredReference<const typename std::remove_extent<T>::type> operator[](int i) const {
+        return {(MonitoredValueBase*)this, &m_value[i]};
+    }
+
+    operator MonitoredPointer<typename std::remove_extent<T>::type>() {
+        return {this, (typename std::remove_extent<T>::type*) &m_value};
+    }
+
+    operator MonitoredPointer<const typename std::remove_extent<T>::type>() const {
+        return {(MonitoredValueBase*)this, m_value};
+    }
+
+    T* data() { return &m_value; }
+    const T* data() const { return &m_value; }
+
+    virtual std::size_t type_size() const { return sizeof(T); }
+    virtual std::size_t size() const { return sizeof(*this); }
+    virtual vluint8_t* data_u8() { return (vluint8_t*) m_value; }
+
+private:
+    T m_value;
 };
 
 template<typename T>
@@ -563,101 +909,43 @@ typedef EData        WData;     ///< Verilated pack data, >64 bits, as an array
 //      string       N          // No typedef needed; Verilator uses string
 // clang-format on
 
-typedef MonitoredValue<vluint8_t> CDataV;
-typedef MonitoredValue<vluint16_t> SDataV;
-typedef MonitoredValue<vluint32_t> IDataV;
-typedef MonitoredValue<vluint64_t> QDataV;
-typedef MonitoredValue<vluint32_t> EDataV;
-typedef MonitoredValue<vluint32_t> EDataV;
+typedef MonitoredValue<CData> CDataV;
+typedef MonitoredValue<SData> SDataV;
+typedef MonitoredValue<IData> IDataV;
+typedef MonitoredValue<QData> QDataV;
+typedef MonitoredValue<EData> EDataV;
 typedef EDataV WDataV;
 typedef MonitoredValue<float> FloatV;
 typedef MonitoredValue<double> DoubleV;
 
-typedef const WDataV* WDataInP;  ///< Array input to a function
-typedef WDataV* WDataOutP;  ///< Array output from a function
+typedef MonitoredReference<CData> CDataR;
+typedef MonitoredReference<SData> SDataR;
+typedef MonitoredReference<IData> IDataR;
+typedef MonitoredReference<QData> QDataR;
+typedef MonitoredReference<EData> EDataR;
+typedef EDataR WDataR;
+typedef MonitoredReference<float> FloatR;
+typedef MonitoredReference<double> DoubleR;
 
-typedef const WDataV* WDataInPV;  ///< Array input to a function
-typedef WDataV* WDataOutPV;  ///< Array output from a function
+typedef MonitoredPointer<CData> CDataP;
+typedef MonitoredPointer<SData> SDataP;
+typedef MonitoredPointer<IData> IDataP;
+typedef MonitoredPointer<QData> QDataP;
+typedef MonitoredPointer<EData> EDataP;
+typedef EDataP WDataP;
+typedef MonitoredReference<float> FloatR;
+typedef MonitoredReference<double> DoubleR;
 
-template<typename T>
-struct MonitoredValueCharPtr {
-    MonitoredValue<T>* base;
-    std::size_t offset;
+//typedef MonitoredPointer<const EData> WDataInP;  ///< Array input to a function
+typedef MonitoredPointer<const EData> WDataInP;  ///< Array input to a function
+typedef MonitoredPointer<EData> WDataOutP;  ///< Array output from a function
 
-    MonitoredValueCharPtr(MonitoredValue<T>* _base, std::size_t _offset = 0) {
-        base = _base;
-        offset = _offset;
-    }
-
-    operator bool() {
-        return base + offset;
-    }
-
-    // Potential TODO: a class that acts like a MonitoredValue<CData>& to support locking
-    vluint8_t& operator[](int i) {
-        vluint8_t* ptr = (vluint8_t*) base[(offset+i)/sizeof(T)].data();
-        ptr += (offset+i) % sizeof(T);
-        return *ptr;
-    }
-
-    vluint8_t& operator*() {
-        return *this[0];
-    }
-
-    vluint8_t* operator++(int) {
-        vluint8_t* ptr = &((*this)[0]);
-        offset++;
-        return ptr;
-    }
-};
-
-struct MonitoredValueBaseCharPtr {
-    MonitoredValueBase* base;
-    std::size_t offset;
-    std::size_t type_size;
-    std::size_t inst_size;
-
-    MonitoredValueBaseCharPtr(MonitoredValueBase* _base, std::size_t _offset = 0) {
-        base = _base;
-        offset = _offset;
-        type_size = base->type_size();
-        inst_size = base->size();
-    }
-
-    operator bool() {
-        return base + offset;
-    }
-
-    // Potential TODO: a class that acts like a MonitoredValue<CData>& to support locking
-    vluint8_t& operator[](int i) {
-        vluint8_t* ptr = (vluint8_t*) base;
-        ptr += ((offset+i)/type_size)*inst_size;
-        ptr = ((MonitoredValueBase*) ptr)->data_u8();
-        ptr += (offset+i) % type_size;
-        return *ptr;
-    }
-
-    vluint8_t& operator*() {
-        return *this[0];
-    }
-
-    vluint8_t* operator++(int) {
-        vluint8_t* ptr = &((*this)[0]);
-        ptr += offset % type_size;
-        offset++;
-        return ptr;
-    }
-};
-
-typedef MonitoredValueCharPtr<CData> CDataCharPtr;
-typedef MonitoredValueCharPtr<SData> SDataCharPtr;
-typedef MonitoredValueCharPtr<IData> IDataCharPtr;
-typedef MonitoredValueCharPtr<QData> QDataCharPtr;
-typedef MonitoredValueCharPtr<WData> WDataCharPtr;
-typedef MonitoredValueBaseCharPtr AnyDataCharPtr;
-
-// Override parts of stdlib to make this class more transparent?
-extern AnyDataCharPtr memset(AnyDataCharPtr dest, int ch, std::size_t count);
+#define CDataA(dims) MonitoredValue<CData[dims]>
+#define SDataA(dims) MonitoredValue<SData[dims]>
+#define IDataA(dims) MonitoredValue<IData[dims]>
+#define QDataA(dims) MonitoredValue<QData[dims]>
+#define EDataA(dims) MonitoredValue<EData[dims]>
+#define WDataA(dims) EDataA(dims)
 
 class VerilatedEvalMsgQueue;
 class VerilatedScopeNameMap;
@@ -681,15 +969,48 @@ private:
 
 public:
     template<typename T, typename U>
-    void schedule(MonitoredValue<T>& lhs, const MonitoredValue<U>& rhs) {
-        schedule(lhs, (U) rhs);
+    void schedule(MonitoredReference<T> lhs, U rhs) {
+        assignments.push_back([lhs, rhs]() mutable {
+            lhs.assign_no_lock(rhs);
+        });
+    }
+
+    template<typename T, typename U>
+    void schedule(MonitoredReference<T> lhs, MonitoredReference<U> rhs) {
+        U raw_rhs = rhs;
+        assignments.push_back([lhs, raw_rhs]() mutable {
+            lhs.assign_no_lock(raw_rhs);
+        });
+    }
+
+    template<typename T, typename U>
+    void schedule(MonitoredReference<T> lhs, const MonitoredValue<U>& rhs) {
+        U raw_rhs = rhs;
+        assignments.push_back([lhs, raw_rhs]() mutable {
+            lhs.assign_no_lock(raw_rhs);
+        });
     }
 
     template<typename T, typename U>
     void schedule(MonitoredValue<T>& lhs, U rhs) {
-        std::unique_lock<std::mutex> lck(mtx);
-        assignments.push_back([&lhs, rhs]() {
+        assignments.push_back([&lhs, rhs]() mutable {
             lhs.assign_no_lock(rhs);
+        });
+    }
+
+    template<typename T, typename U>
+    void schedule(MonitoredValue<T>& lhs, MonitoredReference<U> rhs) {
+        U raw_rhs = rhs;
+        assignments.push_back([&lhs, raw_rhs]() mutable {
+            lhs.assign_no_lock(raw_rhs);
+        });
+    }
+
+    template<typename T, typename U>
+    void schedule(MonitoredValue<T>& lhs, const MonitoredValue<U>& rhs) {
+        U raw_rhs = rhs;
+        assignments.push_back([&lhs, raw_rhs]() mutable {
+            lhs.assign_no_lock(raw_rhs);
         });
     }
 
@@ -865,22 +1186,22 @@ public:
 #define VL_SIG16(name, msb, lsb) SDataV name  ///< Declare signal, 9-16 bits
 #define VL_SIG64(name, msb, lsb) QDataV name  ///< Declare signal, 33-64 bits
 #define VL_SIG(name, msb, lsb) IDataV name  ///< Declare signal, 17-32 bits
-#define VL_SIGW(name, msb, lsb, words) WDataV name[words]  ///< Declare signal, 65+ bits
+#define VL_SIGW(name, msb, lsb, words) WDataA(words) name  ///< Declare signal, 65+ bits
 #define VL_IN8(name, msb, lsb) CDataV name  ///< Declare input signal, 1-8 bits
 #define VL_IN16(name, msb, lsb) SDataV name  ///< Declare input signal, 9-16 bits
 #define VL_IN64(name, msb, lsb) QDataV name  ///< Declare input signal, 33-64 bits
 #define VL_IN(name, msb, lsb) IDataV name  ///< Declare input signal, 17-32 bits
-#define VL_INW(name, msb, lsb, words) WDataV name[words]  ///< Declare input signal, 65+ bits
+#define VL_INW(name, msb, lsb, words) WDataA(words) name  ///< Declare input signal, 65+ bits
 #define VL_INOUT8(name, msb, lsb) CDataV name  ///< Declare bidir signal, 1-8 bits
 #define VL_INOUT16(name, msb, lsb) SDataV name  ///< Declare bidir signal, 9-16 bits
 #define VL_INOUT64(name, msb, lsb) QDataV name  ///< Declare bidir signal, 33-64 bits
 #define VL_INOUT(name, msb, lsb) IDataV name  ///< Declare bidir signal, 17-32 bits
-#define VL_INOUTW(name, msb, lsb, words) WDataV name[words]  ///< Declare bidir signal, 65+ bits
+#define VL_INOUTW(name, msb, lsb, words) WDataA(words) name  ///< Declare bidir signal, 65+ bits
 #define VL_OUT8(name, msb, lsb) CDataV name  ///< Declare output signal, 1-8 bits
 #define VL_OUT16(name, msb, lsb) SDataV name  ///< Declare output signal, 9-16 bits
 #define VL_OUT64(name, msb, lsb) QDataV name  ///< Declare output signal, 33-64bits
 #define VL_OUT(name, msb, lsb) IDataV name  ///< Declare output signal, 17-32 bits
-#define VL_OUTW(name, msb, lsb, words) WDataV name[words]  ///< Declare output signal, 65+ bits
+#define VL_OUTW(name, msb, lsb, words) WDataA(words) name  ///< Declare output signal, 65+ bits
 
 #define VL_PIN_NOP(instname, pin, port)  ///< Connect a pin, ala SP_PIN
 #define VL_CELL(instname, type)  ///< Declare a cell, ala SP_CELL
@@ -955,6 +1276,8 @@ public:  // But internals only - called from VerilatedModule's
                    const char* identifier, vlsint8_t timeunit, const Type& type) VL_MT_UNSAFE;
     void exportInsert(int finalize, const char* namep, void* cb) VL_MT_UNSAFE;
     void varInsert(int finalize, const char* namep, void* datap, bool isParam,
+                   VerilatedVarType vltype, int vlflags, int dims, ...) VL_MT_UNSAFE;
+    void varInsert(int finalize, const char* namep, MonitoredValueBase* datap, bool isParam,
                    VerilatedVarType vltype, int vlflags, int dims, ...) VL_MT_UNSAFE;
     // ACCESSORS
     const char* name() const { return m_namep; }
@@ -1320,43 +1643,14 @@ extern WDataOutP _vl_moddiv_w(int lbits, WDataOutP owp, WDataInP lwp, WDataInP r
                               bool is_modulus);
 
 /// File I/O
-extern IData VL_FGETS_IXI(int obits, void* destp, IData fpi);
-
-extern IData _VL_GET_LINE(std::string& str, IData fpi, size_t maxLen) VL_MT_SAFE;
-
-template<typename T>
-void _VL_STRING_TO_VINT(int obits, MonitoredValue<T>* destp, size_t srclen, const char* srcp) VL_MT_SAFE {
-    // Convert C string to Verilog format
-    size_t bytes = VL_BYTES_I(obits);
-    if (srclen > bytes) srclen = bytes;  // Don't overflow destination
-    size_t i = 0;
-    for (i = 0; i < srclen; i += sizeof(T)) {
-        std::unique_lock<std::mutex> lck(destp->mtx());
-        char* op = (char*)destp->data();
-        size_t max = std::min(i + sizeof(T), srclen);
-        size_t j;
-        for (j = i; j < max; ++j) { *op++ = srcp[srclen - 1 - j]; }
-        for (; j < i + sizeof(T); ++j) { *op++ = 0; }
-        destp++;
-    }
-    for (; i < bytes; i += sizeof(T)) { *destp++ = 0; }
+extern IData VL_FGETS_IXI(int obits, VoidP destp, IData fpi);
+template<typename T, typename = typename std::enable_if<std::is_array<T>::value>::type>
+IData VL_FGETS_IXI(int obits, MonitoredValue<T>& destp, IData fpi) {
+    return VL_FGETS_IXI(obits, &destp, fpi);
 }
-
 template<typename T>
 IData VL_FGETS_IXI(int obits, MonitoredValue<T>* destp, IData fpi) {
-    std::string str;
-    const IData bytes = VL_BYTES_I(obits);
-    IData got = _VL_GET_LINE(str, fpi, bytes);
-
-    if (VL_UNLIKELY(str.empty())) return 0;
-
-    // V3Emit has static check that bytes < VL_TO_STRING_MAX_WORDS, but be safe
-    if (VL_UNCOVERABLE(bytes < str.size())) {
-        VL_FATAL_MT(__FILE__, __LINE__, "", "Internal: fgets buffer overrun");  // LCOV_EXCL_LINE
-    }
-
-    _VL_STRING_TO_VINT(obits, destp, got, str.data());
-    return got;
+    return VL_FGETS_IXI(obits, VoidP(destp), fpi);
 }
 
 extern void VL_FFLUSH_I(IData fdi);
@@ -1366,6 +1660,19 @@ extern void VL_FCLOSE_I(IData fdi);
 
 extern IData VL_FREAD_I(int width, int array_lsb, int array_size, void* memp, IData fpi,
                         IData start, IData count);
+template<typename T, typename = typename std::enable_if<std::is_array<T>::value>::type>
+IData VL_FREAD_I(int width, int array_lsb, int array_size, MonitoredValue<T>& memp, IData fpi,
+                        IData start, IData count) {
+    return VL_FREAD_I(width, array_lsb, array_size, &memp, fpi, start, count);
+}
+template<typename T>
+IData VL_FREAD_I(int width, int array_lsb, int array_size, MonitoredValue<T>* memp, IData fpi,
+                        IData start, IData count) {
+    std::unique_lock<std::mutex> lck(memp->mtx());
+    IData result = VL_FREAD_I(width, array_lsb, array_size, memp->data(), fpi, start, count);
+    memp->written();
+    return result;
+}
 
 extern void VL_WRITEF(const char* formatp, ...);
 extern void VL_FWRITEF(IData fpi, const char* formatp, ...);
@@ -1375,12 +1682,12 @@ extern IData VL_SSCANF_IIX(int lbits, IData ld, const char* formatp, ...);
 extern IData VL_SSCANF_IQX(int lbits, QData ld, const char* formatp, ...);
 extern IData VL_SSCANF_IWX(int lbits, WDataInP lwp, const char* formatp, ...);
 
-extern void VL_SFORMAT_X(int obits, CDataV& destr, const char* formatp, ...);
-extern void VL_SFORMAT_X(int obits, SDataV& destr, const char* formatp, ...);
-extern void VL_SFORMAT_X(int obits, IDataV& destr, const char* formatp, ...);
-extern void VL_SFORMAT_X(int obits, QDataV& destr, const char* formatp, ...);
-extern void VL_SFORMAT_X(int obits, WDataV* destr, const char* formatp, ...);
-extern void VL_SFORMAT_X(int obits, void* destp, const char* formatp, ...);
+extern void VL_SFORMAT_X(int obits, CDataR destr, const char* formatp, ...);
+extern void VL_SFORMAT_X(int obits, SDataR destr, const char* formatp, ...);
+extern void VL_SFORMAT_X(int obits, IDataR destr, const char* formatp, ...);
+extern void VL_SFORMAT_X(int obits, QDataR destr, const char* formatp, ...);
+extern void VL_SFORMAT_X(int obits, WDataOutP destr, const char* formatp, ...);
+extern void VL_SFORMAT_X(int obits, VoidP destp, const char* formatp, ...);
 
 extern IData VL_SYSTEM_IW(int lhswords, WDataInP lhsp);
 extern IData VL_SYSTEM_IQ(QData lhs);
@@ -1616,29 +1923,38 @@ static inline WDataOutP VL_ALLONES_W(int obits, WDataOutP owp) VL_MT_SAFE {
 // EMIT_RULE: VL_ASSIGN:  oclean=rclean; obits==lbits;
 // For now, we always have a clean rhs.
 // Note: If a ASSIGN isn't clean, use VL_ASSIGNCLEAN instead to do the same thing.
-static inline WDataOutP VL_ASSIGN_W(int obits, WDataOutP owp, WDataInP lwp) VL_MT_SAFE {
+static inline WDataOutP VL_ASSIGN_W(int obits, WDataOutP owp, WDataInP lwp) VL_MT_SAFE {//XXX support const
     int words = VL_WORDS_I(obits);
     for (int i = 0; i < words; ++i) owp[i] = lwp[i];
     return owp;
 }
-
-static inline WDataOutP VL_ASSIGN_W(int obits, WDataOutP owp, WData* lwp) VL_MT_SAFE {
+static inline WData* VL_ASSIGN_W(int obits, WData* owp, WDataInP lwp) VL_MT_SAFE {//XXX support const
+    int words = VL_WORDS_I(obits);
+    for (int i = 0; i < words; ++i) owp[i] = lwp[i];
+    return owp;
+}
+static inline WData* VL_ASSIGN_W(int obits, WData* owp, const WData* lwp) VL_MT_SAFE {
+    int words = VL_WORDS_I(obits);
+    for (int i = 0; i < words; ++i) owp[i] = lwp[i];
+    return owp;
+}
+static inline WDataOutP VL_ASSIGN_W(int obits, WDataOutP owp, const WData* lwp) VL_MT_SAFE {
     int words = VL_WORDS_I(obits);
     for (int i = 0; i < words; ++i) owp[i] = lwp[i];
     return owp;
 }
 
 // EMIT_RULE: VL_ASSIGNBIT:  rclean=clean;
-static inline void VL_ASSIGNBIT_II(int, int bit, CDataV& lhsr, IData rhs) VL_PURE {
+static inline void VL_ASSIGNBIT_II(int, int bit, CDataR lhsr, IData rhs) VL_PURE {
     lhsr = ((lhsr & ~(VL_UL(1) << VL_BITBIT_I(bit))) | (rhs << VL_BITBIT_I(bit)));
 }
-static inline void VL_ASSIGNBIT_II(int, int bit, SDataV& lhsr, IData rhs) VL_PURE {
+static inline void VL_ASSIGNBIT_II(int, int bit, SDataR lhsr, IData rhs) VL_PURE {
     lhsr = ((lhsr & ~(VL_UL(1) << VL_BITBIT_I(bit))) | (rhs << VL_BITBIT_I(bit)));
 }
-static inline void VL_ASSIGNBIT_II(int, int bit, IDataV& lhsr, IData rhs) VL_PURE {
+static inline void VL_ASSIGNBIT_II(int, int bit, IDataR lhsr, IData rhs) VL_PURE {
     lhsr = ((lhsr & ~(VL_UL(1) << VL_BITBIT_I(bit))) | (rhs << VL_BITBIT_I(bit)));
 }
-static inline void VL_ASSIGNBIT_QI(int, int bit, QDataV& lhsr, QData rhs) VL_PURE {
+static inline void VL_ASSIGNBIT_QI(int, int bit, QDataR lhsr, QData rhs) VL_PURE {
     lhsr = ((lhsr & ~(1ULL << VL_BITBIT_Q(bit))) | (static_cast<QData>(rhs) << VL_BITBIT_Q(bit)));
 }
 static inline void VL_ASSIGNBIT_WI(int, int bit, WData* owp, IData rhs) VL_MT_SAFE {
@@ -1652,16 +1968,16 @@ static inline void VL_ASSIGNBIT_WI(int, int bit, WDataOutP owp, IData rhs) VL_MT
                               | (static_cast<EData>(rhs) << VL_BITBIT_E(bit)));
 }
 // Alternative form that is an instruction faster when rhs is constant one.
-static inline void VL_ASSIGNBIT_IO(int, int bit, CDataV& lhsr, IData) VL_PURE {
+static inline void VL_ASSIGNBIT_IO(int, int bit, CDataR lhsr, IData) VL_PURE {
     lhsr = (lhsr | (VL_UL(1) << VL_BITBIT_I(bit)));
 }
-static inline void VL_ASSIGNBIT_IO(int, int bit, SDataV& lhsr, IData) VL_PURE {
+static inline void VL_ASSIGNBIT_IO(int, int bit, SDataR lhsr, IData) VL_PURE {
     lhsr = (lhsr | (VL_UL(1) << VL_BITBIT_I(bit)));
 }
-static inline void VL_ASSIGNBIT_IO(int, int bit, IDataV& lhsr, IData) VL_PURE {
+static inline void VL_ASSIGNBIT_IO(int, int bit, IDataR lhsr, IData) VL_PURE {
     lhsr = (lhsr | (VL_UL(1) << VL_BITBIT_I(bit)));
 }
-static inline void VL_ASSIGNBIT_QO(int, int bit, QDataV& lhsr, IData) VL_PURE {
+static inline void VL_ASSIGNBIT_QO(int, int bit, QDataR lhsr, IData) VL_PURE {
     lhsr = (lhsr | (1ULL << VL_BITBIT_Q(bit)));
 }
 static inline void VL_ASSIGNBIT_WO(int, int bit, WDataOutP owp, IData) VL_MT_SAFE {
@@ -2271,9 +2587,9 @@ static inline WDataOutP VL_MULS_WWW(int, int lbits, int, WDataOutP owp, WDataInP
                                     WDataInP rwp) VL_MT_SAFE {
     int words = VL_WORDS_I(lbits);
     // cppcheck-suppress variableScope
-    WDataV lwstore[VL_MULS_MAX_WORDS];  // Fixed size, as MSVC++ doesn't allow [words] here
+    WDataA(VL_MULS_MAX_WORDS) lwstore;  // Fixed size, as MSVC++ doesn't allow [words] here
     // cppcheck-suppress variableScope
-    WDataV rwstore[VL_MULS_MAX_WORDS];
+    WDataA(VL_MULS_MAX_WORDS) rwstore;
     WDataInP lwusp = lwp;
     WDataInP rwusp = rwp;
     EData lneg = VL_SIGN_E(lbits, lwp[words - 1]);
@@ -2342,15 +2658,15 @@ static inline WDataOutP VL_DIVS_WWW(int lbits, WDataOutP owp, WDataInP lwp,
     EData lsign = VL_SIGN_E(lbits, lwp[words - 1]);
     EData rsign = VL_SIGN_E(lbits, rwp[words - 1]);
     // cppcheck-suppress variableScope
-    WDataV lwstore[VL_MULS_MAX_WORDS];  // Fixed size, as MSVC++ doesn't allow [words] here
+    WDataA(VL_MULS_MAX_WORDS) lwstore;  // Fixed size, as MSVC++ doesn't allow [words] here
     // cppcheck-suppress variableScope
-    WDataV rwstore[VL_MULS_MAX_WORDS];
+    WDataA(VL_MULS_MAX_WORDS) rwstore;
     WDataInP ltup = lwp;
     WDataInP rtup = rwp;
     if (lsign) { ltup = _VL_CLEAN_INPLACE_W(lbits, VL_NEGATE_W(VL_WORDS_I(lbits), lwstore, lwp)); }
     if (rsign) { rtup = _VL_CLEAN_INPLACE_W(lbits, VL_NEGATE_W(VL_WORDS_I(lbits), rwstore, rwp)); }
     if ((lsign && !rsign) || (!lsign && rsign)) {
-        WDataV qNoSign[VL_MULS_MAX_WORDS];
+        WDataA(VL_MULS_MAX_WORDS) qNoSign;
         VL_DIV_WWW(lbits, qNoSign, ltup, rtup);
         _VL_CLEAN_INPLACE_W(lbits, VL_NEGATE_W(VL_WORDS_I(lbits), owp, qNoSign));
         return owp;
@@ -2364,15 +2680,15 @@ static inline WDataOutP VL_MODDIVS_WWW(int lbits, WDataOutP owp, WDataInP lwp,
     EData lsign = VL_SIGN_E(lbits, lwp[words - 1]);
     EData rsign = VL_SIGN_E(lbits, rwp[words - 1]);
     // cppcheck-suppress variableScope
-    WDataV lwstore[VL_MULS_MAX_WORDS];  // Fixed size, as MSVC++ doesn't allow [words] here
+    WDataA(VL_MULS_MAX_WORDS) lwstore;  // Fixed size, as MSVC++ doesn't allow [words] here
     // cppcheck-suppress variableScope
-    WDataV rwstore[VL_MULS_MAX_WORDS];
+    WDataA(VL_MULS_MAX_WORDS) rwstore;
     WDataInP ltup = lwp;
     WDataInP rtup = rwp;
     if (lsign) { ltup = _VL_CLEAN_INPLACE_W(lbits, VL_NEGATE_W(VL_WORDS_I(lbits), lwstore, lwp)); }
     if (rsign) { rtup = _VL_CLEAN_INPLACE_W(lbits, VL_NEGATE_W(VL_WORDS_I(lbits), rwstore, rwp)); }
     if (lsign) {  // Only dividend sign matters for modulus
-        WDataV qNoSign[VL_MULS_MAX_WORDS];
+        WDataA(VL_MULS_MAX_WORDS) qNoSign;
         VL_MODDIV_WWW(lbits, qNoSign, ltup, rtup);
         _VL_CLEAN_INPLACE_W(lbits, VL_NEGATE_W(VL_WORDS_I(lbits), owp, qNoSign));
         return owp;
@@ -2473,19 +2789,19 @@ QData VL_POWSS_QQW(int obits, int, int rbits, QData lhs, WDataInP rwp, bool lsig
 
 // INTERNAL: Stuff LHS bit 0++ into OUTPUT at specified offset
 // ld may be "dirty", output is clean
-static inline void _VL_INSERT_II(int, CDataV& lhsr, IData ld, int hbit, int lbit) VL_PURE {
+static inline void _VL_INSERT_II(int, CDataR lhsr, IData ld, int hbit, int lbit) VL_PURE {
     IData insmask = (VL_MASK_I(hbit - lbit + 1)) << lbit;
     lhsr = (lhsr & ~insmask) | ((ld << lbit) & insmask);
 }
-static inline void _VL_INSERT_II(int, SDataV& lhsr, IData ld, int hbit, int lbit) VL_PURE {
+static inline void _VL_INSERT_II(int, SDataR lhsr, IData ld, int hbit, int lbit) VL_PURE {
     IData insmask = (VL_MASK_I(hbit - lbit + 1)) << lbit;
     lhsr = (lhsr & ~insmask) | ((ld << lbit) & insmask);
 }
-static inline void _VL_INSERT_II(int, IDataV& lhsr, IData ld, int hbit, int lbit) VL_PURE {
+static inline void _VL_INSERT_II(int, IDataR lhsr, IData ld, int hbit, int lbit) VL_PURE {
     IData insmask = (VL_MASK_I(hbit - lbit + 1)) << lbit;
     lhsr = (lhsr & ~insmask) | ((ld << lbit) & insmask);
 }
-static inline void _VL_INSERT_QQ(int, QDataV& lhsr, QData ld, int hbit, int lbit) VL_PURE {
+static inline void _VL_INSERT_QQ(int, QDataR lhsr, QData ld, int hbit, int lbit) VL_PURE {
     QData insmask = (VL_MASK_Q(hbit - lbit + 1)) << lbit;
     lhsr = (lhsr & ~insmask) | ((ld << lbit) & insmask);
 }
@@ -2564,7 +2880,7 @@ static inline void _VL_INSERT_WW(int, WDataOutP owp, WDataInP lwp, int hbit, int
 
 static inline void _VL_INSERT_WQ(int obits, WDataOutP owp, QData ld, int hbit,
                                  int lbit) VL_MT_SAFE {
-    WDataV lwp[VL_WQ_WORDS_E];
+    WDataA(VL_MULS_MAX_WORDS) lwp;
     VL_SET_WQ(lwp, ld);
     _VL_INSERT_WW(obits, owp, lwp, hbit, lbit);
 }
@@ -2827,6 +3143,18 @@ static inline void _VL_SHIFTL_INPLACE_W(int obits, WDataOutP iowp,
     iowp[VL_WORDS_I(obits) - 1] &= VL_MASK_E(obits);
 }
 
+static inline void _VL_SHIFTL_INPLACE_W(int obits, WData* iowp,
+                                        IData rd /*1 or 4*/) VL_MT_SAFE {
+    int words = VL_WORDS_I(obits);
+    EData linsmask = VL_MASK_E(rd);
+    for (int i = words - 1; i >= 1; --i) {
+        iowp[i]
+            = ((iowp[i] << rd) & ~linsmask) | ((iowp[i - 1] >> (VL_EDATASIZE - rd)) & linsmask);
+    }
+    iowp[0] = ((iowp[0] << rd) & ~linsmask);
+    iowp[VL_WORDS_I(obits) - 1] &= VL_MASK_E(obits);
+}
+
 // EMIT_RULE: VL_SHIFTL:  oclean=lclean; rclean==clean;
 // Important: Unlike most other funcs, the shift might well be a computed
 // expression.  Thus consider this when optimizing.  (And perhaps have 2 funcs?)
@@ -2910,7 +3238,7 @@ static inline WDataOutP VL_SHIFTR_WWW(int obits, int lbits, int rbits, WDataOutP
 }
 static inline WDataOutP VL_SHIFTR_WWQ(int obits, int lbits, int rbits, WDataOutP owp, WDataInP lwp,
                                       QData rd) VL_MT_SAFE {
-    WDataV rwp[VL_WQ_WORDS_E];
+    WDataA(VL_MULS_MAX_WORDS) rwp;
     VL_SET_WQ(rwp, rd);
     return VL_SHIFTR_WWW(obits, lbits, rbits, owp, lwp, rwp);
 }
@@ -2997,7 +3325,7 @@ static inline WDataOutP VL_SHIFTRS_WWW(int obits, int lbits, int rbits, WDataOut
 }
 static inline WDataOutP VL_SHIFTRS_WWQ(int obits, int lbits, int rbits, WDataOutP owp,
                                        WDataInP lwp, QData rd) VL_MT_SAFE {
-    WDataV rwp[VL_WQ_WORDS_E];
+    WDataA(VL_MULS_MAX_WORDS) rwp;
     VL_SET_WQ(rwp, rd);
     return VL_SHIFTRS_WWW(obits, lbits, rbits, owp, lwp, rwp);
 }
@@ -3022,12 +3350,12 @@ static inline QData VL_SHIFTRS_QQW(int obits, int lbits, int rbits, QData lhs,
     return VL_SHIFTRS_QQI(obits, lbits, 32, lhs, rwp[0]);
 }
 static inline IData VL_SHIFTRS_IIQ(int obits, int lbits, int rbits, IData lhs, QData rhs) VL_PURE {
-    WDataV rwp[VL_WQ_WORDS_E];
+    WDataA(VL_MULS_MAX_WORDS) rwp;
     VL_SET_WQ(rwp, rhs);
     return VL_SHIFTRS_IIW(obits, lbits, rbits, lhs, rwp);
 }
 static inline QData VL_SHIFTRS_QQQ(int obits, int lbits, int rbits, QData lhs, QData rhs) VL_PURE {
-    WDataV rwp[VL_WQ_WORDS_E];
+    WDataA(VL_MULS_MAX_WORDS) rwp;
     VL_SET_WQ(rwp, rhs);
     return VL_SHIFTRS_QQW(obits, lbits, rbits, lhs, rwp);
 }
@@ -3068,7 +3396,10 @@ static inline IData VL_SEL_IWII(int, int lbits, int, int, WDataInP lwp, IData ls
     } else {
         // 32 bit extraction may span two words
         int nbitsfromlow = VL_EDATASIZE - VL_BITBIT_E(lsb);  // bits that come from low word
-        return ((lwp[VL_BITWORD_E(msb)] << nbitsfromlow) | VL_BITRSHIFT_W(lwp, lsb));
+        int highWord = VL_BITWORD_E(msb);
+        if (msb == lbits) // Reproduce bug from mainline
+            highWord = VL_BITWORD_E(msb + sizeof(MonitoredValueBase) * 8);
+        return ((lwp[highWord] << nbitsfromlow) | VL_BITRSHIFT_W(lwp, lsb));
     }
 }
 
@@ -3169,22 +3500,22 @@ static inline WDataOutP VL_RTOIROUND_W_D(int obits, WDataOutP owp, double lhs) V
 // Range assignments
 
 // EMIT_RULE: VL_ASSIGNRANGE:  rclean=dirty;
-static inline void VL_ASSIGNSEL_IIII(int obits, int lsb, CDataV& lhsr, IData rhs) VL_PURE {
+static inline void VL_ASSIGNSEL_IIII(int obits, int lsb, CDataR lhsr, IData rhs) VL_PURE {
     _VL_INSERT_II(obits, lhsr, rhs, lsb + obits - 1, lsb);
 }
-static inline void VL_ASSIGNSEL_IIII(int obits, int lsb, SDataV& lhsr, IData rhs) VL_PURE {
+static inline void VL_ASSIGNSEL_IIII(int obits, int lsb, SDataR lhsr, IData rhs) VL_PURE {
     _VL_INSERT_II(obits, lhsr, rhs, lsb + obits - 1, lsb);
 }
-static inline void VL_ASSIGNSEL_IIII(int obits, int lsb, IDataV& lhsr, IData rhs) VL_PURE {
+static inline void VL_ASSIGNSEL_IIII(int obits, int lsb, IDataR lhsr, IData rhs) VL_PURE {
     _VL_INSERT_II(obits, lhsr, rhs, lsb + obits - 1, lsb);
 }
-static inline void VL_ASSIGNSEL_QIII(int obits, int lsb, QDataV& lhsr, IData rhs) VL_PURE {
+static inline void VL_ASSIGNSEL_QIII(int obits, int lsb, QDataR lhsr, IData rhs) VL_PURE {
     _VL_INSERT_QQ(obits, lhsr, rhs, lsb + obits - 1, lsb);
 }
-static inline void VL_ASSIGNSEL_QQII(int obits, int lsb, QDataV& lhsr, QData rhs) VL_PURE {
+static inline void VL_ASSIGNSEL_QQII(int obits, int lsb, QDataR lhsr, QData rhs) VL_PURE {
     _VL_INSERT_QQ(obits, lhsr, rhs, lsb + obits - 1, lsb);
 }
-static inline void VL_ASSIGNSEL_QIIQ(int obits, int lsb, QDataV& lhsr, QData rhs) VL_PURE {
+static inline void VL_ASSIGNSEL_QIIQ(int obits, int lsb, QDataR lhsr, QData rhs) VL_PURE {
     _VL_INSERT_QQ(obits, lhsr, rhs, lsb + obits - 1, lsb);
 }
 // static inline void VL_ASSIGNSEL_IIIW(int obits, int lsb, IData& lhsr, WDataInP rwp) VL_MT_SAFE {

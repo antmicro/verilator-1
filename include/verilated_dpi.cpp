@@ -269,18 +269,18 @@ static void _vl_svGetBitArrElemVecVal(svBitVecVal* d, const svOpenArrayHandle s,
     void* datap = _vl_sv_adjusted_datap(varp, nargs, indx1, indx2, indx3);
     if (VL_UNLIKELY(!datap)) return;
     switch (varp->vltype()) {  // LCOV_EXCL_BR_LINE
-    case VLVT_UINT8: d[0] = *(reinterpret_cast<CDataV*>(datap)); return;
-    case VLVT_UINT16: d[0] = *(reinterpret_cast<SDataV*>(datap)); return;
-    case VLVT_UINT32: d[0] = *(reinterpret_cast<IDataV*>(datap)); return;
+    case VLVT_UINT8: d[0] = *(reinterpret_cast<CData*>(datap)); return;
+    case VLVT_UINT16: d[0] = *(reinterpret_cast<SData*>(datap)); return;
+    case VLVT_UINT32: d[0] = *(reinterpret_cast<IData*>(datap)); return;
     case VLVT_UINT64: {
         WData lwp[2];
-        VL_SET_WQ(lwp, *(reinterpret_cast<QDataV*>(datap)));
+        VL_SET_WQ(lwp, *(reinterpret_cast<QData*>(datap)));
         d[0] = lwp[0];
         d[1] = lwp[1];
         break;
     }
     case VLVT_WDATA: {
-        WDataOutP wdatap = (reinterpret_cast<WDataOutP>(datap));
+        WData* wdatap = (reinterpret_cast<WData*>(datap));
         for (int i = 0; i < VL_WORDS_I(varp->packed().elements()); ++i) d[i] = wdatap[i];
         return;
     }
@@ -298,20 +298,20 @@ static void _vl_svGetLogicArrElemVecVal(svLogicVecVal* d, const svOpenArrayHandl
     if (VL_UNLIKELY(!datap)) return;
     switch (varp->vltype()) {  // LCOV_EXCL_BR_LINE
     case VLVT_UINT8:
-        d[0].aval = *(reinterpret_cast<CDataV*>(datap));
+        d[0].aval = *(reinterpret_cast<CData*>(datap));
         d[0].bval = 0;
         return;
     case VLVT_UINT16:
-        d[0].aval = *(reinterpret_cast<SDataV*>(datap));
+        d[0].aval = *(reinterpret_cast<SData*>(datap));
         d[0].bval = 0;
         return;
     case VLVT_UINT32:
-        d[0].aval = *(reinterpret_cast<IDataV*>(datap));
+        d[0].aval = *(reinterpret_cast<IData*>(datap));
         d[0].bval = 0;
         return;
     case VLVT_UINT64: {
         WData lwp[2];
-        VL_SET_WQ(lwp, *(reinterpret_cast<QDataV*>(datap)));
+        VL_SET_WQ(lwp, *(reinterpret_cast<QData*>(datap)));
         d[0].aval = lwp[0];
         d[0].bval = 0;
         d[1].aval = lwp[1];
@@ -319,7 +319,7 @@ static void _vl_svGetLogicArrElemVecVal(svLogicVecVal* d, const svOpenArrayHandl
         break;
     }
     case VLVT_WDATA: {
-        WDataOutP wdatap = (reinterpret_cast<WDataOutP>(datap));
+        WData* wdatap = (reinterpret_cast<WData*>(datap));
         for (int i = 0; i < VL_WORDS_I(varp->packed().elements()); ++i) {
             d[i].aval = wdatap[i];
             d[i].bval = 0;
@@ -340,12 +340,12 @@ static void _vl_svPutBitArrElemVecVal(const svOpenArrayHandle d, const svBitVecV
     void* datap = _vl_sv_adjusted_datap(varp, nargs, indx1, indx2, indx3);
     if (VL_UNLIKELY(!datap)) return;
     switch (varp->vltype()) {  // LCOV_EXCL_BR_LINE
-    case VLVT_UINT8: *(reinterpret_cast<CDataV*>(datap)) = s[0]; return;
-    case VLVT_UINT16: *(reinterpret_cast<SDataV*>(datap)) = s[0]; return;
-    case VLVT_UINT32: *(reinterpret_cast<IDataV*>(datap)) = s[0]; return;
-    case VLVT_UINT64: *(reinterpret_cast<QDataV*>(datap)) = _VL_SET_QII(s[1], s[0]); break;
+    case VLVT_UINT8: *(reinterpret_cast<CData*>(datap)) = s[0]; return;
+    case VLVT_UINT16: *(reinterpret_cast<SData*>(datap)) = s[0]; return;
+    case VLVT_UINT32: *(reinterpret_cast<IData*>(datap)) = s[0]; return;
+    case VLVT_UINT64: *(reinterpret_cast<QData*>(datap)) = _VL_SET_QII(s[1], s[0]); break;
     case VLVT_WDATA: {
-        WDataOutP wdatap = (reinterpret_cast<WDataOutP>(datap));
+        WData* wdatap = (reinterpret_cast<WData*>(datap));
         for (int i = 0; i < VL_WORDS_I(varp->packed().elements()); ++i) wdatap[i] = s[i];
         return;
     }
@@ -362,14 +362,14 @@ static void _vl_svPutLogicArrElemVecVal(const svOpenArrayHandle d, const svLogic
     void* datap = _vl_sv_adjusted_datap(varp, nargs, indx1, indx2, indx3);
     if (VL_UNLIKELY(!datap)) return;
     switch (varp->vltype()) {  // LCOV_EXCL_BR_LINE
-    case VLVT_UINT8: *(reinterpret_cast<CDataV*>(datap)) = s[0].aval; return;
-    case VLVT_UINT16: *(reinterpret_cast<SDataV*>(datap)) = s[0].aval; return;
-    case VLVT_UINT32: *(reinterpret_cast<IDataV*>(datap)) = s[0].aval; return;
+    case VLVT_UINT8: *(reinterpret_cast<CData*>(datap)) = s[0].aval; return;
+    case VLVT_UINT16: *(reinterpret_cast<SData*>(datap)) = s[0].aval; return;
+    case VLVT_UINT32: *(reinterpret_cast<IData*>(datap)) = s[0].aval; return;
     case VLVT_UINT64:
-        *(reinterpret_cast<QDataV*>(datap)) = _VL_SET_QII(s[1].aval, s[0].aval);
+        *(reinterpret_cast<QData*>(datap)) = _VL_SET_QII(s[1].aval, s[0].aval);
         break;
     case VLVT_WDATA: {
-        WDataOutP wdatap = (reinterpret_cast<WDataOutP>(datap));
+        WData* wdatap = (reinterpret_cast<WData*>(datap));
         for (int i = 0; i < VL_WORDS_I(varp->packed().elements()); ++i) wdatap[i] = s[i].aval;
         return;
     }
@@ -388,7 +388,7 @@ static svBit _vl_svGetBitArrElem(const svOpenArrayHandle s, int nargs, int indx1
     void* datap = _vl_sv_adjusted_datap(varp, nargs, indx1, indx2, indx3);
     if (VL_UNLIKELY(!datap)) return 0;
     switch (varp->vltype()) {  // LCOV_EXCL_BR_LINE
-    case VLVT_UINT8: return (*(reinterpret_cast<CDataV*>(datap))) & 1;
+    case VLVT_UINT8: return (*(reinterpret_cast<CData*>(datap))) & 1;
     default:  // LCOV_EXCL_START  // Errored earlier
         _VL_SVDPI_WARN("%%Warning: DPI svOpenArrayHandle function unsupported datatype (%d).\n",
                        varp->vltype());
@@ -404,7 +404,7 @@ static void _vl_svPutBitArrElem(const svOpenArrayHandle d, svBit value, int narg
     void* datap = _vl_sv_adjusted_datap(varp, nargs, indx1, indx2, indx3);
     if (VL_UNLIKELY(!datap)) return;
     switch (varp->vltype()) {  // LCOV_EXCL_BR_LINE
-    case VLVT_UINT8: *(reinterpret_cast<CDataV*>(datap)) = value; return;
+    case VLVT_UINT8: *(reinterpret_cast<CData*>(datap)) = value; return;
     default:  // LCOV_EXCL_START  // Errored earlier
         _VL_SVDPI_WARN("%%Warning: DPI svOpenArrayHandle function unsupported datatype (%d).\n",
                        varp->vltype());
@@ -412,38 +412,9 @@ static void _vl_svPutBitArrElem(const svOpenArrayHandle d, svBit value, int narg
     }
 }
 
-static void* svGetArrElemConv(const svOpenArrayHandle h, void* datap)
-{
-    const VerilatedDpiOpenVar* varp = _vl_openhandle_varp(h);
-    switch (varp->vltype())
-    {
-        case VLVT_UINT8:
-        {
-            CDataV *vdatap = reinterpret_cast<CDataV*>(datap);
-            return vdatap->data();
-        }
-        case VLVT_UINT16:
-        {
-            SDataV *vdatap = reinterpret_cast<SDataV*>(datap);
-            return vdatap->data();
-        }
-        case VLVT_UINT32:
-        {
-            IDataV *vdatap = reinterpret_cast<IDataV*>(datap);
-            return vdatap->data();
-        }
-        case VLVT_UINT64:
-        {
-            QDataV *vdatap = reinterpret_cast<QDataV*>(datap);
-            return vdatap->data();
-        }
-        default:
-            return datap;
-    }
-}
-
 //======================================================================
 // DPI accessors that simply call above functions
+
 void* svGetArrElemPtr(const svOpenArrayHandle h, int indx1, ...) {
     const VerilatedDpiOpenVar* varp = _vl_openhandle_varp(h);
     void* datap;
@@ -466,16 +437,16 @@ void* svGetArrElemPtr(const svOpenArrayHandle h, int indx1, ...) {
     default: datap = _vl_svGetArrElemPtr(h, -1, 0, 0, 0); break;  // Will error
     }
     va_end(ap);
-    return svGetArrElemConv(h, datap);
+    return datap;
 }
 void* svGetArrElemPtr1(const svOpenArrayHandle h, int indx1) {
-    return svGetArrElemConv(h, _vl_svGetArrElemPtr(h, 1, indx1, 0, 0));
+    return _vl_svGetArrElemPtr(h, 1, indx1, 0, 0);
 }
 void* svGetArrElemPtr2(const svOpenArrayHandle h, int indx1, int indx2) {
-    return svGetArrElemConv(h, _vl_svGetArrElemPtr(h, 2, indx1, indx2, 0));
+    return _vl_svGetArrElemPtr(h, 2, indx1, indx2, 0);
 }
 void* svGetArrElemPtr3(const svOpenArrayHandle h, int indx1, int indx2, int indx3) {
-    return svGetArrElemConv(h, _vl_svGetArrElemPtr(h, 3, indx1, indx2, indx3));
+    return _vl_svGetArrElemPtr(h, 3, indx1, indx2, indx3);
 }
 
 void svPutBitArrElemVecVal(const svOpenArrayHandle d, const svBitVecVal* s, int indx1, ...) {

@@ -44,7 +44,7 @@ static inline QData VL_SET_Q_SVBV(const svBitVecVal* lwp) VL_MT_SAFE {
 static inline IData VL_SET_I_SVBV(const svBitVecVal* lwp) VL_MT_SAFE { return lwp[0]; }
 
 /// Convert Verilator internal data to svBitVecVal
-static inline void VL_SET_SVBV_W(int obits, svBitVecVal* owp, WDataInP lwp) VL_MT_SAFE {
+static inline void VL_SET_SVBV_W(int obits, svBitVecVal* owp, WDataP lwp) VL_MT_SAFE {
     int words = VL_WORDS_I(obits);
     for (int i = 0; i < words - 1; ++i) owp[i] = lwp[i];
     owp[words - 1] = lwp[words - 1] & VL_MASK_I(obits);
@@ -68,7 +68,7 @@ static inline IData VL_SET_I_SVLV(const svLogicVecVal* lwp) VL_MT_SAFE { return 
 
 /// Convert Verilator internal data to svLogicVecVal
 /// Note these functions never create X/Z in svLogicVecVal
-static inline void VL_SET_SVLV_W(int obits, svLogicVecVal* owp, WDataInP lwp) VL_MT_SAFE {
+static inline void VL_SET_SVLV_W(int obits, svLogicVecVal* owp, WDataP lwp) VL_MT_SAFE {
     int words = VL_WORDS_I(obits);
     for (int i = 0; i < words; ++i) owp[i].bval = 0;
     for (int i = 0; i < words - 1; ++i) owp[i].aval = lwp[i];

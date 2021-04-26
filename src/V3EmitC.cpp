@@ -445,7 +445,7 @@ public:
                     }
                 }
             }
-            puts("] { ");
+            puts("] () mutable { "); // XXX can we get rid of this 'mutable'?
             visit_generic_assign(nodep);
             puts("; }");
         }
@@ -1237,7 +1237,7 @@ public:
         else if (nodep->width() <= VL_BYTESIZE)  puts("(CData)");
         else if (nodep->width() <= VL_SHORTSIZE) puts("(SData)");
         else if (nodep->width() <= VL_IDATASIZE) puts("(IData)");
-        else puts("(QData)");
+        else if (nodep->width() <= VL_QUADSIZE) puts("(QData)");
     }
     virtual void visit(AstCCast* nodep) override {
         // Extending a value of the same word width is just a NOP.
@@ -2549,14 +2549,15 @@ void EmitCStmts::displayEmit(AstNode* nodep, bool isScan) {
                 if (func != "") {
                     puts(func);
                 } else if (argp) {
-                    if (isScan || fmt == '@') {
-                        puts("&");
-                    } else if (argp->dtypep() && VN_IS(argp->dtypep()->skipRefp(), BasicDType)) {
-                        emitPrimitiveCast(argp);
-                    }
+                        if (!argp->isWide() && (isScan || fmt == '@'))
+                            puts("&");
+                        else if (argp->dtypep() && VN_IS(argp->dtypep()->skipRefp(), BasicDType))
+                            emitPrimitiveCast(argp);
                     puts("(");
                     iterate(argp);
                     puts(")");
+                    if (argp->dtypep() && VN_IS(argp->dtypep()->skipRefp(), BasicDType) && argp->width() > 64)
+                        puts(".data()"); // XXX not thread safe
                 }
                 ofp()->indentDec();
             }

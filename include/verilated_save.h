@@ -255,6 +255,14 @@ template<typename T>
 inline VerilatedDeserialize& operator>>(VerilatedDeserialize& os, MonitoredValue<T>& rhs) {
     return os >> *rhs.data();
 }
+template<typename T>
+inline VerilatedSerialize& operator<<(VerilatedSerialize& os, const MonitoredReference<T> rhs) {
+    return os << rhs.value();
+}
+template<typename T>
+inline VerilatedDeserialize& operator>>(VerilatedDeserialize& os, MonitoredReference<T> rhs) {
+    return os >> *rhs.data();
+}
 template <class T_Key, class T_Value>
 VerilatedSerialize& operator<<(VerilatedSerialize& os, VlAssocArray<T_Key, T_Value>& rhs) {
     os << rhs.atDefault();

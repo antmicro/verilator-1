@@ -77,7 +77,7 @@ protected:
     inline void emitIData(vluint32_t code, IData newval, int bits);
     inline void emitQData(vluint32_t code, QData newval, int bits);
     inline void emitWData(vluint32_t code, const WData* newvalp, int bits);
-    inline void emitWData(vluint32_t code, const WDataV* newvalp, int bits);
+    inline void emitWData(vluint32_t code, WDataP newvalp, int bits);
     inline void emitDouble(vluint32_t code, double newval);
 
 public:

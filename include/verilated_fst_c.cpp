@@ -252,7 +252,7 @@ void VerilatedFst::emitWData(vluint32_t code, const WData* newvalp, int bits) {
 }
 
 VL_ATTR_ALWINLINE
-void VerilatedFst::emitWData(vluint32_t code, const WDataV* newvalp, int bits) {
+void VerilatedFst::emitWData(vluint32_t code, WDataP newvalp, int bits) {
     int words = VL_WORDS_I(bits);
     char* wp = m_strbuf;
     // Convert the most significant word

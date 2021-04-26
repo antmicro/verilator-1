@@ -190,18 +190,18 @@ public:
 class VerilatedDpiOpenVar final {
     // MEMBERS
     const VerilatedVarProps* m_propsp;  // Variable properties
-    void* m_datap;  // Location of data (local to thread always, so safe)
+    VoidP m_datap;  // Location of data (local to thread always, so safe)
 public:
     // CONSTRUCTORS
-    VerilatedDpiOpenVar(const VerilatedVarProps* propsp, void* datap)
+    /*VerilatedDpiOpenVar(const VerilatedVarProps* propsp, VoidP datap)
         : m_propsp{propsp}
-        , m_datap{datap} {}
-    VerilatedDpiOpenVar(const VerilatedVarProps* propsp, const void* datap)
+        , m_datap{datap} {}*/
+    VerilatedDpiOpenVar(const VerilatedVarProps* propsp, MonitoredPointer<const void> datap)
         : m_propsp{propsp}
-        , m_datap{const_cast<void*>(datap)} {}
+        , m_datap{datap.monitored_value(), (void*) datap.data()} {} // XXX not thread safe
     ~VerilatedDpiOpenVar() = default;
     // METHODS
-    void* datap() const { return m_datap; }
+    VoidP datap() const { return m_datap; }
     // METHODS - from VerilatedVarProps
     bool magicOk() const { return m_propsp->magicOk(); }
     VerilatedVarType vltype() const { return m_propsp->vltype(); }

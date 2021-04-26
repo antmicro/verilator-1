@@ -43,6 +43,7 @@ extern std::string VL_TO_STRING(IData lhs);
 extern std::string VL_TO_STRING(QData lhs);
 inline std::string VL_TO_STRING(const std::string& obj) { return "\"" + obj + "\""; }
 extern std::string VL_TO_STRING_W(int words, WDataInP obj);
+extern std::string VL_TO_STRING_W(int words, const WData* obj);
 
 //===================================================================
 // Shuffle RNG
@@ -96,7 +97,7 @@ public:
 // simply use a C style array (which is just a pointer).
 
 template <std::size_t T_Words> class VlWide final {
-    EDataV m_storage[T_Words];
+    EDataA(T_Words) m_storage;
 
 public:
     // cppcheck-suppress uninitVar
@@ -113,19 +114,19 @@ public:
     operator WDataOutP() { return &m_storage[0]; }
 
     // METHODS
-    const EData& at(size_t index) const { return m_storage[index]; }
-    EData& at(size_t index) { return m_storage[index]; }
-    WDataV* data() { return &m_storage[0]; }
-    const WDataV* data() const { return &m_storage[0]; }
+    const EDataR at(size_t index) const { return m_storage[index]; }
+    EDataR at(size_t index) { return m_storage[index]; }
+    WData* data() { return (WData*) m_storage.data(); } // XXX not thread-safe
+    const WData* data() const { return (const WData*) m_storage.data(); }
     bool operator<(const VlWide<T_Words>& rhs) const {
-        return VL_LT_W(T_Words, data(), rhs.data());
+        return VL_LT_W(T_Words, m_storage, rhs.m_storage);
     }
 };
 
 // Convert a C array to std::array reference by pointer magic, without copy.
 // Data type (second argument) is so the function template can automatically generate.
 template <std::size_t T_Words> VlWide<T_Words>& VL_CVT_W_A(WDataInP inp, const VlWide<T_Words>&) {
-    return *((VlWide<T_Words>*)inp);
+    return *((VlWide<T_Words>*) inp.monitored_value());
 }
 
 template <std::size_t T_Words> std::string VL_TO_STRING(const VlWide<T_Words>& obj) {
@@ -564,7 +565,7 @@ public:
     // Can't just overload operator[] or provide a "at" reference to set,
     // because we need to be able to insert only when the value is set
     T_Value& at(const T_Key& index) {
-        const auto it = m_map.find(index);
+        const auto it = m_map.find(const_cast<T_Key&>(index));
         if (it == m_map.end()) {
             std::pair<typename Map::iterator, bool> pit = m_map.emplace(index, m_defaultValue);
             return pit.first->second;
@@ -775,7 +776,7 @@ void VL_READMEM_N(bool hex, int bits, const std::string& filename,
         QData addr;
         std::string data;
         if (rmem.get(addr /*ref*/, data /*ref*/)) {
-            rmem.setData(&(obj.at(addr)), data);
+            rmem.setData(obj.at(addr).data(), data);
         } else {
             break;
         }
@@ -789,7 +790,7 @@ void VL_WRITEMEM_N(bool hex, int bits, const std::string& filename,
     if (VL_UNLIKELY(!wmem.isOpen())) return;
     for (const auto& i : obj) {
         QData addr = i.first;
-        if (addr >= start && addr <= end) wmem.print(addr, true, &(i.second));
+        if (addr >= start && addr <= end) wmem.print(addr, true, i.second.data());
     }
 }
 
@@ -858,14 +859,14 @@ static inline bool VL_CAST_DYNAMIC(VlClassRef<T> in, VlClassRef<U>& outr) {
 
 extern std::string VL_CVT_PACK_STR_NW(int lwords, WDataInP lwp) VL_MT_SAFE;
 inline std::string VL_CVT_PACK_STR_NQ(QData lhs) VL_PURE {
-    WDataV lw[VL_WQ_WORDS_E];
+    WDataA(VL_WQ_WORDS_E) lw;
     VL_SET_WQ(lw, lhs);
     return VL_CVT_PACK_STR_NW(VL_WQ_WORDS_E, lw);
 }
 inline std::string VL_CVT_PACK_STR_NN(const std::string& lhs) VL_PURE { return lhs; }
 inline std::string& VL_CVT_PACK_STR_NN(std::string& lhs) VL_PURE { return lhs; }
 inline std::string VL_CVT_PACK_STR_NI(IData lhs) VL_PURE {
-    WDataV lw[VL_WQ_WORDS_E];
+    WDataA(VL_WQ_WORDS_E) lw;
     VL_SET_WI(lw, lhs);
     return VL_CVT_PACK_STR_NW(1, lw);
 }
@@ -893,9 +894,36 @@ extern IData VL_FOPEN_MCD_N(const std::string& filename) VL_MT_SAFE;
 extern void VL_READMEM_N(bool hex, int bits, QData depth, int array_lsb,
                          const std::string& filename, void* memp, QData start,
                          QData end) VL_MT_SAFE;
+template<typename T, typename = typename std::enable_if<std::is_array<T>::value>::type>
+void VL_READMEM_N(bool hex, int bits, QData depth, int array_lsb,
+                  const std::string& filename, MonitoredValue<T>& memp,
+                  QData start, QData end) VL_MT_SAFE {
+    VL_READMEM_N(hex, bits, depth, array_lsb, filename, &memp, start, end);
+}
+template<typename T>
+void VL_READMEM_N(bool hex, int bits, QData depth, int array_lsb,
+                  const std::string& filename, MonitoredValue<T>* memp,
+                  QData start, QData end) VL_MT_SAFE {
+    std::unique_lock<std::mutex> lck(memp->mtx());
+    VL_READMEM_N(hex, bits, depth, array_lsb, filename, memp->data(), start, end);
+    memp->written();
+}
 extern void VL_WRITEMEM_N(bool hex, int bits, QData depth, int array_lsb,
                           const std::string& filename, const void* memp, QData start,
                           QData end) VL_MT_SAFE;
+template<typename T, typename = typename std::enable_if<std::is_array<T>::value>::type>
+void VL_WRITEMEM_N(bool hex, int bits, QData depth, int array_lsb,
+                   const std::string& filename, const MonitoredValue<T>& memp, QData start,
+                   QData end) VL_MT_SAFE {
+    VL_WRITEMEM_N(hex, bits, depth, array_lsb, filename, &memp, start, end);
+}
+template<typename T>
+void VL_WRITEMEM_N(bool hex, int bits, QData depth, int array_lsb,
+                   const std::string& filename, const MonitoredValue<T>* memp,
+                   QData start, QData end) VL_MT_SAFE {
+    std::unique_lock<std::mutex> lck(memp->mtx());
+    VL_WRITEMEM_N(hex, bits, depth, array_lsb, filename, memp->data(), start, end);
+}
 extern IData VL_SSCANF_INX(int lbits, const std::string& ld, const char* formatp, ...) VL_MT_SAFE;
 extern void VL_SFORMAT_X(int obits_ignored, std::string& output, const char* formatp,
                          ...) VL_MT_SAFE;
@@ -903,32 +931,32 @@ extern std::string VL_SFORMATF_NX(const char* formatp, ...) VL_MT_SAFE;
 extern void VL_TIMEFORMAT_IINI(int units, int precision, const std::string& suffix,
                                int width) VL_MT_SAFE;
 extern IData VL_VALUEPLUSARGS_INW(int rbits, const std::string& ld, WDataOutP rwp) VL_MT_SAFE;
-inline IData VL_VALUEPLUSARGS_INI(int rbits, const std::string& ld, CDataV& rdr) VL_MT_SAFE {
-    WDataV rwp[2];  // WData must always be at least 2
+inline IData VL_VALUEPLUSARGS_INI(int rbits, const std::string& ld, CDataR rdr) VL_MT_SAFE {
+    WDataA(2) rwp;  // WData must always be at least 2
     IData got = VL_VALUEPLUSARGS_INW(rbits, ld, rwp);
     if (got) rdr = rwp[0];
     return got;
 }
-inline IData VL_VALUEPLUSARGS_INI(int rbits, const std::string& ld, SDataV& rdr) VL_MT_SAFE {
-    WDataV rwp[2];  // WData must always be at least 2
+inline IData VL_VALUEPLUSARGS_INI(int rbits, const std::string& ld, SDataR rdr) VL_MT_SAFE {
+    WDataA(2) rwp;  // WData must always be at least 2
     IData got = VL_VALUEPLUSARGS_INW(rbits, ld, rwp);
     if (got) rdr = rwp[0];
     return got;
 }
-inline IData VL_VALUEPLUSARGS_INI(int rbits, const std::string& ld, IDataV& rdr) VL_MT_SAFE {
-    WDataV rwp[2];
+inline IData VL_VALUEPLUSARGS_INI(int rbits, const std::string& ld, IDataR rdr) VL_MT_SAFE {
+    WDataA(2) rwp;
     IData got = VL_VALUEPLUSARGS_INW(rbits, ld, rwp);
     if (got) rdr = rwp[0];
     return got;
 }
-inline IData VL_VALUEPLUSARGS_INQ(int rbits, const std::string& ld, QDataV& rdr) VL_MT_SAFE {
-    WDataV rwp[2];
+inline IData VL_VALUEPLUSARGS_INQ(int rbits, const std::string& ld, QDataR rdr) VL_MT_SAFE {
+    WDataA(2) rwp;
     IData got = VL_VALUEPLUSARGS_INW(rbits, ld, rwp);
     if (got) rdr = VL_SET_QW(rwp);
     return got;
 }
 inline IData VL_VALUEPLUSARGS_INQ(int rbits, const std::string& ld, DoubleV& rdr) VL_MT_SAFE {
-    WDataV rwp[2];
+    WDataA(2) rwp;
     IData got = VL_VALUEPLUSARGS_INW(rbits, ld, rwp);
     if (got) rdr = VL_CVT_D_Q(VL_SET_QW(rwp));
     return got;

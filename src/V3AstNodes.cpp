@@ -640,11 +640,14 @@ public:
     string m_type;  // The base type, e.g.: "Foo_t"s
     string m_dims;  // Array dimensions, e.g.: "[3][2][1]"
     string render(const string& name, bool isRef) const {
+        bool monval = m_type.substr(1, 4) == "Data" || m_type == "double";
         string out;
+        if (monval) out += "MonitoredValue<";
         out += m_type;
+        if (monval) out += m_dims + ">";
         if (name != "") out += " ";
         out += isRef ? "(&" + name + ")" : name;
-        out += m_dims;
+        if (!monval) out += m_dims;
         return out;
     }
 };
@@ -695,22 +698,26 @@ AstNodeDType::CTypeRecursed AstNodeDType::cTypeRecurse(bool compound) const {
         } else if (bdtypep->keyword() == AstBasicDTypeKwd::SCOPEPTR) {
             info.m_type = "const VerilatedScope*";
         } else if (bdtypep->keyword() == AstBasicDTypeKwd::DOUBLE) {
-            info.m_type = "DoubleV";
+            info.m_type = "double";
         } else if (bdtypep->keyword() == AstBasicDTypeKwd::STRING) {
             info.m_type = "std::string";
         } else if (dtypep->widthMin() <= 8) {  // Handle unpacked arrays; not bdtypep->width
-            info.m_type = "CDataV" + bitvec;
+            if (compound) info.m_type = "CDataV" + bitvec;
+            else info.m_type = "CData" + bitvec;
         } else if (dtypep->widthMin() <= 16) {
-            info.m_type = "SDataV" + bitvec;
+            if (compound) info.m_type = "SDataV" + bitvec;
+            else info.m_type = "SData" + bitvec;
         } else if (dtypep->widthMin() <= VL_IDATASIZE) {
-            info.m_type = "IDataV" + bitvec;
+            if (compound) info.m_type = "IDataV" + bitvec;
+            else info.m_type = "IData" + bitvec;
         } else if (dtypep->isQuad()) {
-            info.m_type = "QDataV" + bitvec;
+            if (compound) info.m_type = "QDataV" + bitvec;
+            else info.m_type = "QData" + bitvec;
         } else if (dtypep->isWide()) {
             if (compound) {
                 info.m_type = "VlWide<" + cvtToStr(dtypep->widthWords()) + ">";
             } else {
-                info.m_type += "WDataV" + bitvec;  // []'s added later
+                info.m_type += "WData" + bitvec;  // []'s added later
                 info.m_dims = "[" + cvtToStr(dtypep->widthWords()) + "]";
             }
         }

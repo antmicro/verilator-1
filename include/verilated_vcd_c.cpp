@@ -643,7 +643,7 @@ void VerilatedVcd::emitWData(vluint32_t code, const WData* newvalp, int bits) {
 }
 
 VL_ATTR_ALWINLINE
-void VerilatedVcd::emitWData(vluint32_t code, const WDataV* newvalp, int bits) {
+void VerilatedVcd::emitWData(vluint32_t code, WDataP newvalp, int bits) {
     int words = VL_WORDS_I(bits);
     char* wp = m_writep;
     *wp++ = 'b';
@@ -700,7 +700,7 @@ void VerilatedVcd::fullQuad(vluint32_t code, const vluint64_t newval, int bits) 
     *m_writep++ = '\n';
     bufferCheck();
 }
-void VerilatedVcd::fullArray(vluint32_t code, const WDataV* newval, int bits) {
+void VerilatedVcd::fullArray(vluint32_t code, const WDataP newval, int bits) {
     for (int word = 0; word < (((bits - 1) / 32) + 1); ++word) { oldp(code)[word] = newval[word]; }
     *m_writep++ = 'b';
     for (int bit = bits - 1; bit >= 0; --bit) {

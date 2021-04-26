@@ -288,7 +288,7 @@ public:
     // duck-typed void emitSData(vluint32_t code, SData newval, int bits) = 0;
     // duck-typed void emitIData(vluint32_t code, IData newval, int bits) = 0;
     // duck-typed void emitQData(vluint32_t code, QData newval, int bits) = 0;
-    // duck-typed void emitWData(vluint32_t code, const WDataV* newvalp, int bits) = 0;
+    // duck-typed void emitWData(vluint32_t code, const WDataP newvalp, int bits) = 0;
     // duck-typed void emitDouble(vluint32_t code, double newval) = 0;
 
     vluint32_t* oldp(vluint32_t code) { return m_sigs_oldvalp + code; }
@@ -300,7 +300,7 @@ public:
     void fullIData(vluint32_t* oldp, IData newval, int bits);
     void fullQData(vluint32_t* oldp, QData newval, int bits);
     void fullWData(vluint32_t* oldp, const WData* newvalp, int bits);
-    void fullWData(vluint32_t* oldp, const WDataV* newvalp, int bits);
+    void fullWData(vluint32_t* oldp, WDataP newvalp, int bits);
     void fullDouble(vluint32_t* oldp, double newval);
 
 #ifdef VL_TRACE_THREADED
@@ -346,7 +346,7 @@ public:
         for (int i = 0; i < (bits + 31) / 32; ++i) { *m_traceBufferWritep++ = newvalp[i]; }
         VL_DEBUG_IF(assert(m_traceBufferWritep <= m_traceBufferEndp););
     }
-    inline void chgWData(vluint32_t code, const WDataV* newvalp, int bits) {
+    inline void chgWData(vluint32_t code, WDataP newvalp, int bits) {
         m_traceBufferWritep[0] = (bits << 4) | VerilatedTraceCommand::CHG_WDATA;
         m_traceBufferWritep[1] = code;
         m_traceBufferWritep += 2;
@@ -400,7 +400,7 @@ public:
             }
         }
     }
-    inline void CHG(WData)(vluint32_t* oldp, const WDataV* newvalp, int bits) {
+    inline void CHG(WData)(vluint32_t* oldp, WDataP newvalp, int bits) {
         for (int i = 0; i < (bits + 31) / 32; ++i) {
             if (VL_UNLIKELY(oldp[i] ^ newvalp[i])) {
                 fullWData(oldp, newvalp, bits);
