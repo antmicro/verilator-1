@@ -41,7 +41,10 @@ protected:
 public:
     GraphAcycVertex(V3Graph* graphp, V3GraphVertex* origVertexp)
         : V3GraphVertex{graphp}
-        , m_origVertexp{origVertexp} {}
+        , m_origVertexp{origVertexp}
+        {
+            this->allow_cycles(origVertexp->allow_cycles());
+        }
     virtual ~GraphAcycVertex() override = default;
     V3GraphVertex* origVertexp() const { return m_origVertexp; }
     void setDelete() { m_deleted = true; }
