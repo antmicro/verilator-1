@@ -138,6 +138,16 @@ public:
     ~LifeBlock() = default;
     // METHODS
     void checkRemoveAssign(const LifeMap::iterator& it) {
+        return; // XXX disable it for now;
+                // in some cases it would remove necessary assignments,
+                // e.g. in this one the zeroing would be removed, so we
+                // wouldn't be able to detect the clock posedge:
+                //   initial begin
+                //       forever begin
+                //           #1 clk = 1'b0;
+                //           #1 clk = 1'b1;
+                //       end
+                //   end
         AstVar* varp = it->first->varp();
         LifeVarEntry* entp = &(it->second);
         if (!varp->isSigPublic()) {
