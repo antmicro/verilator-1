@@ -296,6 +296,7 @@ private:
     VL_DEBUG_FUNC;  // Declare debug()
 
     // VISITORS
+    virtual void visit(AstWait* nodep) override {}
     virtual void visit(AstVarRef* nodep) override {
         // Consumption/generation of a variable,
         // it's used so can't elim assignment before this use.
