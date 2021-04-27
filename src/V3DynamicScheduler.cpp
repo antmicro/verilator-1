@@ -249,7 +249,7 @@ class DynamicSchedulerWaitVisitor final : public AstNVisitor {
 private:
     // STATE
     std::unordered_map<AstVar*, size_t> m_indices;
-    std::unordered_map<AstVar*, AstVarRef*> m_varrefps;
+    std::map<AstVar*, AstVarRef*> m_varrefps;
 
     // METHODS
     VL_DEBUG_FUNC;  // Declare debug()
