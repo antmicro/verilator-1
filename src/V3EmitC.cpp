@@ -950,16 +950,32 @@ public:
     }
     virtual void visit(AstTimingControl* nodep) override {
         puts("/* [@ statement] */\n");
+        AstSenItem* posedgeItemp = nullptr;
         for (auto* itemp = nodep->sensesp()->sensesp(); itemp; itemp = VN_CAST(itemp->nextp(), SenItem)) {
-            visit(itemp);
-            puts(".assign_no_notify(0);\n");
+            if (itemp->edgeType() == VEdgeType::ET_POSEDGE)
+                posedgeItemp = itemp;
+            else if (itemp->varrefp()->dtypep()->basicp()->isEventValue()) {
+                visit(itemp);
+                puts(".assign_no_notify(0);\n");
+            }
         }
-        puts("self->wait_for(");
-        iterateAndNextNull(nodep->sensesp());
-        puts(");\n");
-        puts("if (self->should_exit()) return;\n");
-        // XXX should we handle this too??
-        // iterateAndNextNull(nodep->stmtsp());
+        if (posedgeItemp) { // XXX only single posedge supported for now
+            puts("self->wait_until([](auto&& v) -> bool { return !std::get<0>(v); },");
+            visit(posedgeItemp);
+            puts(");\n");
+            puts("if (self->should_exit()) return;\n");
+            puts("self->wait_until([](auto&& v) -> bool { return std::get<0>(v); },");
+            visit(posedgeItemp);
+            puts(");\n");
+            puts("if (self->should_exit()) return;\n");
+        } else {
+            puts("self->wait_for(");
+            iterateAndNextNull(nodep->sensesp());
+            puts(");\n");
+            puts("if (self->should_exit()) return;\n");
+            // XXX should we handle this too??
+            // iterateAndNextNull(nodep->stmtsp());
+        }
     }
     virtual void visit(AstWait* nodep) override {
         puts("/* [wait statement] */\n");
