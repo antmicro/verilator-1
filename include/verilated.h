@@ -265,9 +265,19 @@ public:
 
     void kick();
 
-    template <typename... Ts> void wait_for(MonitoredValue<Ts>&... mon_vals) {
+    template <typename... Ts> void wait_for_events(MonitoredValue<Ts>&... mon_vals) {
         wait_until([](auto values) { return any_equal(values, 1); },
                    mon_vals...);
+    }
+
+    template <typename... Ts> void wait_for_change(MonitoredValue<Ts>&... mon_vals) {
+        std::atomic_bool done(false);
+        auto f = [this, &done]() {
+            done = true;
+            m_cv.notify_all();
+            set_idle(false);
+        };
+        wait_internal(done, MonitoredValueCallback(&mon_vals, f)...);
     }
 
     template <typename P> void wait_until(P pred) {

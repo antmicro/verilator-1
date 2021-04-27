@@ -951,10 +951,12 @@ public:
     virtual void visit(AstTimingControl* nodep) override {
         puts("/* [@ statement] */\n");
         AstSenItem* posedgeItemp = nullptr;
+        bool events = false;
         for (auto* itemp = nodep->sensesp()->sensesp(); itemp; itemp = VN_CAST(itemp->nextp(), SenItem)) {
             if (itemp->edgeType() == VEdgeType::ET_POSEDGE)
                 posedgeItemp = itemp;
             else if (itemp->varrefp()->dtypep()->basicp()->isEventValue()) {
+                events = true;
                 visit(itemp);
                 puts(".assign_no_notify(0);\n");
             }
@@ -966,16 +968,17 @@ public:
             puts("if (self->should_exit()) return;\n");
             puts("self->wait_until([](auto&& v) -> bool { return std::get<0>(v); },");
             visit(posedgeItemp);
-            puts(");\n");
-            puts("if (self->should_exit()) return;\n");
-        } else {
-            puts("self->wait_for(");
+        } else if (!events) { // XXX If no events, wait for any change. Needs support for mixed types
+            puts("self->wait_for_change(");
             iterateAndNextNull(nodep->sensesp());
-            puts(");\n");
-            puts("if (self->should_exit()) return;\n");
+        } else {
+            puts("self->wait_for_events(");
+            iterateAndNextNull(nodep->sensesp());
             // XXX should we handle this too??
             // iterateAndNextNull(nodep->stmtsp());
         }
+        puts(");\n");
+        puts("if (self->should_exit()) return;\n");
     }
     virtual void visit(AstWait* nodep) override {
         puts("/* [wait statement] */\n");
