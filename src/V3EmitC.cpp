@@ -952,13 +952,14 @@ public:
         puts("/* [@ statement] */\n{\n");
         int i = 0;
         for (auto* itemp = nodep->sensesp()->sensesp(); itemp; itemp = VN_CAST(itemp->nextp(), SenItem)) {
-            puts("auto __Vtc__tmp" + cvtToStr(i) + " = ");
+            emitPrimitiveType(itemp);
+            puts(" __Vtc__tmp" + cvtToStr(i) + " = ");
             visit(itemp);
             puts(";\n");
             i++;
         }
         for (auto* itemp = nodep->sensesp()->sensesp(); itemp; itemp = VN_CAST(itemp->nextp(), SenItem)) {
-            if (itemp->varrefp()->dtypep()->basicp()->isEventValue()) {
+            if (itemp->varrefp()->varp()->dtypep()->basicp()->isEventValue()) {
                 visit(itemp);
                 puts(".assign_no_notify(0);\n");
             }
@@ -979,7 +980,7 @@ public:
             } else if (itemp->edgeType() == VEdgeType::ET_NEGEDGE) {
                 puts("(__Vtc__tmp" + cvtToStr(i) + " && ");
                 puts("!std::get<" + cvtToStr(i) + ">(v))");
-            } else if (itemp->varrefp()->dtypep()->basicp()->isEventValue()) {
+            } else if (itemp->varrefp()->varp()->dtypep()->basicp()->isEventValue()) {
                 puts("std::get<" + cvtToStr(i) + ">(v)");
             } else {
                 puts("__Vtc__tmp" + cvtToStr(i));
@@ -1274,12 +1275,18 @@ public:
             puts(")");
         }
     }
+    void emitPrimitiveType(AstNode* nodep) {
+        if (nodep->isDouble()) puts("double");
+        else if (nodep->width() <= VL_BYTESIZE)  puts("CData");
+        else if (nodep->width() <= VL_SHORTSIZE) puts("SData");
+        else if (nodep->width() <= VL_IDATASIZE) puts("IData");
+        else if (nodep->width() <= VL_QUADSIZE) puts("QData");
+    }
     void emitPrimitiveCast(AstNode* nodep) {
-        if (nodep->isDouble()) puts("(double)");
-        else if (nodep->width() <= VL_BYTESIZE)  puts("(CData)");
-        else if (nodep->width() <= VL_SHORTSIZE) puts("(SData)");
-        else if (nodep->width() <= VL_IDATASIZE) puts("(IData)");
-        else if (nodep->width() <= VL_QUADSIZE) puts("(QData)");
+        if (nodep->width() > VL_QUADSIZE) return;
+        puts("(");
+        emitPrimitiveType(nodep);
+        puts(") ");
     }
     virtual void visit(AstCCast* nodep) override {
         // Extending a value of the same word width is just a NOP.
