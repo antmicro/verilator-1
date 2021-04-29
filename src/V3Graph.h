@@ -192,6 +192,7 @@ protected:
     double m_fanout;  // Order fanout
     uint32_t m_color;  // Color of the node
     uint32_t m_rank;  // Rank of edge
+    bool m_cycles_allowed;
     union {
         void* m_userp;  // Marker for some algorithms
         uint32_t m_user;  // Marker for some algorithms
@@ -241,6 +242,8 @@ public:
     uint32_t user() const { return m_user; }
     void userp(void* userp) { m_userp = userp; }
     void* userp() const { return m_userp; }
+    void allow_cycles(bool allow_cycles) { m_cycles_allowed = allow_cycles; }
+    bool allow_cycles() const { return m_cycles_allowed; }
     // ITERATORS
     V3GraphVertex* verticesNextp() const { return m_vertices.nextp(); }
     V3GraphEdge* inBeginp() const { return m_ins.begin(); }

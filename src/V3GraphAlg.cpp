@@ -280,11 +280,12 @@ private:
         // If larger rank is found, assign it and loop back through
         // If we hit a back node make a list of all loops
         if (vertexp->user() == 1) {
-            if(verilator_unlink_objects)
+            if(vertexp->allow_cycles())
             {
-             vertexp->outUnlink();
-             return;
+                vertexp->outUnlink();
+                return;
             }
+
             m_graphp->reportLoops(m_edgeFuncp, vertexp);
             m_graphp->loopsMessageCb(vertexp);
             return;  // LCOV_EXCL_LINE  // gcc gprof bug misses this return

@@ -1041,6 +1041,8 @@ private:
                 OrderVarVertex* varVxp = newVarUserVertex(varscp, WV_STD);
                 varVxp->isClock(true);
                 new OrderEdge(&m_graph, varVxp, m_activeSenVxp, WEIGHT_MEDIUM);
+                m_activeSenVxp->allow_cycles(true);
+                varVxp->allow_cycles(true);
             } else {
                 UASSERT_OBJ(m_logicVxp, nodep, "Var ref not under a logic block");
                 // What new directions is this used
@@ -1109,6 +1111,7 @@ private:
                             // ALWAYS do it:
                             //    There maybe a wire a=b; between the two blocks
                             OrderVarVertex* postVxp = newVarUserVertex(varscp, WV_POST);
+                            postVxp->allow_cycles(true);
                             new OrderEdge(&m_graph, postVxp, m_logicVxp, WEIGHT_POST);
                         }
                         if (con) {
