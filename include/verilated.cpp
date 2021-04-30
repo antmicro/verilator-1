@@ -95,7 +95,6 @@ struct VerilatedInitializer {
     }
 } s_VerilatedInitializer;
 
-VerilatedNBACtrl verilated_nba_ctrl;
 VerilatedThreadPool thread_pool;
 VerilatedThreadRegistry thread_registry;
 Monitor monitor;

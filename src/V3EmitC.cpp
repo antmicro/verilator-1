@@ -426,7 +426,7 @@ public:
     }
     virtual void visit(AstNodeAssign* nodep) override { visit_generic_assign(nodep); }
     virtual void visit_assigndly(AstNodeAssign* nodep, bool delayedEval) {
-        puts("verilated_nba_ctrl.schedule(");
+        puts("vlTOPp->verilated_nba_ctrl.schedule(");
         if (!delayedEval && !nodep->isWide()
             && !VN_IS(nodep->lhsp(), Sel)
             && !VN_IS(nodep->lhsp(), AssocSel)
@@ -3136,7 +3136,7 @@ void EmitCImp::emitSettleLoop(AstNodeModule* modp, const std::string& eval_call,
     puts(protect("__eval_change_counter"));
     puts(" = 0;\n");
     puts(eval_call + "\n");
-    puts("verilated_nba_ctrl.assign();\n");
+    puts("vlSymsp->TOPp->verilated_nba_ctrl.assign();\n");
     puts("} while (!Verilated::gotFinish() && vlSymsp->TOPp->");
     puts(protect("__eval_change_counter"));
     puts(" != 0);\n");
@@ -3548,6 +3548,8 @@ void EmitCImp::emitInt(AstNodeModule* modp) {
     }
     ofp()->resetPrivate();
     ofp()->putsPrivate(false);  // public:
+    if (modp->isTop())
+        puts("VerilatedNBACtrl verilated_nba_ctrl;");
 
     {  // Instantiated cells
         bool did = false;

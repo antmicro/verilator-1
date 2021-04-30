@@ -1022,8 +1022,6 @@ public:
     }
 };
 
-extern VerilatedNBACtrl verilated_nba_ctrl;
-
 enum VerilatedVarType : vluint8_t {
     VLVT_UNKNOWN = 0,
     VLVT_PTR,  // Pointer to something
