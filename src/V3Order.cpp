@@ -1995,7 +1995,7 @@ void OrderVisitor::process() {
         if (debug() >= 4) m_pomGraph.dumpDotFilePrefixed("ordermv_simpl");
 
         UINFO(2, "  Move...\n");
-        processMove();
+        //processMove();
     } else {
         UINFO(2, "  Set up mtasks...\n");
         processMTasks();
