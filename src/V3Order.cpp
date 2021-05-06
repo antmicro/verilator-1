@@ -1965,8 +1965,8 @@ void OrderVisitor::process() {
 
     // Assign ranks so we know what to follow
     // Then, sort vertices and edges by that ordering
-    m_graph.order();
-    m_graph.dumpDotFilePrefixed("orderg_order");
+   // m_graph.order();
+   // m_graph.dumpDotFilePrefixed("orderg_order");
 
     // This finds everything that can be traced from an input (which by
     // definition are the source clocks). After this any vertex which was
@@ -1995,7 +1995,7 @@ void OrderVisitor::process() {
         if (debug() >= 4) m_pomGraph.dumpDotFilePrefixed("ordermv_simpl");
 
         UINFO(2, "  Move...\n");
-        //processMove();
+        processMove();
     } else {
         UINFO(2, "  Set up mtasks...\n");
         processMTasks();
