@@ -1631,41 +1631,15 @@ void OrderVisitor::processMove() {
     //           Move logic to ordered active
     //           Any children that have all inputs now ready move from waiting->ready graph
     //           (This may add nodes the for loop directly above needs to detext)
-    processMovePrepReady();
-
-    // New domain... another loop
-    UINFO(5, "  MoveIterate\n");
-    while (!m_pomReadyDomScope.empty()) {
-        // Start with top node on ready list's domain & scope
-        OrderMoveDomScope* domScopep = m_pomReadyDomScope.begin();
-        OrderMoveVertex* topVertexp = domScopep->readyVertices().begin();  // lintok-begin-on-ref
-        UASSERT(topVertexp, "domScope on ready list without any nodes ready under it");
-        // Work on all scopes ready inside this domain
-        while (domScopep) {
-            UINFO(6, "   MoveDomain l=" << domScopep->domainp() << endl);
-            // Process all nodes ready under same domain & scope
-            m_pomNewFuncp = nullptr;
-            while (OrderMoveVertex* vertexp
-                   = domScopep->readyVertices().begin()) {  // lintok-begin-on-ref
-                processMoveOne(vertexp, domScopep, 1);
-            }
-            // Done with scope/domain pair, pick new scope under same domain, or nullptr if none
-            // left
-            OrderMoveDomScope* domScopeNextp = nullptr;
-            for (OrderMoveDomScope* huntp = m_pomReadyDomScope.begin(); huntp;
-                 huntp = huntp->readyDomScopeNextp()) {
-                if (huntp->domainp() == domScopep->domainp()) {
-                    domScopeNextp = huntp;
-                    break;
-                }
-            }
-            domScopep = domScopeNextp;
-        }
+    //processMovePrepReady();
+    for (OrderMoveVertex* vertexp = m_pomWaiting.begin(); vertexp;) {
+        OrderMoveVertex* nextp = vertexp->pomWaitingNextp();
+        m_pomNewFuncp = nullptr;
+        AstActive* newActivep
+            = processMoveOneLogic(vertexp->logicp(), m_pomNewFuncp /*ref*/, m_pomNewStmts /*ref*/);
+        if (newActivep) m_scopetopp->addActivep(newActivep);
+        vertexp = nextp;
     }
-    UASSERT(m_pomWaiting.empty(),
-            "Didn't converge; nodes waiting, none ready, perhaps some input activations lost.");
-    // Cleanup memory
-    processMoveClear();
 }
 
 void OrderVisitor::processMovePrepReady() {
@@ -1736,6 +1710,9 @@ void OrderVisitor::processMoveOne(OrderMoveVertex* vertexp, OrderMoveDomScope* d
 
 AstActive* OrderVisitor::processMoveOneLogic(const OrderLogicVertex* lvertexp,
                                              AstCFunc*& newFuncpr, int& newStmtsr) {
+    if(lvertexp == nullptr)
+        return nullptr;
+
     AstActive* activep = nullptr;
     AstScope* scopep = lvertexp->scopep();
     AstSenTree* domainp = lvertexp->domainp();
@@ -1965,8 +1942,8 @@ void OrderVisitor::process() {
 
     // Assign ranks so we know what to follow
     // Then, sort vertices and edges by that ordering
-    m_graph.order();
-    m_graph.dumpDotFilePrefixed("orderg_order");
+   // m_graph.order();
+   // m_graph.dumpDotFilePrefixed("orderg_order");
 
     // This finds everything that can be traced from an input (which by
     // definition are the source clocks). After this any vertex which was
