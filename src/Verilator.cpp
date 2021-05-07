@@ -245,6 +245,7 @@ static void process() {
     }
 
     //--PRE-FLAT OPTIMIZATIONS------------------
+
     // Initial const/dead to reduce work for ordering code
     V3Const::constifyAll(v3Global.rootp());
     v3Global.checkTree();
