@@ -76,6 +76,7 @@ AstNode::AstNode(AstType t, FileLine* fl)
     // Attributes
     m_didWidth = false;
     m_doingWidth = false;
+    m_visited = false;
     m_protect = true;
     m_user1u = VNUser(0);
     m_user1Cnt = 0;

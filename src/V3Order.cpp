@@ -1617,6 +1617,69 @@ void OrderVisitor::processMoveBuildGraph() {
 
 //######################################################################
 // OrderVisitor - Moving
+//
+
+const AstNode *assig = nullptr;
+const AstNode *parent_node = nullptr;
+using NodesContainer = std::vector<const AstNode*>;
+
+std::map<const AstNode*, std::map<const AstNode*, NodesContainer>> varef_map;
+
+static void get_varrefs(const AstNode *nodep, NodesContainer &nodes)
+{
+    if(VN_IS(nodep, VarRef))
+    {   auto noderef = reinterpret_cast<const AstVarRef*>(nodep);
+        if(std::find(nodes.begin(), nodes.end(), noderef->varp()) == nodes.end())
+            nodes.push_back(noderef->varp());
+    }
+
+    for (const AstNode* np = nodep->op1p(); np; np = np->nextp()) {
+        get_varrefs(np, nodes);
+    }
+
+    for (const AstNode* np = nodep->op2p(); np; np = np->nextp()) {
+        get_varrefs(np, nodes);
+    }
+
+    for (const AstNode* np = nodep->op3p(); np; np = np->nextp()) {
+        get_varrefs(np, nodes);
+    }
+
+    for (const AstNode* np = nodep->op4p(); np; np = np->nextp()) {
+        get_varrefs(np, nodes);
+    }
+}
+
+static void get_all_assignes(const AstNode *nodep)
+{
+
+    if(VN_IS(nodep, Assign) or VN_IS(nodep, AssignW) or VN_IS(nodep, AssignDly) )
+    {
+        NodesContainer nodes;
+        assig = nodep;
+        get_varrefs(nodep, nodes);
+        if(nodes.size()>1)
+        {
+            varef_map[parent_node][assig] = std::move(nodes);
+        }
+    }
+
+    for (const AstNode* np = nodep->op1p(); np; np = np->nextp()) {
+        get_all_assignes(np);
+    }
+
+    for (const AstNode* np = nodep->op2p(); np; np = np->nextp()) {
+        get_all_assignes(np);
+    }
+
+    for (const AstNode* np = nodep->op3p(); np; np = np->nextp()) {
+        get_all_assignes(np);
+    }
+
+    for (const AstNode* np = nodep->op4p(); np; np = np->nextp()) {
+        get_all_assignes(np);
+    }
+}
 
 void OrderVisitor::processMove() {
     // The graph routines have already sorted the vertexes and edges into best->worst order
@@ -1631,14 +1694,36 @@ void OrderVisitor::processMove() {
     //           Move logic to ordered active
     //           Any children that have all inputs now ready move from waiting->ready graph
     //           (This may add nodes the for loop directly above needs to detext)
-    //processMovePrepReady();
+    
     for (OrderMoveVertex* vertexp = m_pomWaiting.begin(); vertexp;) {
         OrderMoveVertex* nextp = vertexp->pomWaitingNextp();
         m_pomNewFuncp = nullptr;
-        AstActive* newActivep
-            = processMoveOneLogic(vertexp->logicp(), m_pomNewFuncp /*ref*/, m_pomNewStmts /*ref*/);
-        if (newActivep) m_scopetopp->addActivep(newActivep);
+
+        if(vertexp->logicp()){
+            parent_node=vertexp->logicp()->nodep();
+
+            if(VN_IS(parent_node, Active) or VN_IS(parent_node, Always))
+            {
+                get_all_assignes(vertexp->logicp()->nodep());
+            }
+            AstActive* newActivep
+                = processMoveOneLogic(vertexp->logicp(), m_pomNewFuncp /*ref*/, m_pomNewStmts /*ref*/);
+            if (newActivep) m_scopetopp->addActivep(newActivep);
+        }
         vertexp = nextp;
+    }
+
+    for(const auto& [main_node, assign_map] : varef_map)
+    {
+        std::cout << main_node << std::endl;
+        for(const auto& [assign, vars] : assign_map)
+        {
+            std::cout << assign << std::endl;
+            for(const auto& var: vars)
+            {
+                std::cout << var << std::endl;
+            }
+        }
     }
 }
 
@@ -1710,9 +1795,6 @@ void OrderVisitor::processMoveOne(OrderMoveVertex* vertexp, OrderMoveDomScope* d
 
 AstActive* OrderVisitor::processMoveOneLogic(const OrderLogicVertex* lvertexp,
                                              AstCFunc*& newFuncpr, int& newStmtsr) {
-    if(lvertexp == nullptr)
-        return nullptr;
-
     AstActive* activep = nullptr;
     AstScope* scopep = lvertexp->scopep();
     AstSenTree* domainp = lvertexp->domainp();
@@ -1942,8 +2024,8 @@ void OrderVisitor::process() {
 
     // Assign ranks so we know what to follow
     // Then, sort vertices and edges by that ordering
-   // m_graph.order();
-   // m_graph.dumpDotFilePrefixed("orderg_order");
+    m_graph.order();
+    m_graph.dumpDotFilePrefixed("orderg_order");
 
     // This finds everything that can be traced from an input (which by
     // definition are the source clocks). After this any vertex which was

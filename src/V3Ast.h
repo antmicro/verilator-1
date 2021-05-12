@@ -1425,6 +1425,7 @@ class AstNode VL_NOT_FINAL {
     bool m_didWidth : 1;  // Did V3Width computation
     bool m_doingWidth : 1;  // Inside V3Width
     bool m_protect : 1;  // Protect name if protection is on
+    bool m_visited : 1;  // Protect name if protection is on
     //          // Space for more bools here
 
     // This member ordering both allows 64 bit alignment and puts associated data together
@@ -1587,6 +1588,10 @@ public:
     int widthInstrs() const;
     void didWidth(bool flag) { m_didWidth = flag; }
     bool didWidth() const { return m_didWidth; }
+    
+    void visited(bool flag) { m_visited = flag; }
+    bool visited() const { return m_visited; }
+    
     bool didWidthAndSet() {
         if (didWidth()) return true;
         didWidth(true);
