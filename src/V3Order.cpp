@@ -1621,16 +1621,21 @@ void OrderVisitor::processMoveBuildGraph() {
 
 const AstNode *assig = nullptr;
 const AstNode *parent_node = nullptr;
-using NodesContainer = std::vector<const AstNode*>;
+using NodesContainer = std::vector<const AstVarRef*>;
+using AlwaysId = std::pair<const AstNode*, std::vector<NodesContainer>>;
 
-std::map<const AstNode*, std::map<const AstNode*, NodesContainer>> varef_map;
+std::vector<AlwaysId> varef_map;
 
 static void get_varrefs(const AstNode *nodep, NodesContainer &nodes)
 {
     if(VN_IS(nodep, VarRef))
-    {   auto noderef = reinterpret_cast<const AstVarRef*>(nodep);
-        if(std::find(nodes.begin(), nodes.end(), noderef->varp()) == nodes.end())
-            nodes.push_back(noderef->varp());
+    {   
+        auto noderef = reinterpret_cast<const AstVarRef*>(nodep);
+        if(std::find_if(nodes.begin(), 
+                        nodes.end(), 
+                        [&noderef](const AstVarRef*a){return a->varp() == noderef->varp();})
+                        == nodes.end())
+            nodes.push_back(noderef);
     }
 
     for (const AstNode* np = nodep->op1p(); np; np = np->nextp()) {
@@ -1652,7 +1657,6 @@ static void get_varrefs(const AstNode *nodep, NodesContainer &nodes)
 
 static void get_all_assignes(const AstNode *nodep)
 {
-
     if(VN_IS(nodep, Assign) or VN_IS(nodep, AssignW) or VN_IS(nodep, AssignDly) )
     {
         NodesContainer nodes;
@@ -1660,7 +1664,15 @@ static void get_all_assignes(const AstNode *nodep)
         get_varrefs(nodep, nodes);
         if(nodes.size()>1)
         {
-            varef_map[parent_node][assig] = std::move(nodes);
+            auto fnodep = std::find_if(varef_map.begin(), varef_map.end(), [](const AlwaysId& a){return a.first == parent_node;});
+            if(fnodep == varef_map.end())
+            {
+                AlwaysId a = {parent_node, {}};
+                a.second.push_back(std::move(nodes));
+                varef_map.push_back(std::move(a));
+            } else {
+                fnodep->second.push_back(nodes);
+            }
         }
     }
 
@@ -1678,6 +1690,29 @@ static void get_all_assignes(const AstNode *nodep)
 
     for (const AstNode* np = nodep->op4p(); np; np = np->nextp()) {
         get_all_assignes(np);
+    }
+}
+
+void sort_refs()
+{
+    for(const auto& [main_node, always_blocks] : varef_map)
+    {
+        auto lhs_node = vars.back();
+        for(const auto& vars : always_blocks)
+        {
+            for(const auto& var: vars)
+            {
+                if(!var->access().isReadOnly())
+                {
+                    continue;
+                }
+
+                if(lhs_node->varp() == var->varp())
+                {
+
+                }
+            }
+        }
     }
 }
 
@@ -1704,7 +1739,7 @@ void OrderVisitor::processMove() {
 
             if(VN_IS(parent_node, Active) or VN_IS(parent_node, Always))
             {
-                get_all_assignes(vertexp->logicp()->nodep());
+                get_all_assignes(parent_node);
             }
             AstActive* newActivep
                 = processMoveOneLogic(vertexp->logicp(), m_pomNewFuncp /*ref*/, m_pomNewStmts /*ref*/);
@@ -1713,15 +1748,15 @@ void OrderVisitor::processMove() {
         vertexp = nextp;
     }
 
-    for(const auto& [main_node, assign_map] : varef_map)
+    for(const auto& [main_node, always_blocks] : varef_map)
     {
         std::cout << main_node << std::endl;
-        for(const auto& [assign, vars] : assign_map)
+        for(const auto& vars : always_blocks)
         {
-            std::cout << assign << std::endl;
+            std::cout << "Another block" << std::endl;
             for(const auto& var: vars)
             {
-                std::cout << var << std::endl;
+                std::cout << var->varp() << std::endl;
             }
         }
     }
