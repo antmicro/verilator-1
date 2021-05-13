@@ -1662,16 +1662,13 @@ static void get_all_assignes(const AstNode *nodep)
         NodesContainer nodes;
         assig = nodep;
         get_varrefs(nodep, nodes);
-        if(nodes.size()>1)
+        auto fnodep = std::find_if(varref_map.begin(), varref_map.end(), [](const AlwaysId& a){return a.first == parent_node;});
+        if(fnodep == varref_map.end())
         {
-            auto fnodep = std::find_if(varref_map.begin(), varref_map.end(), [](const AlwaysId& a){return a.first == parent_node;});
-            if(fnodep == varref_map.end())
-            {
-                AlwaysId a = {parent_node, {std::move(nodes)}};
-                varref_map.push_back(std::move(a));
-            } else {
-                fnodep->second.push_back(nodes);
-            }
+            AlwaysId a = {parent_node, {std::move(nodes)}};
+            varref_map.push_back(std::move(a));
+        } else {
+            fnodep->second.push_back(nodes);
         }
     }
 
@@ -1764,17 +1761,13 @@ void OrderVisitor::processMove() {
     
     for (OrderMoveVertex* vertexp = m_pomWaiting.begin(); vertexp;) {
         OrderMoveVertex* nextp = vertexp->pomWaitingNextp();
-        m_pomNewFuncp = nullptr;
 
         if(vertexp->logicp()){
             parent_node=vertexp->logicp();
-            if(VN_IS(parent_node->nodep(), Active) or VN_IS(parent_node->nodep(), Always))
-            {
-                get_all_assignes(parent_node->nodep());
-            }
-            AstActive* newActivep
-                = processMoveOneLogic(parent_node, m_pomNewFuncp /*ref*/, m_pomNewStmts /*ref*/);
-            if (newActivep) m_scopetopp->addActivep(newActivep);
+            get_all_assignes(parent_node->nodep());
+           // AstActive* newActivep
+           //     = processMoveOneLogic(parent_node, m_pomNewFuncp /*ref*/, m_pomNewStmts /*ref*/);
+           // if (newActivep) m_scopetopp->addActivep(newActivep);
         }
         vertexp = nextp;
     }
@@ -1783,9 +1776,10 @@ void OrderVisitor::processMove() {
 
     for(const auto& [main_node, logicp] : varref_map)
     {
-       // AstActive* newActivep
-       //     = processMoveOneLogic(main_node, m_pomNewFuncp /*ref*/, m_pomNewStmts /*ref*/);
-       // if (newActivep) m_scopetopp->addActivep(newActivep);
+        m_pomNewFuncp = nullptr;
+        AstActive* newActivep
+            = processMoveOneLogic(main_node, m_pomNewFuncp /*ref*/, m_pomNewStmts /*ref*/);
+        if (newActivep) m_scopetopp->addActivep(newActivep);
     }
 }
 
@@ -1892,6 +1886,7 @@ AstActive* OrderVisitor::processMoveOneLogic(const OrderLogicVertex* lvertexp,
             triggerp->argTypes("vlSymsp");
             activep->addStmtsp(triggerp);
             UINFO(6, "      New " << newFuncpr << endl);
+            std::cout << "New fun" << name << std::endl; 
         }
 
         // Move the logic to the function we're creating
