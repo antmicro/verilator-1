@@ -1620,11 +1620,11 @@ void OrderVisitor::processMoveBuildGraph() {
 //
 
 const AstNode *assig = nullptr;
-const AstNode *parent_node = nullptr;
+OrderLogicVertex *parent_node = nullptr;
 using NodesContainer = std::vector<const AstVarRef*>;
-using AlwaysId = std::pair<const AstNode*, std::vector<NodesContainer>>;
+using AlwaysId = std::pair<OrderLogicVertex *, std::vector<NodesContainer>>;
 
-std::vector<AlwaysId> varef_map;
+std::vector<AlwaysId> varref_map;
 
 static void get_varrefs(const AstNode *nodep, NodesContainer &nodes)
 {
@@ -1664,12 +1664,11 @@ static void get_all_assignes(const AstNode *nodep)
         get_varrefs(nodep, nodes);
         if(nodes.size()>1)
         {
-            auto fnodep = std::find_if(varef_map.begin(), varef_map.end(), [](const AlwaysId& a){return a.first == parent_node;});
-            if(fnodep == varef_map.end())
+            auto fnodep = std::find_if(varref_map.begin(), varref_map.end(), [](const AlwaysId& a){return a.first == parent_node;});
+            if(fnodep == varref_map.end())
             {
-                AlwaysId a = {parent_node, {}};
-                a.second.push_back(std::move(nodes));
-                varef_map.push_back(std::move(a));
+                AlwaysId a = {parent_node, {std::move(nodes)}};
+                varref_map.push_back(std::move(a));
             } else {
                 fnodep->second.push_back(nodes);
             }
@@ -1692,25 +1691,58 @@ static void get_all_assignes(const AstNode *nodep)
         get_all_assignes(np);
     }
 }
+std::vector<size_t> find_rhs_node(const AstVar *rhs)
+{
+    std::vector<size_t> rhsPtrVec;
+    size_t rhsPtr=0;
+    for(const auto& [main_node, always_blocks] : varref_map)
+    {
+        if(main_node->nodep()->visited())
+        {
+            rhsPtr++;
+            continue;
+        }
+
+        for(const auto& vars : always_blocks)
+        {
+            // we have guarantee that lhs is the last node
+           if(rhs == vars.back()->varp())
+           {
+               rhsPtrVec.push_back(rhsPtr);
+           }
+        }
+        rhsPtr++;
+    }
+    return rhsPtrVec;
+}
 
 void sort_refs()
 {
-    for(const auto& [main_node, always_blocks] : varef_map)
+    size_t alwaysPtr=0, lhsPtr=0;
+    std::cout << varref_map.size()<< std::endl;
+    while(alwaysPtr < varref_map.size())
     {
-        auto lhs_node = vars.back();
-        for(const auto& vars : always_blocks)
+        auto& [main_node, assignBlocks] = varref_map[alwaysPtr];
+        if(main_node->nodep()->visited()){
+            alwaysPtr++;
+            continue;
+        }
+        lhsPtr = alwaysPtr;
+        main_node->nodep()->visited(true);
+        for(const auto& vars : assignBlocks)
         {
             for(const auto& var: vars)
             {
-                if(!var->access().isReadOnly())
-                {
-                    continue;
-                }
-
-                if(lhs_node->varp() == var->varp())
-                {
-
-                }
+               if(!var->access().isReadOnly())
+                   continue;
+               auto rhsPtrVec = find_rhs_node(var->varp());
+               for(auto rhsPtr : rhsPtrVec){
+                   if(lhsPtr < rhsPtr)
+                   {
+                       std::swap(varref_map[lhsPtr], varref_map[rhsPtr]);
+                       lhsPtr = rhsPtr;
+                   }
+               }
             }
         }
     }
@@ -1735,30 +1767,25 @@ void OrderVisitor::processMove() {
         m_pomNewFuncp = nullptr;
 
         if(vertexp->logicp()){
-            parent_node=vertexp->logicp()->nodep();
-
-            if(VN_IS(parent_node, Active) or VN_IS(parent_node, Always))
+            parent_node=vertexp->logicp();
+            if(VN_IS(parent_node->nodep(), Active) or VN_IS(parent_node->nodep(), Always))
             {
-                get_all_assignes(parent_node);
+                get_all_assignes(parent_node->nodep());
             }
             AstActive* newActivep
-                = processMoveOneLogic(vertexp->logicp(), m_pomNewFuncp /*ref*/, m_pomNewStmts /*ref*/);
+                = processMoveOneLogic(parent_node, m_pomNewFuncp /*ref*/, m_pomNewStmts /*ref*/);
             if (newActivep) m_scopetopp->addActivep(newActivep);
         }
         vertexp = nextp;
     }
 
-    for(const auto& [main_node, always_blocks] : varef_map)
+    sort_refs();
+
+    for(const auto& [main_node, logicp] : varref_map)
     {
-        std::cout << main_node << std::endl;
-        for(const auto& vars : always_blocks)
-        {
-            std::cout << "Another block" << std::endl;
-            for(const auto& var: vars)
-            {
-                std::cout << var->varp() << std::endl;
-            }
-        }
+       // AstActive* newActivep
+       //     = processMoveOneLogic(main_node, m_pomNewFuncp /*ref*/, m_pomNewStmts /*ref*/);
+       // if (newActivep) m_scopetopp->addActivep(newActivep);
     }
 }
 
