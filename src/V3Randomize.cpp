@@ -160,8 +160,8 @@ private:
             offset += memberp ? memberp->lsb() : 0;
             for (auto* smemberp = structDtp->membersp(); smemberp;
                  smemberp = VN_CAST(smemberp->nextp(), MemberDType)) {
-                auto* randp = newRandStmtsp(fl, stmtsp ? refp->cloneTree(false) : refp,
-                                            offset, smemberp);
+                auto* randp
+                    = newRandStmtsp(fl, stmtsp ? refp->cloneTree(false) : refp, offset, smemberp);
                 if (stmtsp) {
                     stmtsp->addNext(randp);
                 } else {
@@ -211,7 +211,10 @@ private:
                     auto* callp = new AstMethodCall(fl, refp, "randomize", nullptr);
                     callp->taskp(memberFuncp);
                     callp->dtypeFrom(memberFuncp);
-                    stmtsp = AstNode::addNext(stmtsp, newClassRandStmtsp(classRefp->classp(), createRef(fl, memberVarp, fromp, VAccess::WRITE)));
+                    stmtsp = AstNode::addNext(
+                        stmtsp,
+                        newClassRandStmtsp(classRefp->classp(),
+                                           createRef(fl, memberVarp, fromp, VAccess::WRITE)));
                 } else {
                     memberp->v3warn(E_UNSUPPORTED,
                                     "Unsupported: random member variables with type "
@@ -232,7 +235,8 @@ private:
         auto* fvarp = VN_CAST(funcp->fvarp(), Var);
         funcp->addStmtsp(newClassRandStmtsp(nodep, nullptr));
         funcp->addStmtsp(m_constraints.applyConstraints(funcp, nullptr, m_varCnt));
-        funcp->addStmtsp(new AstAssign(fl, new AstVarRef(fl, fvarp, VAccess::WRITE), m_constraints.generateCheck(funcp, nullptr)));
+        funcp->addStmtsp(new AstAssign(fl, new AstVarRef(fl, fvarp, VAccess::WRITE),
+                                       m_constraints.generateCheck(funcp, nullptr)));
         m_constraints = {};
         nodep->user1(false);
     }
@@ -247,9 +251,10 @@ private:
             m_constraints.addConstraints(nodep->pinsp());
             auto* pinsp = nodep->pinsp()->unlinkFrBack();
             VL_DO_DANGLING(pinsp->deleteTree(), pinsp);
-            auto* stmtsp = m_constraints.applyConstraints(nodep, VN_CAST(nodep->fromp(), VarRef)->varp(), m_varCnt);
+            auto* stmtsp = m_constraints.applyConstraints(
+                nodep, VN_CAST(nodep->fromp(), VarRef)->varp(), m_varCnt);
             if (stmtsp) {
-                std::string funcName =  "__Vrandomize" + std::to_string(m_funcCnt++);
+                std::string funcName = "__Vrandomize" + std::to_string(m_funcCnt++);
                 auto* dtypep = nodep->findBitDType(32, 32, VSigning::SIGNED);
                 auto* fvarp = new AstVar(fl, AstVarType::MEMBER, funcName, dtypep);
                 fvarp->lifetime(VLifetime::AUTOMATIC);
@@ -264,7 +269,8 @@ private:
                 auto* fromp = VN_CAST(nodep->fromp(), VarRef)->varp();
                 funcp->addStmtsp(newClassRandStmtsp(classp, fromp));
                 funcp->addStmtsp(stmtsp);
-                funcp->addStmtsp(new AstAssign(fl, new AstVarRef(fl, fvarp, VAccess::WRITE), m_constraints.generateCheck(funcp, fromp)));
+                funcp->addStmtsp(new AstAssign(fl, new AstVarRef(fl, fvarp, VAccess::WRITE),
+                                               m_constraints.generateCheck(funcp, fromp)));
                 funcp->dtypep(dtypep);
                 if (auto* classp = VN_CAST(m_modp, Class)) {
                     funcp->classMethod(true);
@@ -303,8 +309,8 @@ private:
                 memberSelp = new AstMemberSel(fl, fromMemberSelp->cloneTree(false),
                                               VFlagChildDType(), varp->name());
             } else if (auto* fromVarRefp = VN_CAST(fromp, VarRef)) {
-                memberSelp = new AstMemberSel(fl, fromVarRefp->cloneTree(false),
-                                              VFlagChildDType(), varp->name());
+                memberSelp = new AstMemberSel(fl, fromVarRefp->cloneTree(false), VFlagChildDType(),
+                                              varp->name());
             } else if (auto* fromVarp = VN_CAST(fromp, Var)) {
                 memberSelp = new AstMemberSel(fl, new AstVarRef(fl, fromVarp, access),
                                               VFlagChildDType(), varp->name());
@@ -357,12 +363,14 @@ private:
                             addMaxConstraint(nodep, lhsVarp, rhsConstp, true);
                             return;
                         } else if (VN_IS(biopp, Gt) || VN_IS(biopp, GtS) || VN_IS(biopp, Gte)
-                           || VN_IS(biopp, GteS)) {
-                            addMinConstraint(nodep, lhsVarp, rhsConstp, VN_IS(biopp, Gte) || VN_IS(biopp, GteS));
+                                   || VN_IS(biopp, GteS)) {
+                            addMinConstraint(nodep, lhsVarp, rhsConstp,
+                                             VN_IS(biopp, Gte) || VN_IS(biopp, GteS));
                             return;
                         } else if (VN_IS(biopp, Lt) || VN_IS(biopp, LtS) || VN_IS(biopp, Lte)
-                           || VN_IS(biopp, LteS)) {
-                            addMaxConstraint(nodep, lhsVarp, rhsConstp, VN_IS(biopp, Lte) || VN_IS(biopp, LteS));
+                                   || VN_IS(biopp, LteS)) {
+                            addMaxConstraint(nodep, lhsVarp, rhsConstp,
+                                             VN_IS(biopp, Lte) || VN_IS(biopp, LteS));
                             return;
                         }
                     }
@@ -373,12 +381,14 @@ private:
                             addMaxConstraint(nodep, rhsVarp, lhsConstp, true);
                             return;
                         } else if (VN_IS(biopp, Gt) || VN_IS(biopp, GtS) || VN_IS(biopp, Gte)
-                           || VN_IS(biopp, GteS)) {
-                            addMaxConstraint(nodep, rhsVarp, lhsConstp, VN_IS(biopp, Gte) || VN_IS(biopp, GteS));
+                                   || VN_IS(biopp, GteS)) {
+                            addMaxConstraint(nodep, rhsVarp, lhsConstp,
+                                             VN_IS(biopp, Gte) || VN_IS(biopp, GteS));
                             return;
                         } else if (VN_IS(biopp, Lt) || VN_IS(biopp, LtS) || VN_IS(biopp, Lte)
-                           || VN_IS(biopp, LteS)) {
-                            addMinConstraint(nodep, rhsVarp, lhsConstp, VN_IS(biopp, Lte) || VN_IS(biopp, LteS));
+                                   || VN_IS(biopp, LteS)) {
+                            addMinConstraint(nodep, rhsVarp, lhsConstp,
+                                             VN_IS(biopp, Lte) || VN_IS(biopp, LteS));
                             return;
                         }
                     }
@@ -423,10 +433,14 @@ private:
             auto* fl = nodep->fileline();
             AstNode* stmtsp = new AstConst(fl, AstConst::WidthedValue(), 32, 1);
             for (auto c : m_minConstraints) {
-                stmtsp = new AstAnd(fl, stmtsp, new AstGt(fl, createRef(fl, c.first, fromp, VAccess::READ), new AstConst(fl, c.second)));
+                stmtsp = new AstAnd(fl, stmtsp,
+                                    new AstGt(fl, createRef(fl, c.first, fromp, VAccess::READ),
+                                              new AstConst(fl, c.second)));
             }
             for (auto c : m_maxConstraints) {
-                stmtsp = new AstAnd(fl, stmtsp, new AstLt(fl, createRef(fl, c.first, fromp, VAccess::READ), new AstConst(fl, c.second)));
+                stmtsp = new AstAnd(fl, stmtsp,
+                                    new AstLt(fl, createRef(fl, c.first, fromp, VAccess::READ),
+                                              new AstConst(fl, c.second)));
             }
             return stmtsp;
         }
@@ -438,7 +452,7 @@ private:
     struct ConstraintMultiset {
         void addConstraints(AstClass* nodep) {
             for (auto* classp = nodep; classp;
-                classp = classp->extendsp() ? classp->extendsp()->classp() : nullptr) {
+                 classp = classp->extendsp() ? classp->extendsp()->classp() : nullptr) {
                 addConstraints(classp->stmtsp());
             }
         }
@@ -502,8 +516,10 @@ private:
             AstNode* stmtsp = nullptr;
             for (auto constraintSet : m_constraintSets) {
                 auto* checkp = constraintSet.generateCheck(nodep, fromp);
-                if (stmtsp) stmtsp = new AstOr(fl, stmtsp, checkp);
-                else stmtsp = checkp;
+                if (stmtsp)
+                    stmtsp = new AstOr(fl, stmtsp, checkp);
+                else
+                    stmtsp = checkp;
             }
             return stmtsp;
         }
