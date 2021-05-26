@@ -279,6 +279,19 @@ private:
         // Can't do this, as we may have more calls later
         // nodep->funcp()->scopep(nullptr);
     }
+    virtual void visit(AstConstraint* nodep) override {
+        VL_RESTORER(m_needThis);
+        VL_RESTORER(m_allowThis);
+        if (!nodep->user1SetOnce()) {
+            m_needThis = true;
+            m_allowThis = true;
+            iterateChildren(nodep);
+            if (m_scopep) {
+                nodep->unlinkFrBack();
+                m_modp->addStmtp(nodep);
+            }
+        }
+    }
     virtual void visit(AstCFunc* nodep) override {
         VL_RESTORER(m_needThis);
         VL_RESTORER(m_allowThis);

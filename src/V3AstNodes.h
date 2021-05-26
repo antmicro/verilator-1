@@ -360,6 +360,17 @@ public:
     AstClass* classp() const;  // Class being extended (after link)
 };
 
+class AstConstraint final : public AstNode {
+public:
+    AstConstraint(FileLine* fl, AstNode* condsp)
+        : ASTGEN_SUPER(fl) {
+        addNOp1p(condsp);
+    }
+    ASTNODE_NODE_FUNCS(Constraint)
+    virtual string verilogKwd() const override { return "constraint"; }
+    AstNode* condsp() { return op1p(); }
+};
+
 //######################################################################
 //==== Data Types
 

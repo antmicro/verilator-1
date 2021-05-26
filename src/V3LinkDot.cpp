@@ -1285,11 +1285,16 @@ class LinkDotFindVisitor final : public AstNVisitor {
         }
         // Type depends on the method used, let V3Width figure it out later
         if (nodep->exprp()) {  // Else empty expression and pretend no "with"
-            const auto indexArgRefp = new AstLambdaArgRef(argFl, name + "__DOT__index", true);
-            const auto valueArgRefp = new AstLambdaArgRef(argFl, name, false);
-            const auto newp = new AstWith(nodep->fileline(), indexArgRefp, valueArgRefp,
-                                          nodep->exprp()->unlinkFrBackWithNext());
-            funcrefp->addPinsp(newp);
+            if (nodep->funcrefp()->name() == "randomize") {
+                funcrefp->addPinsp(
+                    new AstConstraint(nodep->fileline(), nodep->exprp()->unlinkFrBack()));
+            } else {
+                const auto indexArgRefp = new AstLambdaArgRef(argFl, name + "__DOT__index", true);
+                const auto valueArgRefp = new AstLambdaArgRef(argFl, name, false);
+                const auto newp = new AstWith(nodep->fileline(), indexArgRefp, valueArgRefp,
+                                              nodep->exprp()->unlinkFrBackWithNext());
+                funcrefp->addPinsp(newp);
+            }
         }
         nodep->replaceWith(funcrefp->unlinkFrBack());
         VL_DO_DANGLING(nodep->deleteTree(), nodep);
@@ -1309,6 +1314,28 @@ class LinkDotFindVisitor final : public AstNVisitor {
             // Insert argref's name into symbol table
             m_statep->insertSym(m_curSymp, nodep->valueArgRefp()->name(), nodep->valueArgRefp(),
                                 nullptr);
+            iterateAndNextNull(nodep->exprp());
+        }
+    }
+    AstNode* m_fromp = nullptr;
+    virtual void visit(AstDot* nodep) override {
+        if (nodep->user1()) return;
+        if (auto* withParsep = VN_CAST(nodep->rhsp(), WithParse)) {
+            if (withParsep->funcrefp()->name() == "randomize") {
+                m_fromp = nodep->lhsp();
+                iterateAndNextNull(withParsep->exprp());
+                m_fromp = nullptr;
+            }
+        }
+        iterateChildren(nodep);
+    }
+    virtual void visit(AstParseRef* nodep) override {
+        if (m_fromp) {
+            auto* dotp = new AstDot(nodep->fileline(), false, m_fromp->cloneTree(false),
+                                    nodep->cloneTree(false));
+            nodep->replaceWith(dotp);
+            dotp->user1SetOnce();
+            VL_DO_DANGLING(nodep->deleteTree(), nodep);
         }
     }
 

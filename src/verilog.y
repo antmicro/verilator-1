@@ -3539,7 +3539,7 @@ function_subroutine_callNoMethod<nodep>:	// IEEE: function_subroutine_call (as f
 	//			// IEEE: randomize_call
 	//			// We implement randomize as a normal funcRef, since randomize isn't a keyword
 	//			// Note yNULL is already part of expressions, so they come for free
-	|	funcRef yWITH__CUR constraint_block	{ $$ = $1; BBUNSUP($2, "Unsupported: randomize() 'with' constraint"); }
+	|	funcRef yWITH__CUR constraint_block	{ $$ = new AstWithParse($2, false, $1, $3); }
 	|	funcRef yWITH__CUR '{' '}'		{ $$ = new AstWithParse($2, false, $1, nullptr); }
 	;
 
@@ -6197,7 +6197,7 @@ class_constraint<nodep>:  // ==IEEE: class_constraint
 	//			// IEEE: constraint_declaration
 	//			// UNSUP: We have the unsupported warning on the randomize() call, so don't bother on
 	//			// constraint blocks. When we support randomize we need to make AST nodes for below rules
-		constraintStaticE yCONSTRAINT idAny constraint_block	{ $$ = nullptr; /*UNSUP*/ }
+		constraintStaticE yCONSTRAINT idAny constraint_block	{ $$ = new AstConstraint($<fl>1, $4); /*UNSUP*/ }
 	//			// IEEE: constraint_prototype + constraint_prototype_qualifier
 	|	constraintStaticE yCONSTRAINT idAny ';'		{ $$ = nullptr; }
 	|	yEXTERN constraintStaticE yCONSTRAINT idAny ';'	{ $$ = nullptr; BBUNSUP($1, "Unsupported: extern constraint"); }
